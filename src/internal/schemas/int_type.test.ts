@@ -64,6 +64,14 @@ describe('IntType', () => {
     });
   });
 
+  describe('toBuffer', () => {
+    it('should throw ValidationError for invalid value', () => {
+      assertThrows(() => {
+        type.toBuffer(1.5 as unknown as number);
+      }, ValidationError);
+    });
+  });
+
   describe('compare', () => {
     it('should compare numbers correctly', () => {
       assertEquals(type.compare(1, 2), -1);

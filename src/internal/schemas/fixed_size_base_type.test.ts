@@ -1,7 +1,8 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { FixedSizeBaseType } from './fixed_size_base_type.ts';
 import { Tap } from '../serialization/tap.ts';
+import { ValidationError, ErrorHook } from './error.ts';
 
 // Simple concrete implementation for testing
 class TestFixedSizeType extends FixedSizeBaseType<number> {
@@ -9,8 +10,12 @@ class TestFixedSizeType extends FixedSizeBaseType<number> {
     return 4;
   }
 
-  public check(value: unknown): boolean {
-    return typeof value === 'number';
+  public check(value: unknown, errorHook?: ErrorHook, path: string[] = []): boolean {
+    const isValid = typeof value === 'number';
+    if (!isValid && errorHook) {
+      errorHook(path, value, this);
+    }
+    return isValid;
   }
 
   public read(tap: Tap): number {
@@ -48,6 +53,12 @@ describe('FixedSizeBaseType', () => {
       assertEquals(buffer.byteLength, 4);
       const tap = new Tap(buffer);
       assertEquals(type.read(tap), value);
+    });
+
+    it('should throw ValidationError for invalid value', () => {
+      assertThrows(() => {
+        type.toBuffer('invalid' as unknown as number);
+      }, ValidationError);
     });
   });
 });

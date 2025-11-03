@@ -28,6 +28,10 @@ describe('StringType', () => {
     assertEquals(type.read(tap), value);
   });
 
+  it('toBuffer should throw ValidationError for invalid value', () => {
+    assertThrows(() => type.toBuffer(123 as unknown as string));
+  });
+
   it('toBuffer and read should serialize and deserialize strings', () => {
     const testStrings = ['hello', '', 'test string', '🚀 emoji'];
 

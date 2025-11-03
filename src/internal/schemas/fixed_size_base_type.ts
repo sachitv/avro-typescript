@@ -1,5 +1,6 @@
 import { Tap } from '../serialization/tap.ts';
 import { BaseType } from './base_type.ts';
+import { throwInvalidError } from './error.ts';
 
 /**
  * Base class for fixed-size Avro types.
@@ -18,6 +19,7 @@ export abstract class FixedSizeBaseType<T = unknown> extends BaseType<T> {
      * @returns The serialized ArrayBuffer.
      */
     public toBuffer(value: T): ArrayBuffer {
+        this.check(value, throwInvalidError, []);
         const size = this.sizeBytes();
         const buf = new ArrayBuffer(size);
         const tap = new Tap(buf);

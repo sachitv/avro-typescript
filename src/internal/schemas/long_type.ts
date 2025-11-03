@@ -33,13 +33,14 @@ export class LongType extends PrimitiveType<bigint> {
   }
 
   public override toBuffer(value: bigint): ArrayBuffer {
-      // For long, allocate exact size based on value
-      const size = calculateVarintSize(value);
-      const buf = new ArrayBuffer(size);
-      const tap = new Tap(buf);
-      this.write(tap, value);
-      return buf;
-    }
+    this.check(value, throwInvalidError, []);
+    // For long, allocate exact size based on value
+    const size = calculateVarintSize(value);
+    const buf = new ArrayBuffer(size);
+    const tap = new Tap(buf);
+    this.write(tap, value);
+    return buf;
+  }
 
   public override compare(val1: bigint, val2: bigint): number {
     return val1 < val2 ? -1 : val1 > val2 ? 1 : 0;

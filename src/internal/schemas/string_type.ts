@@ -19,6 +19,7 @@ export class StringType extends PrimitiveType<string> {
   }
 
   public override toBuffer(value: string): ArrayBuffer {
+    this.check(value, throwInvalidError, []);
     const strBytes = encode(value);
     const lengthSize = calculateVarintSize(strBytes.length);
     const buf = new ArrayBuffer(lengthSize + strBytes.length);

@@ -33,6 +33,7 @@ export class BytesType extends PrimitiveType<Uint8Array> {
   }
 
   public override toBuffer(value: Uint8Array): ArrayBuffer {
+    this.check(value, throwInvalidError, []);
     // Pre-allocate buffer based on value length for efficiency
     const lengthSize = calculateVarintSize(value.length);
     const totalSize = lengthSize + value.length;

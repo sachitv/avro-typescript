@@ -75,6 +75,20 @@ describe('LongType', () => {
     });
   });
 
+  describe('toBuffer', () => {
+    it('should throw ValidationError for out-of-range value', () => {
+      assertThrows(() => {
+        type.toBuffer(maxLong + 1n);
+      }, ValidationError);
+    });
+
+    it('should throw ValidationError for non-bigint value', () => {
+      assertThrows(() => {
+        type.toBuffer(1.5 as unknown as bigint);
+      }, ValidationError);
+    });
+  });
+
   describe('compare', () => {
     it('should compare bigints correctly', () => {
       assertEquals(type.compare(1n, 2n), -1);

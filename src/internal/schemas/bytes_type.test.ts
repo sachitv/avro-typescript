@@ -77,6 +77,12 @@ describe('BytesType', () => {
       const result = type.fromBuffer(buffer);
       assertEquals(result, data);
     });
+
+    it('should throw ValidationError for invalid value', () => {
+      assertThrows(() => {
+        type.toBuffer('invalid' as unknown as Uint8Array);
+      }, ValidationError);
+    });
   });
 
   describe('compare', () => {
