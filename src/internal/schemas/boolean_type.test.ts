@@ -103,6 +103,11 @@ describe('BooleanType', () => {
       assertEquals(result, value);
     });
 
+    it('should throw for truncated buffer', () => {
+      const buffer = new ArrayBuffer(0);
+      assertThrows(() => type.fromBuffer(buffer), Error, 'Insufficient data for type');
+    });
+
     it('should have isValid', () => {
       assert(type.isValid(true));
       assert(!type.isValid('true'));

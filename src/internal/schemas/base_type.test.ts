@@ -28,10 +28,7 @@ class TestType extends BaseType<string> {
 
   public override read(tap: Tap): string {
     const val = tap.readString();
-    if (val === undefined) {
-      throw new Error('Insufficient data');
-    }
-    return val;
+    return val ?? '';
   }
 
   public override check(value: unknown, errorHook?: (path: string[], invalidValue: unknown, schemaType: Type) => void): boolean {
@@ -126,6 +123,11 @@ describe('Type', () => {
       const buffer = type.toBuffer(value);
       const result = type.fromBuffer(buffer);
       assertEquals(result, value);
+    });
+
+    it('should throw for truncated buffers', () => {
+      const buffer = new ArrayBuffer(0);
+      assertThrows(() => type.fromBuffer(buffer), Error, 'Insufficient data for type');
     });
   });
 

@@ -14,10 +14,14 @@ export abstract class BaseType<T = unknown> extends Type<T> {
     * Deserializes an ArrayBuffer into a value using the schema.
     * @param buffer The ArrayBuffer to deserialize.
     * @returns The deserialized value.
-    */
+   */
    public fromBuffer(buffer: ArrayBuffer): T {
      const tap = new Tap(buffer);
-     return this.read(tap);
+     const value = this.read(tap);
+     if (!tap.isValid()) {
+       throw new Error('Insufficient data for type');
+     }
+     return value;
    }
 
    /**

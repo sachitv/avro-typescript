@@ -95,6 +95,11 @@ describe('NullType', () => {
       assertEquals(result, value);
     });
 
+    it('should deserialize from an empty buffer', () => {
+      const result = type.fromBuffer(new ArrayBuffer(0));
+      assertEquals(result, null);
+    });
+
     it('should have isValid', () => {
       assert(type.isValid(null));
       assert(!type.isValid(undefined));
