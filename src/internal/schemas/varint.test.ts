@@ -1,9 +1,9 @@
 import { assertEquals } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { calculateVarintSize } from './varint.ts';
+import { calculateVarintSize } from "./varint.ts";
 
-describe('calculateVarintSize', () => {
-  it('should calculate correct sizes for numbers', () => {
+describe("calculateVarintSize", () => {
+  it("should calculate correct sizes for numbers", () => {
     assertEquals(calculateVarintSize(0), 1);
     assertEquals(calculateVarintSize(-1), 1);
     assertEquals(calculateVarintSize(1), 1);
@@ -21,7 +21,7 @@ describe('calculateVarintSize', () => {
     assertEquals(calculateVarintSize(-2147483648), 5);
   });
 
-  it('should calculate correct sizes for bigints', () => {
+  it("should calculate correct sizes for bigints", () => {
     assertEquals(calculateVarintSize(0n), 1);
     assertEquals(calculateVarintSize(-1n), 1);
     assertEquals(calculateVarintSize(-2199023255552n), 6);

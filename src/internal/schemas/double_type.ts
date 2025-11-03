@@ -1,18 +1,22 @@
-import { Tap } from '../serialization/tap.ts';
-import { FixedSizeBaseType } from './fixed_size_base_type.ts';
-import { Type } from './type.ts';
-import { Resolver } from './resolver.ts';
-import { IntType } from './int_type.ts';
-import { LongType } from './long_type.ts';
-import { FloatType } from './float_type.ts';
-import { ErrorHook, throwInvalidError } from './error.ts';
+import { Tap } from "../serialization/tap.ts";
+import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
+import { Type } from "./type.ts";
+import { Resolver } from "./resolver.ts";
+import { IntType } from "./int_type.ts";
+import { LongType } from "./long_type.ts";
+import { FloatType } from "./float_type.ts";
+import { ErrorHook, throwInvalidError } from "./error.ts";
 
 /**
  * Double type (64-bit).
  */
 export class DoubleType extends FixedSizeBaseType<number> {
-  public check(value: unknown, errorHook?: ErrorHook, path: string[] = []): boolean {
-    const isValid = typeof value === 'number';
+  public check(
+    value: unknown,
+    errorHook?: ErrorHook,
+    path: string[] = [],
+  ): boolean {
+    const isValid = typeof value === "number";
     if (!isValid && errorHook) {
       errorHook(path, value, this);
     }
@@ -22,7 +26,7 @@ export class DoubleType extends FixedSizeBaseType<number> {
   public override read(tap: Tap): number {
     const val = tap.readDouble();
     if (val === undefined) {
-      throw new Error('Insufficient data for double');
+      throw new Error("Insufficient data for double");
     }
     return val;
   }
@@ -74,7 +78,7 @@ export class DoubleType extends FixedSizeBaseType<number> {
         public override read(tap: Tap): number {
           const floatValue = tap.readFloat();
           if (floatValue === undefined) {
-            throw new Error('Insufficient data for float');
+            throw new Error("Insufficient data for float");
           }
           return floatValue;
         }
@@ -85,6 +89,6 @@ export class DoubleType extends FixedSizeBaseType<number> {
   }
 
   public toJSON(): string {
-    return 'double';
+    return "double";
   }
 }

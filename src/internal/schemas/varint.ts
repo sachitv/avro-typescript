@@ -4,7 +4,7 @@
  * @returns The size in bytes (1-10).
  */
 export function calculateVarintSize(value: number | bigint): number {
-  const val = typeof value === 'number' ? BigInt(value) : value;
+  const val = typeof value === "number" ? BigInt(value) : value;
   // Zigzag encoding: (val << 1) ^ (val >> 63)
   const zigzag = (val << 1n) ^ (val >> 63n);
   // Now calculate varint size for the unsigned zigzag value

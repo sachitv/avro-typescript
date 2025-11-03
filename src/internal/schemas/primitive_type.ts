@@ -1,5 +1,5 @@
-import { BaseType } from './base_type.ts';
-import { throwInvalidError } from './error.ts';
+import { BaseType } from "./base_type.ts";
+import { throwInvalidError } from "./error.ts";
 
 /**
  * Abstract base class for primitive Avro types.
@@ -13,12 +13,12 @@ export abstract class PrimitiveType<T = unknown> extends BaseType<T> {
     return value;
   }
 
-   /**
-    * Compares two primitive values.
-    */
-   public override compare(val1: T, val2: T): number {
-     if (val1 < val2) return -1;
-     if (val1 > val2) return 1;
-     return 0;
-   }
+  /**
+   * Compares two primitive values.
+   */
+  public override compare(val1: T, val2: T): number {
+    if (val1 < val2) return -1;
+    if (val1 > val2) return 1;
+    return 0;
+  }
 }

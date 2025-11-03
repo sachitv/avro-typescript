@@ -1,17 +1,17 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { Tap } from '../serialization/tap.ts';
-import { LongType } from './long_type.ts';
-import { IntType } from './int_type.ts';
-import { ValidationError } from './error.ts';
+import { Tap } from "../serialization/tap.ts";
+import { LongType } from "./long_type.ts";
+import { IntType } from "./int_type.ts";
+import { ValidationError } from "./error.ts";
 
-describe('LongType', () => {
+describe("LongType", () => {
   const type = new LongType();
   const minLong = -(1n << 63n);
   const maxLong = (1n << 63n) - 1n;
 
-  describe('check', () => {
-    it('should return true for bigint values', () => {
+  describe("check", () => {
+    it("should return true for bigint values", () => {
       assert(type.check(0n));
       assert(type.check(42n));
       assert(type.check(-42n));
@@ -19,28 +19,30 @@ describe('LongType', () => {
       assert(type.check(maxLong));
     });
 
-    it('should return false for non-bigint values', () => {
+    it("should return false for non-bigint values", () => {
       assert(!type.check(42));
-      assert(!type.check('42'));
+      assert(!type.check("42"));
       assert(!type.check(null));
       assert(!type.check(undefined));
     });
 
-    it('should return false for out-of-range bigint values', () => {
+    it("should return false for out-of-range bigint values", () => {
       assert(!type.check(maxLong + 1n));
       assert(!type.check(minLong - 1n));
     });
 
-    it('should call errorHook for invalid values', () => {
+    it("should call errorHook for invalid values", () => {
       let called = false;
-      const errorHook = () => { called = true; };
-      type.check('invalid', errorHook);
+      const errorHook = () => {
+        called = true;
+      };
+      type.check("invalid", errorHook);
       assert(called);
     });
   });
 
-  describe('read', () => {
-    it('should read long from tap', () => {
+  describe("read", () => {
+    it("should read long from tap", () => {
       const buffer = new ArrayBuffer(10);
       const writeTap = new Tap(buffer);
       writeTap.writeLong(123n);
@@ -49,8 +51,8 @@ describe('LongType', () => {
     });
   });
 
-  describe('write', () => {
-    it('should write long to tap', () => {
+  describe("write", () => {
+    it("should write long to tap", () => {
       const buffer = new ArrayBuffer(10);
       const writeTap = new Tap(buffer);
       type.write(writeTap, 456n);
@@ -58,7 +60,7 @@ describe('LongType', () => {
       assertEquals(readTap.readLong(), 456n);
     });
 
-    it('should throw for out-of-range value', () => {
+    it("should throw for out-of-range value", () => {
       const buffer = new ArrayBuffer(10);
       const tap = new Tap(buffer);
       assertThrows(() => {
@@ -66,7 +68,7 @@ describe('LongType', () => {
       }, ValidationError);
     });
 
-    it('should throw for invalid value', () => {
+    it("should throw for invalid value", () => {
       const buffer = new ArrayBuffer(10);
       const tap = new Tap(buffer);
       assertThrows(() => {
@@ -75,43 +77,43 @@ describe('LongType', () => {
     });
   });
 
-  describe('toBuffer', () => {
-    it('should throw ValidationError for out-of-range value', () => {
+  describe("toBuffer", () => {
+    it("should throw ValidationError for out-of-range value", () => {
       assertThrows(() => {
         type.toBuffer(maxLong + 1n);
       }, ValidationError);
     });
 
-    it('should throw ValidationError for non-bigint value', () => {
+    it("should throw ValidationError for non-bigint value", () => {
       assertThrows(() => {
         type.toBuffer(1.5 as unknown as bigint);
       }, ValidationError);
     });
   });
 
-  describe('compare', () => {
-    it('should compare bigints correctly', () => {
+  describe("compare", () => {
+    it("should compare bigints correctly", () => {
       assertEquals(type.compare(1n, 2n), -1);
       assertEquals(type.compare(2n, 1n), 1);
       assertEquals(type.compare(1n, 1n), 0);
     });
   });
 
-  describe('random', () => {
-    it('should return a bigint', () => {
+  describe("random", () => {
+    it("should return a bigint", () => {
       const value = type.random();
-      assert(typeof value === 'bigint');
+      assert(typeof value === "bigint");
     });
   });
 
-  describe('toJSON', () => {
+  describe("toJSON", () => {
     it('should return "long"', () => {
-      assertEquals(type.toJSON(), 'long');
+      assertEquals(type.toJSON(), "long");
     });
   });
 
-  describe('createResolver', () => {
-    it('should create resolver for same type', () => {
+  describe("createResolver", () => {
+    it("should create resolver for same type", () => {
       const resolver = type.createResolver(type);
       const value = 789n;
       const buffer = type.toBuffer(value);
@@ -120,7 +122,7 @@ describe('LongType', () => {
       assertEquals(result, value);
     });
 
-    it('should create resolver for IntType writer', () => {
+    it("should create resolver for IntType writer", () => {
       const intType = new IntType();
       const resolver = type.createResolver(intType);
       const intValue = 123;
@@ -130,39 +132,43 @@ describe('LongType', () => {
       assertEquals(result, 123n);
     });
 
-    it('should throw error for unsupported type', () => {
+    it("should throw error for unsupported type", () => {
       class FakeType extends LongType {
         // Different class
       }
       const otherType = new FakeType();
-      assertThrows(() => {
-        type.createResolver(otherType);
-      }, Error, 'Schema evolution not supported from writer type: long to reader type: long');
+      assertThrows(
+        () => {
+          type.createResolver(otherType);
+        },
+        Error,
+        "Schema evolution not supported from writer type: long to reader type: long",
+      );
     });
   });
 
-  describe('inheritance from PrimitiveType and BaseType', () => {
-    it('should clone bigint values', () => {
+  describe("inheritance from PrimitiveType and BaseType", () => {
+    it("should clone bigint values", () => {
       assertEquals(type.clone(42n), 42n);
       assertEquals(type.clone(-42n), -42n);
       assertEquals(type.clone(maxLong), maxLong);
       assertEquals(type.clone(minLong), minLong);
     });
 
-    it('should throw ValidationError for invalid clone', () => {
+    it("should throw ValidationError for invalid clone", () => {
       assertThrows(() => {
         type.clone(42 as unknown as bigint);
       }, ValidationError);
     });
 
-    it('should have toBuffer and fromBuffer', () => {
+    it("should have toBuffer and fromBuffer", () => {
       const value = 123n;
       const buffer = type.toBuffer(value);
       const result = type.fromBuffer(buffer);
       assertEquals(result, value);
     });
 
-    it('should have isValid', () => {
+    it("should have isValid", () => {
       assert(type.isValid(42n));
       assert(!type.isValid(42));
       assert(!type.isValid(maxLong + 1n));

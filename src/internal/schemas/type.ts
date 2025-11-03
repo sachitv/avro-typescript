@@ -1,8 +1,12 @@
-import { Tap } from '../serialization/tap.ts';
-import { Resolver } from './resolver.ts';
+import { Tap } from "../serialization/tap.ts";
+import { Resolver } from "./resolver.ts";
 
 type CloneOptions = Record<string, unknown>;
-type ErrorHook = (path: string[], invalidValue: unknown, schemaType: Type) => void;
+type ErrorHook = (
+  path: string[],
+  invalidValue: unknown,
+  schemaType: Type,
+) => void;
 type IsValidOptions = { errorHook?: ErrorHook };
 
 /**
@@ -68,7 +72,11 @@ export abstract class Type<T = unknown> {
    * @param path Current path in the schema for error reporting.
    * @returns True if valid.
    */
-  public abstract check(value: unknown, errorHook?: ErrorHook, path?: string[]): boolean;
+  public abstract check(
+    value: unknown,
+    errorHook?: ErrorHook,
+    path?: string[],
+  ): boolean;
 
   /**
    * Compares two values. Must be implemented by subclasses.
@@ -78,15 +86,15 @@ export abstract class Type<T = unknown> {
    */
   public abstract compare(val1: T, val2: T): number;
 
-   /**
-    * Generates a random value. Must be implemented by subclasses.
-    * @returns A random value of this type.
-    */
-   public abstract random(): T;
+  /**
+   * Generates a random value. Must be implemented by subclasses.
+   * @returns A random value of this type.
+   */
+  public abstract random(): T;
 
-   /**
-    * Returns the JSON schema representation (type name).
-    * @returns The type name as a string.
-    */
-   public abstract toJSON(): string;
+  /**
+   * Returns the JSON schema representation (type name).
+   * @returns The type name as a string.
+   */
+  public abstract toJSON(): string;
 }

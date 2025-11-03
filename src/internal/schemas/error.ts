@@ -1,6 +1,10 @@
-import { Type } from './type.ts';
+import { Type } from "./type.ts";
 
-export type ErrorHook<T = unknown> = (path: string[], invalidValue: unknown, schemaType: Type<T>) => void;
+export type ErrorHook<T = unknown> = (
+  path: string[],
+  invalidValue: unknown,
+  schemaType: Type<T>,
+) => void;
 
 /**
  * Custom error class for Avro schema validation failures.
@@ -11,18 +15,24 @@ export class ValidationError<T = unknown> extends Error {
   public readonly type: Type<T>;
 
   constructor(path: string[], invalidValue: unknown, schemaType: Type<T>) {
-    const serializedValue = typeof invalidValue === 'bigint'
+    const serializedValue = typeof invalidValue === "bigint"
       ? `${invalidValue}n`
       : safeStringify(invalidValue);
-    super(`Invalid value: ${serializedValue} for type: ${schemaType.constructor.name}`);
-    this.name = 'ValidationError';
+    super(
+      `Invalid value: ${serializedValue} for type: ${schemaType.constructor.name}`,
+    );
+    this.name = "ValidationError";
     this.path = path;
     this.value = invalidValue;
     this.type = schemaType;
   }
 }
 
-export function throwInvalidError<T = unknown>(path: string[], invalidValue: unknown, schemaType: Type<T>): never {
+export function throwInvalidError<T = unknown>(
+  path: string[],
+  invalidValue: unknown,
+  schemaType: Type<T>,
+): never {
   throw new ValidationError(path, invalidValue, schemaType);
 }
 

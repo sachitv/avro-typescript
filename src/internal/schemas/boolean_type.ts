@@ -1,13 +1,17 @@
-import { Tap } from '../serialization/tap.ts';
-import { FixedSizeBaseType } from './fixed_size_base_type.ts';
-import { ErrorHook, throwInvalidError } from './error.ts';
+import { Tap } from "../serialization/tap.ts";
+import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
+import { ErrorHook, throwInvalidError } from "./error.ts";
 
 /**
  * Boolean type.
  */
 export class BooleanType extends FixedSizeBaseType<boolean> {
-  public check(value: unknown, errorHook?: ErrorHook, path: string[] = []): boolean {
-    const isValid = typeof value === 'boolean';
+  public check(
+    value: unknown,
+    errorHook?: ErrorHook,
+    path: string[] = [],
+  ): boolean {
+    const isValid = typeof value === "boolean";
     if (!isValid && errorHook) {
       errorHook(path, value, this);
     }
@@ -19,7 +23,7 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
   }
 
   public write(tap: Tap, value: boolean): void {
-    if (typeof value !== 'boolean') {
+    if (typeof value !== "boolean") {
       throwInvalidError([], value, this);
     }
     tap.writeBoolean(value);
@@ -43,6 +47,6 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
   }
 
   public toJSON(): string {
-    return 'boolean';
+    return "boolean";
   }
 }

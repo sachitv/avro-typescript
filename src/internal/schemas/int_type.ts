@@ -1,14 +1,19 @@
-import { Tap } from '../serialization/tap.ts';
-import { PrimitiveType } from './primitive_type.ts';
-import { calculateVarintSize } from './varint.ts';
-import { ErrorHook, throwInvalidError } from './error.ts';
+import { Tap } from "../serialization/tap.ts";
+import { PrimitiveType } from "./primitive_type.ts";
+import { calculateVarintSize } from "./varint.ts";
+import { ErrorHook, throwInvalidError } from "./error.ts";
 
 /**
  * Int type (32-bit).
  */
 export class IntType extends PrimitiveType<number> {
-  public override check(value: unknown, errorHook?: ErrorHook, path: string[] = []): boolean {
-    const isValid = typeof value === 'number' && Number.isInteger(value) && value >= -2147483648 && value <= 2147483647;
+  public override check(
+    value: unknown,
+    errorHook?: ErrorHook,
+    path: string[] = [],
+  ): boolean {
+    const isValid = typeof value === "number" && Number.isInteger(value) &&
+      value >= -2147483648 && value <= 2147483647;
     if (!isValid && errorHook) {
       errorHook(path, value, this);
     }

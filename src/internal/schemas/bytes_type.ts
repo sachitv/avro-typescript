@@ -1,15 +1,19 @@
-import { Tap } from '../serialization/tap.ts';
-import { PrimitiveType } from './primitive_type.ts';
-import { Type } from './type.ts';
-import { Resolver } from './resolver.ts';
-import { ErrorHook, throwInvalidError } from './error.ts';
-import { calculateVarintSize } from './varint.ts';
+import { Tap } from "../serialization/tap.ts";
+import { PrimitiveType } from "./primitive_type.ts";
+import { Type } from "./type.ts";
+import { Resolver } from "./resolver.ts";
+import { ErrorHook, throwInvalidError } from "./error.ts";
+import { calculateVarintSize } from "./varint.ts";
 
 /**
  * Bytes type.
  */
 export class BytesType extends PrimitiveType<Uint8Array> {
-  public override check(value: unknown, errorHook?: ErrorHook, path: string[] = []): boolean {
+  public override check(
+    value: unknown,
+    errorHook?: ErrorHook,
+    path: string[] = [],
+  ): boolean {
     const isValid = value instanceof Uint8Array;
     if (!isValid && errorHook) {
       errorHook(path, value, this);
@@ -20,7 +24,7 @@ export class BytesType extends PrimitiveType<Uint8Array> {
   public override read(tap: Tap): Uint8Array {
     const val = tap.readBytes();
     if (val === undefined) {
-      throw new Error('Insufficient data for bytes');
+      throw new Error("Insufficient data for bytes");
     }
     return val;
   }
@@ -41,18 +45,21 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     const tap = new Tap(buf);
     this.write(tap, value);
     const result = tap.getValue();
-    return (result.buffer as ArrayBuffer).slice(result.byteOffset, result.byteOffset + result.byteLength);
+    return (result.buffer as ArrayBuffer).slice(
+      result.byteOffset,
+      result.byteOffset + result.byteLength,
+    );
   }
 
   public override createResolver(writerType: Type): Resolver {
-    if (writerType.toJSON() === 'string') {
+    if (writerType.toJSON() === "string") {
       // Bytes can promote from string. We use an anonymous class here to avoid a
       // cyclic dependency between this file and the string type file.
       return new class extends Resolver {
         public override read(tap: Tap): Uint8Array {
           const str = tap.readString();
           if (str === undefined) {
-            throw new Error('Insufficient data for string');
+            throw new Error("Insufficient data for string");
           }
           // Convert string to bytes (assuming UTF-8)
           const encoder = new TextEncoder();
@@ -91,6 +98,6 @@ export class BytesType extends PrimitiveType<Uint8Array> {
   }
 
   public toJSON(): string {
-    return 'bytes';
+    return "bytes";
   }
 }

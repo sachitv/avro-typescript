@@ -1,8 +1,8 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { FixedSizeBaseType } from './fixed_size_base_type.ts';
-import { Tap } from '../serialization/tap.ts';
-import { ValidationError, ErrorHook } from './error.ts';
+import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
+import { Tap } from "../serialization/tap.ts";
+import { ErrorHook, ValidationError } from "./error.ts";
 
 // Simple concrete implementation for testing
 class TestFixedSizeType extends FixedSizeBaseType<number> {
@@ -10,8 +10,12 @@ class TestFixedSizeType extends FixedSizeBaseType<number> {
     return 4;
   }
 
-  public check(value: unknown, errorHook?: ErrorHook, path: string[] = []): boolean {
-    const isValid = typeof value === 'number';
+  public check(
+    value: unknown,
+    errorHook?: ErrorHook,
+    path: string[] = [],
+  ): boolean {
+    const isValid = typeof value === "number";
     if (!isValid && errorHook) {
       errorHook(path, value, this);
     }
@@ -39,15 +43,15 @@ class TestFixedSizeType extends FixedSizeBaseType<number> {
   }
 
   public toJSON(): string {
-    return 'test';
+    return "test";
   }
 }
 
-describe('FixedSizeBaseType', () => {
+describe("FixedSizeBaseType", () => {
   const type = new TestFixedSizeType();
 
-  describe('toBuffer', () => {
-    it('should serialize value using fixed size', () => {
+  describe("toBuffer", () => {
+    it("should serialize value using fixed size", () => {
       const value = 42;
       const buffer = type.toBuffer(value);
       assertEquals(buffer.byteLength, 4);
@@ -55,9 +59,9 @@ describe('FixedSizeBaseType', () => {
       assertEquals(type.read(tap), value);
     });
 
-    it('should throw ValidationError for invalid value', () => {
+    it("should throw ValidationError for invalid value", () => {
       assertThrows(() => {
-        type.toBuffer('invalid' as unknown as number);
+        type.toBuffer("invalid" as unknown as number);
       }, ValidationError);
     });
   });

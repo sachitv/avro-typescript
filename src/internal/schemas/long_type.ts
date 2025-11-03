@@ -1,9 +1,9 @@
-import { Tap } from '../serialization/tap.ts';
-import { PrimitiveType } from './primitive_type.ts';
-import { Type } from './type.ts';
-import { Resolver } from './resolver.ts';
-import { IntType } from './int_type.ts';
-import { ErrorHook, throwInvalidError } from './error.ts';
+import { Tap } from "../serialization/tap.ts";
+import { PrimitiveType } from "./primitive_type.ts";
+import { Type } from "./type.ts";
+import { Resolver } from "./resolver.ts";
+import { IntType } from "./int_type.ts";
+import { ErrorHook, throwInvalidError } from "./error.ts";
 import { calculateVarintSize } from "./varint.ts";
 
 const MIN_LONG = -(1n << 63n);
@@ -13,8 +13,13 @@ const MAX_LONG = (1n << 63n) - 1n;
  * Long type (64-bit).
  */
 export class LongType extends PrimitiveType<bigint> {
-  public override check(value: unknown, errorHook?: ErrorHook, path: string[] = []): boolean {
-    const isValid = typeof value === 'bigint' && value >= MIN_LONG && value <= MAX_LONG;
+  public override check(
+    value: unknown,
+    errorHook?: ErrorHook,
+    path: string[] = [],
+  ): boolean {
+    const isValid = typeof value === "bigint" && value >= MIN_LONG &&
+      value <= MAX_LONG;
     if (!isValid && errorHook) {
       errorHook(path, value, this);
     }
@@ -65,6 +70,6 @@ export class LongType extends PrimitiveType<bigint> {
   }
 
   public toJSON(): string {
-    return 'long';
+    return "long";
   }
 }

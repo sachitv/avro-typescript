@@ -1,12 +1,16 @@
-import { Tap } from '../serialization/tap.ts';
-import { FixedSizeBaseType } from './fixed_size_base_type.ts';
-import { ErrorHook, throwInvalidError } from './error.ts';
+import { Tap } from "../serialization/tap.ts";
+import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
+import { ErrorHook, throwInvalidError } from "./error.ts";
 
 /**
  * Null type.
  */
 export class NullType extends FixedSizeBaseType<null> {
-  public check(value: unknown, errorHook?: ErrorHook, path: string[] = []): boolean {
+  public check(
+    value: unknown,
+    errorHook?: ErrorHook,
+    path: string[] = [],
+  ): boolean {
     const isValid = value === null;
     if (!isValid && errorHook) {
       errorHook(path, value, this);
@@ -42,6 +46,6 @@ export class NullType extends FixedSizeBaseType<null> {
   }
 
   public toJSON(): string {
-    return 'null';
+    return "null";
   }
 }
