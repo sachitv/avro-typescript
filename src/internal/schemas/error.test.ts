@@ -1,6 +1,10 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { throwInvalidError, ValidationError } from "./error.ts";
+import {
+  renderPathAsTree,
+  throwInvalidError,
+  ValidationError,
+} from "./error.ts";
 import { LongType } from "./long_type.ts";
 import { DoubleType } from "./double_type.ts";
 
@@ -8,7 +12,7 @@ describe("ValidationError", () => {
   it("includes bigint value with n suffix", () => {
     const type = new LongType();
     const err = new ValidationError([], 123n, type);
-    assertEquals(err.message, "Invalid value: 123n for type: LongType");
+    assertEquals(err.message, "Invalid value: 123n for type: long");
   });
 
   it("falls back to string representation when JSON serialization fails", () => {
@@ -18,7 +22,7 @@ describe("ValidationError", () => {
     const err = new ValidationError([], circular, type);
     assertEquals(
       err.message,
-      "Invalid value: [object Object] for type: DoubleType",
+      "Invalid value: [object Object] for type: double",
     );
   });
 
@@ -28,7 +32,7 @@ describe("ValidationError", () => {
     const err = new ValidationError([], symbolValue, type);
     assertEquals(
       err.message,
-      "Invalid value: Symbol(token) for type: DoubleType",
+      "Invalid value: Symbol(token) for type: double",
     );
   });
 });
@@ -41,11 +45,30 @@ describe("throwInvalidError", () => {
         throwInvalidError(["field"], "bad", type);
       },
       ValidationError,
-      'Invalid value: "bad" for type: DoubleType',
+      'Invalid value: "bad" for type: double at path:\nfield',
     );
 
     assertEquals(err.path, ["field"]);
     assertEquals(err.value, "bad");
     assertEquals(err.type, type);
+  });
+});
+
+describe("renderPathAsTree", () => {
+  it("renders empty path as empty string", () => {
+    assertEquals(renderPathAsTree([]), "");
+  });
+
+  it("renders single element path", () => {
+    assertEquals(renderPathAsTree(["root"]), "root");
+  });
+
+  it("renders multi-element path with indentation", () => {
+    assertEquals(
+      renderPathAsTree(["root", "child", "leaf"]),
+      `root
+  child
+    leaf`,
+    );
   });
 });

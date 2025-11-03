@@ -18,9 +18,12 @@ export class ValidationError<T = unknown> extends Error {
     const serializedValue = typeof invalidValue === "bigint"
       ? `${invalidValue}n`
       : safeStringify(invalidValue);
-    super(
-      `Invalid value: ${serializedValue} for type: ${schemaType.constructor.name}`,
-    );
+    let message =
+      `Invalid value: ${serializedValue} for type: ${schemaType.toJSON()}`;
+    if (path.length > 0) {
+      message += ` at path:\n${renderPathAsTree(path)}`;
+    }
+    super(message);
     this.name = "ValidationError";
     this.path = path;
     this.value = invalidValue;
@@ -43,4 +46,13 @@ function safeStringify(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+export function renderPathAsTree(path: string[]): string {
+  if (path.length === 0) return "";
+  let result = path[0];
+  for (let i = 1; i < path.length; i++) {
+    result += "\n" + "  ".repeat(i) + path[i];
+  }
+  return result;
 }
