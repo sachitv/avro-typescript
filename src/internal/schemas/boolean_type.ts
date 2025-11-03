@@ -29,6 +29,10 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     tap.writeBoolean(value);
   }
 
+  public override skip(tap: Tap): void {
+    tap.skipBoolean();
+  }
+
   public sizeBytes(): number {
     return 1; // 1 byte
   }

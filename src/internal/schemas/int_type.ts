@@ -31,6 +31,10 @@ export class IntType extends PrimitiveType<number> {
     tap.writeInt(value);
   }
 
+  public override skip(tap: Tap): void {
+    tap.skipInt();
+  }
+
   public override toBuffer(value: number): ArrayBuffer {
     this.check(value, throwInvalidError, []);
     // For int, allocate exact size based on value

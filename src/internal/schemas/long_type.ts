@@ -37,6 +37,10 @@ export class LongType extends PrimitiveType<bigint> {
     tap.writeLong(value);
   }
 
+  public override skip(tap: Tap): void {
+    tap.skipLong();
+  }
+
   public override toBuffer(value: bigint): ArrayBuffer {
     this.check(value, throwInvalidError, []);
     // For long, allocate exact size based on value

@@ -37,6 +37,10 @@ export class FloatType extends FixedSizeBaseType<number> {
     tap.writeFloat(value);
   }
 
+  public override skip(tap: Tap): void {
+    tap.skipFloat();
+  }
+
   public sizeBytes(): number {
     return 4; // 4 bytes
   }

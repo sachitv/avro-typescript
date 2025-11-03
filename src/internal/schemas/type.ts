@@ -66,6 +66,12 @@ export abstract class Type<T = unknown> {
   public abstract read(tap: Tap): T;
 
   /**
+   * Skips a value in the tap. Must be implemented by subclasses.
+   * @param tap The tap to skip from.
+   */
+  public abstract skip(tap: Tap): void;
+
+  /**
    * Checks if a value is valid according to the schema. Must be implemented by subclasses.
    * @param value The value to check.
    * @param errorHook Optional error callback.

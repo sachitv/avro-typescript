@@ -51,6 +51,10 @@ class TestPrimitiveType extends PrimitiveType<number> {
     tap.writeInt(value);
   }
 
+  public override skip(tap: Tap): void {
+    tap.skipInt();
+  }
+
   public override toJSON(): string {
     return "test";
   }
@@ -101,6 +105,10 @@ class FakePrimitiveType extends PrimitiveType<string> {
       throwInvalidError([], value, this);
     }
     tap.writeString(value);
+  }
+
+  public override skip(tap: Tap): void {
+    tap.skipString();
   }
 
   public override toJSON(): string {

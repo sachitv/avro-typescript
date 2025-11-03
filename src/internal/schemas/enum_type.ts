@@ -63,6 +63,10 @@ export class EnumType extends NamedType<string> {
     tap.writeLong(BigInt(index));
   }
 
+  public override skip(tap: Tap): void {
+    tap.skipLong();
+  }
+
   public override read(tap: Tap): string {
     const rawIndex = tap.readLong();
     const index = Number(rawIndex);

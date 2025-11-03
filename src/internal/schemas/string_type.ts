@@ -47,6 +47,10 @@ export class StringType extends PrimitiveType<string> {
     tap.writeString(value);
   }
 
+  public override skip(tap: Tap): void {
+    tap.skipString();
+  }
+
   public override compare(val1: string, val2: string): number {
     return val1 < val2 ? -1 : val1 > val2 ? 1 : 0;
   }

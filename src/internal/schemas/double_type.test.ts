@@ -95,6 +95,18 @@ describe("DoubleType", () => {
     });
   });
 
+  describe("skip", () => {
+    it("should skip double in tap", () => {
+      const buffer = new ArrayBuffer(16);
+      const tap = new Tap(buffer);
+      tap.writeDouble(123.5); // write something first
+      const posBefore = tap._testOnlyPos;
+      type.skip(tap);
+      const posAfter = tap._testOnlyPos;
+      assertEquals(posAfter - posBefore, 8);
+    });
+  });
+
   describe("sizeBytes", () => {
     it("should return 8", () => {
       assertEquals(type.sizeBytes(), 8);

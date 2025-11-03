@@ -26,4 +26,12 @@ export abstract class FixedSizeBaseType<T = unknown> extends BaseType<T> {
     this.write(tap, value);
     return buf;
   }
+
+  /**
+   * Skips a fixed-size value by advancing the tap by the fixed size.
+   * @param tap The tap to skip from.
+   */
+  public skip(tap: Tap): void {
+    tap.skipFixed(this.sizeBytes());
+  }
 }

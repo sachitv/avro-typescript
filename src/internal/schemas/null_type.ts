@@ -28,6 +28,10 @@ export class NullType extends FixedSizeBaseType<null> {
     }
   }
 
+  public override skip(_tap: Tap): void {
+    // Null takes no space
+  }
+
   public sizeBytes(): number {
     return 0; // Null takes no space
   }

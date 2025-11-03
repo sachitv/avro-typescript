@@ -60,6 +60,16 @@ describe("StringType", () => {
     assertThrows(() => type.write(tap, invalidValue), Error);
   });
 
+  it("skip should skip string in tap", () => {
+    const str = "test";
+    const buffer = type.toBuffer(str);
+    const tap = new Tap(buffer);
+    const posBefore = tap._testOnlyPos;
+    type.skip(tap);
+    const posAfter = tap._testOnlyPos;
+    assertEquals(posAfter - posBefore, buffer.byteLength);
+  });
+
   it("read should throw for insufficient data", () => {
     const buf = new ArrayBuffer(5);
     const writeTap = new Tap(buf);

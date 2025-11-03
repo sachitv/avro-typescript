@@ -36,6 +36,10 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     tap.writeBytes(value);
   }
 
+  public override skip(tap: Tap): void {
+    tap.skipBytes();
+  }
+
   public override toBuffer(value: Uint8Array): ArrayBuffer {
     this.check(value, throwInvalidError, []);
     // Pre-allocate buffer based on value length for efficiency

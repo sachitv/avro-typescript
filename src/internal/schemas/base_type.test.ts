@@ -31,6 +31,10 @@ class TestType extends BaseType<string> {
     return val ?? "";
   }
 
+  public override skip(tap: Tap): void {
+    tap.skipString();
+  }
+
   public override check(
     value: unknown,
     errorHook?: (
@@ -85,6 +89,10 @@ class OtherType extends FixedSizeBaseType<number> {
       throw new Error("Insufficient data");
     }
     return val;
+  }
+
+  public override skip(tap: Tap): void {
+    tap.skipDouble();
   }
 
   public override check(value: unknown): boolean {

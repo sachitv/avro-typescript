@@ -26,6 +26,8 @@ class DummyNamedType extends NamedType<string> {
     return "";
   }
 
+  public override skip(_tap: Tap): void {}
+
   public override check(
     _value: unknown,
     _errorHook?: unknown,

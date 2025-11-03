@@ -91,6 +91,18 @@ describe("FloatType", () => {
     });
   });
 
+  describe("skip", () => {
+    it("should skip float in tap", () => {
+      const buffer = new ArrayBuffer(8);
+      const tap = new Tap(buffer);
+      tap.writeFloat(123.5); // write something first
+      const posBefore = tap._testOnlyPos;
+      type.skip(tap);
+      const posAfter = tap._testOnlyPos;
+      assertEquals(posAfter - posBefore, 4);
+    });
+  });
+
   describe("sizeBytes", () => {
     it("should return 4", () => {
       assertEquals(type.sizeBytes(), 4);

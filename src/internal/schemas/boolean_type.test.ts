@@ -58,6 +58,18 @@ describe("BooleanType", () => {
     });
   });
 
+  describe("skip", () => {
+    it("should skip boolean in tap", () => {
+      const buffer = new ArrayBuffer(2);
+      const tap = new Tap(buffer);
+      tap.writeBoolean(true); // write something first
+      const posBefore = tap._testOnlyPos;
+      type.skip(tap);
+      const posAfter = tap._testOnlyPos;
+      assertEquals(posAfter - posBefore, 1);
+    });
+  });
+
   describe("sizeBytes", () => {
     it("should return 1", () => {
       assertEquals(type.sizeBytes(), 1);

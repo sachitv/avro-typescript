@@ -3,6 +3,7 @@ import { describe, it } from "@std/testing/bdd";
 import { Tap } from "../serialization/tap.ts";
 import { IntType } from "./int_type.ts";
 import { ValidationError } from "./error.ts";
+import { calculateVarintSize } from "./varint.ts";
 
 describe("IntType", () => {
   const type = new IntType();
@@ -63,6 +64,22 @@ describe("IntType", () => {
       assertThrows(() => {
         type.write(tap, 2147483648 as unknown as number);
       }, ValidationError);
+    });
+  });
+
+  describe("skip", () => {
+    it("should skip int in tap", () => {
+      const value = 42;
+      const size = calculateVarintSize(value);
+      const buffer = new ArrayBuffer(size + 1);
+      const tap = new Tap(buffer);
+      type.write(tap, value);
+      const posAfterWrite = tap._testOnlyPos;
+      assertEquals(posAfterWrite, size);
+      tap.resetPos();
+      type.skip(tap);
+      const posAfterSkip = tap._testOnlyPos;
+      assertEquals(posAfterSkip, size);
     });
   });
 

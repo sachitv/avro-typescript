@@ -77,6 +77,18 @@ describe("BytesType", () => {
     });
   });
 
+  describe("skip", () => {
+    it("should skip bytes in tap", () => {
+      const data = new Uint8Array([1, 2, 3]);
+      const buffer = type.toBuffer(data);
+      const tap = new Tap(buffer);
+      const posBefore = tap._testOnlyPos;
+      type.skip(tap);
+      const posAfter = tap._testOnlyPos;
+      assertEquals(posAfter - posBefore, buffer.byteLength);
+    });
+  });
+
   describe("toBuffer", () => {
     it("should serialize bytes correctly", () => {
       const data = new Uint8Array([10, 20, 30]);

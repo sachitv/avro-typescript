@@ -4,6 +4,7 @@ import { Tap } from "../serialization/tap.ts";
 import { LongType } from "./long_type.ts";
 import { IntType } from "./int_type.ts";
 import { ValidationError } from "./error.ts";
+import { calculateVarintSize } from "./varint.ts";
 
 describe("LongType", () => {
   const type = new LongType();
@@ -74,6 +75,22 @@ describe("LongType", () => {
       assertThrows(() => {
         type.write(tap, 42 as unknown as bigint);
       }, ValidationError);
+    });
+  });
+
+  describe("skip", () => {
+    it("should skip long in tap", () => {
+      const value = 42n;
+      const size = calculateVarintSize(value);
+      const buffer = new ArrayBuffer(size + 1);
+      const tap = new Tap(buffer);
+      type.write(tap, value);
+      const posAfterWrite = tap._testOnlyPos;
+      assertEquals(posAfterWrite, size);
+      tap.resetPos();
+      type.skip(tap);
+      const posAfterSkip = tap._testOnlyPos;
+      assertEquals(posAfterSkip, size);
     });
   });
 

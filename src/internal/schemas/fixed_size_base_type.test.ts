@@ -65,4 +65,16 @@ describe("FixedSizeBaseType", () => {
       }, ValidationError);
     });
   });
+
+  describe("skip", () => {
+    it("should skip fixed-size value using base class implementation", () => {
+      const value = 42;
+      const buffer = type.toBuffer(value);
+      const tap = new Tap(buffer);
+      const posBefore = tap._testOnlyPos;
+      type.skip(tap);
+      const posAfter = tap._testOnlyPos;
+      assertEquals(posAfter - posBefore, 4); // sizeBytes() returns 4
+    });
+  });
 });

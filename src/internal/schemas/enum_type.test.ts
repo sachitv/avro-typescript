@@ -116,6 +116,17 @@ describe("EnumType", () => {
     assertEquals(type.getSymbols(), ["A", "B"]);
   });
 
+  it("skips encoded values", () => {
+    const type = createEnum({
+      name: "Letter",
+      symbols: ["A", "B", "C"],
+    });
+    const buffer = type.toBuffer("C");
+    const tap = new Tap(buffer);
+    type.skip(tap);
+    assertEquals(tap._testOnlyPos, buffer.byteLength);
+  });
+
   it("creates resolvers when writer symbols are compatible", () => {
     const reader = createEnum({
       name: "Letter",

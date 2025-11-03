@@ -38,6 +38,10 @@ export class DoubleType extends FixedSizeBaseType<number> {
     tap.writeDouble(value);
   }
 
+  public override skip(tap: Tap): void {
+    tap.skipDouble();
+  }
+
   public sizeBytes(): number {
     return 8; // 8 bytes
   }

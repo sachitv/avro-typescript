@@ -55,6 +55,17 @@ describe("NullType", () => {
     });
   });
 
+  describe("skip", () => {
+    it("should skip null in tap", () => {
+      const buffer = new ArrayBuffer(1);
+      const tap = new Tap(buffer);
+      const posBefore = tap._testOnlyPos;
+      type.skip(tap);
+      const posAfter = tap._testOnlyPos;
+      assertEquals(posAfter - posBefore, 0);
+    });
+  });
+
   describe("sizeBytes", () => {
     it("should return 0", () => {
       assertEquals(type.sizeBytes(), 0);
