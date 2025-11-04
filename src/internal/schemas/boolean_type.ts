@@ -54,4 +54,8 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
   public override toJSON(): JSONType {
     return "boolean";
   }
+
+  public override match(tap1: Tap, tap2: Tap): number {
+    return tap1.matchBoolean(tap2);
+  }
 }

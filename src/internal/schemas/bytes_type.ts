@@ -104,4 +104,8 @@ export class BytesType extends PrimitiveType<Uint8Array> {
   public override toJSON(): JSONType {
     return "bytes";
   }
+
+  public override match(tap1: Tap, tap2: Tap): number {
+    return tap1.matchBytes(tap2);
+  }
 }

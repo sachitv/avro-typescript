@@ -76,4 +76,8 @@ export class LongType extends PrimitiveType<bigint> {
   public override toJSON(): JSONType {
     return "long";
   }
+
+  public override match(tap1: Tap, tap2: Tap): number {
+    return tap1.matchLong(tap2);
+  }
 }

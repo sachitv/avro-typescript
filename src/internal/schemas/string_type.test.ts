@@ -89,6 +89,17 @@ describe("StringType", () => {
     assertEquals(type.compare("", "a"), -1);
   });
 
+  it("match should match encoded string buffers", () => {
+    const bufA = type.toBuffer("a");
+    const bufB = type.toBuffer("b");
+    const bufEmpty = type.toBuffer("");
+
+    assertEquals(type.match(new Tap(bufA), new Tap(bufB)), -1);
+    assertEquals(type.match(new Tap(bufB), new Tap(bufA)), 1);
+    assertEquals(type.match(new Tap(bufA), new Tap(type.toBuffer("a"))), 0);
+    assertEquals(type.match(new Tap(bufEmpty), new Tap(type.toBuffer(""))), 0);
+  });
+
   it("random should return a string", () => {
     const rand = type.random();
     assertEquals(typeof rand, "string");

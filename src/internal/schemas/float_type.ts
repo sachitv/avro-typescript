@@ -83,4 +83,8 @@ export class FloatType extends FixedSizeBaseType<number> {
   public override toJSON(): JSONType {
     return "float";
   }
+
+  public override match(tap1: Tap, tap2: Tap): number {
+    return tap1.matchFloat(tap2);
+  }
 }

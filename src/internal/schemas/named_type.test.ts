@@ -48,6 +48,10 @@ class DummyNamedType extends NamedType<string> {
   public override toJSON(): JSONType {
     return "dummy";
   }
+
+  public override match(_tap1: Tap, _tap2: Tap): number {
+    return 0;
+  }
 }
 
 describe("NamedType", () => {
@@ -66,5 +70,19 @@ describe("NamedType", () => {
     assert(type.matchesName("com.example.Person"));
     assert(type.matchesName("com.example.LegacyPerson"));
     assert(type.matchesName("other.Alias"));
+  });
+
+  it("match should return 0", () => {
+    const params = {
+      name: "Test",
+      namespace: "test",
+    };
+    const resolved = resolveNames(params);
+    const type = new DummyNamedType(resolved);
+
+    const buf1 = type.toBuffer("a");
+    const buf2 = type.toBuffer("b");
+
+    assertEquals(type.match(new Tap(buf1), new Tap(buf2)), 0);
   });
 });

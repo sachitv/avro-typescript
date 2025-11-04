@@ -105,4 +105,12 @@ export abstract class Type<T = unknown> {
    * @returns The JSON representation as JSONType.
    */
   public abstract toJSON(): JSONType;
+
+  /**
+   * Compares two encoded buffers. Must be implemented by subclasses.
+   * @param tap1 The first tap.
+   * @param tap2 The second tap.
+   * @returns -1 if tap1 < tap2, 0 if equal, 1 if tap1 > tap2.
+   */
+  public abstract match(tap1: Tap, tap2: Tap): number;
 }

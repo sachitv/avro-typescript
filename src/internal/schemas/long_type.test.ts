@@ -164,6 +164,22 @@ describe("LongType", () => {
     });
   });
 
+  describe("match", () => {
+    it("should match encoded long buffers correctly", () => {
+      const val1 = 1n;
+      const val2 = 1n;
+      const val3 = 2n;
+
+      const buf1 = type.toBuffer(val1);
+      const buf2 = type.toBuffer(val2);
+      const buf3 = type.toBuffer(val3);
+
+      assertEquals(type.match(new Tap(buf1), new Tap(buf2)), 0); // 1n == 1n
+      assertEquals(type.match(new Tap(buf1), new Tap(buf3)), -1); // 1n < 2n
+      assertEquals(type.match(new Tap(buf3), new Tap(buf1)), 1); // 2n > 1n
+    });
+  });
+
   describe("inheritance from PrimitiveType and BaseType", () => {
     it("should clone bigint values", () => {
       assertEquals(type.clone(42n), 42n);

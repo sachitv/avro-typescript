@@ -64,6 +64,10 @@ class TestType extends BaseType<string> {
   public override random(): string {
     return Math.random().toString(36).substring(2);
   }
+
+  public override match(tap1: Tap, tap2: Tap): number {
+    return tap1.matchString(tap2);
+  }
 }
 
 /**
@@ -112,6 +116,10 @@ class OtherType extends FixedSizeBaseType<number> {
 
   public override random(): number {
     return Math.random();
+  }
+
+  public override match(tap1: Tap, tap2: Tap): number {
+    return tap1.matchDouble(tap2);
   }
 }
 
@@ -256,6 +264,50 @@ describe("Type", () => {
       const randomValue = type.random();
       assert(typeof randomValue === "string");
       assert(randomValue.length > 0);
+    });
+  });
+
+  describe("match", () => {
+    it("should match encoded buffers correctly", () => {
+      const value1 = "apple";
+      const value2 = "banana";
+      const value3 = "apple";
+
+      const buffer1 = type.toBuffer(value1);
+      const buffer2 = type.toBuffer(value2);
+      const buffer3 = type.toBuffer(value3);
+
+      // apple < banana
+      assertEquals(type.match(new Tap(buffer1), new Tap(buffer2)), -1);
+      // banana > apple
+      assertEquals(type.match(new Tap(buffer2), new Tap(buffer1)), 1);
+      // apple == apple
+      assertEquals(type.match(new Tap(buffer1), new Tap(buffer3)), 0);
+    });
+
+    it("should handle empty strings", () => {
+      const emptyBuf = type.toBuffer("");
+      const nonEmptyBuf = type.toBuffer("a");
+
+      assertEquals(type.match(new Tap(emptyBuf), new Tap(nonEmptyBuf)), -1);
+      assertEquals(type.match(new Tap(nonEmptyBuf), new Tap(emptyBuf)), 1);
+      assertEquals(
+        type.match(new Tap(emptyBuf), new Tap(type.toBuffer(""))),
+        0,
+      );
+    });
+
+    it("should handle unicode strings", () => {
+      const value1 = "héllo";
+      const value2 = "wörld";
+
+      const buffer1 = type.toBuffer(value1);
+      const buffer2 = type.toBuffer(value2);
+
+      // Compare based on encoded byte order
+      const result = type.match(new Tap(buffer1), new Tap(buffer2));
+      assert(typeof result === "number");
+      assert(result !== 0); // They should be different
     });
   });
 });

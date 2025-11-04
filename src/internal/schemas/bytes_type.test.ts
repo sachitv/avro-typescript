@@ -124,6 +124,16 @@ describe("BytesType", () => {
       assert(randomValue instanceof Uint8Array);
       assert(randomValue.length >= 0 && randomValue.length < 32);
     });
+
+    it("should generate random bytes with values 0-255", () => {
+      let randomValue;
+      do {
+        randomValue = type.random();
+      } while (randomValue.length === 0);
+      for (const byte of randomValue) {
+        assert(byte >= 0 && byte <= 255);
+      }
+    });
   });
 
   describe("toJSON", () => {
@@ -179,6 +189,26 @@ describe("BytesType", () => {
         Error,
         "Schema evolution not supported from writer type: bytes to reader type: bytes",
       );
+    });
+  });
+
+  describe("match", () => {
+    it("should match encoded bytes buffers correctly", () => {
+      const val1 = new Uint8Array([1, 2, 3]);
+      const val2 = new Uint8Array([1, 2, 3]);
+      const val3 = new Uint8Array([1, 2, 4]);
+      const val4 = new Uint8Array([1, 2]);
+
+      const buf1 = type.toBuffer(val1);
+      const buf2 = type.toBuffer(val2);
+      const buf3 = type.toBuffer(val3);
+      const buf4 = type.toBuffer(val4);
+
+      assertEquals(type.match(new Tap(buf1), new Tap(buf2)), 0); // equal
+      assertEquals(type.match(new Tap(buf1), new Tap(buf3)), -1); // [1,2,3] < [1,2,4]
+      assertEquals(type.match(new Tap(buf3), new Tap(buf1)), 1); // [1,2,4] > [1,2,3]
+      assertEquals(type.match(new Tap(buf1), new Tap(buf4)), 1); // longer > shorter
+      assertEquals(type.match(new Tap(buf4), new Tap(buf1)), -1); // shorter < longer
     });
   });
 

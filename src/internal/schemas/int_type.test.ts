@@ -104,6 +104,19 @@ describe("IntType", () => {
     });
   });
 
+  describe("match", () => {
+    it("should match encoded int buffers", () => {
+      const buf1 = type.toBuffer(1);
+      const buf2 = type.toBuffer(2);
+      const bufNeg = type.toBuffer(-1);
+
+      assertEquals(type.match(new Tap(buf1), new Tap(buf2)), -1);
+      assertEquals(type.match(new Tap(buf2), new Tap(buf1)), 1);
+      assertEquals(type.match(new Tap(buf1), new Tap(type.toBuffer(1))), 0);
+      assertEquals(type.match(new Tap(bufNeg), new Tap(type.toBuffer(-1))), 0);
+    });
+  });
+
   describe("random", () => {
     it("should return a valid int", () => {
       const value = type.random();

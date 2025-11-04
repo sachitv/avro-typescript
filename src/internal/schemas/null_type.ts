@@ -53,4 +53,8 @@ export class NullType extends FixedSizeBaseType<null> {
   public override toJSON(): JSONType {
     return "null";
   }
+
+  public override match(_tap1: Tap, _tap2: Tap): number {
+    return 0;
+  }
 }

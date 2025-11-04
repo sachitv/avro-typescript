@@ -186,6 +186,22 @@ describe("FloatType", () => {
     });
   });
 
+  describe("match", () => {
+    it("should match encoded float buffers correctly", () => {
+      const val1 = 1.0;
+      const val2 = 1.0;
+      const val3 = 2.0;
+
+      const buf1 = type.toBuffer(val1);
+      const buf2 = type.toBuffer(val2);
+      const buf3 = type.toBuffer(val3);
+
+      assertEquals(type.match(new Tap(buf1), new Tap(buf2)), 0); // 1.0 == 1.0
+      assertEquals(type.match(new Tap(buf1), new Tap(buf3)), -1); // 1.0 < 2.0
+      assertEquals(type.match(new Tap(buf3), new Tap(buf1)), 1); // 2.0 > 1.0
+    });
+  });
+
   describe("inheritance from PrimitiveType and BaseType", () => {
     it("should clone number values", () => {
       assertEquals(type.clone(42.5), 42.5);

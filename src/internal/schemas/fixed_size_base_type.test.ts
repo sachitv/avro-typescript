@@ -46,6 +46,10 @@ class TestFixedSizeType extends FixedSizeBaseType<number> {
   public override toJSON(): JSONType {
     return "test";
   }
+
+  public override match(tap1: Tap, tap2: Tap): number {
+    return tap1.matchInt(tap2);
+  }
 }
 
 describe("FixedSizeBaseType", () => {
@@ -76,6 +80,17 @@ describe("FixedSizeBaseType", () => {
       type.skip(tap);
       const posAfter = tap._testOnlyPos;
       assertEquals(posAfter - posBefore, 4); // sizeBytes() returns 4
+    });
+  });
+
+  describe("match", () => {
+    it("should match encoded buffers", () => {
+      const buf1 = type.toBuffer(1);
+      const buf2 = type.toBuffer(2);
+
+      assertEquals(type.match(new Tap(buf1), new Tap(buf2)), -1);
+      assertEquals(type.match(new Tap(buf2), new Tap(buf1)), 1);
+      assertEquals(type.match(new Tap(buf1), new Tap(type.toBuffer(1))), 0);
     });
   });
 });

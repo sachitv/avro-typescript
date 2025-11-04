@@ -57,4 +57,8 @@ export class IntType extends PrimitiveType<number> {
   public override toJSON(): JSONType {
     return "int";
   }
+
+  public override match(tap1: Tap, tap2: Tap): number {
+    return tap1.matchInt(tap2);
+  }
 }

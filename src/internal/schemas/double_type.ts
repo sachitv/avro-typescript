@@ -95,4 +95,8 @@ export class DoubleType extends FixedSizeBaseType<number> {
   public override toJSON(): JSONType {
     return "double";
   }
+
+  public override match(tap1: Tap, tap2: Tap): number {
+    return tap1.matchDouble(tap2);
+  }
 }

@@ -81,4 +81,8 @@ export class StringType extends PrimitiveType<string> {
   public override toJSON(): JSONType {
     return "string";
   }
+
+  public override match(tap1: Tap, tap2: Tap): number {
+    return tap1.matchString(tap2);
+  }
 }

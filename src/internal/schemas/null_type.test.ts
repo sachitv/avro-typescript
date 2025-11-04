@@ -78,6 +78,15 @@ describe("NullType", () => {
     });
   });
 
+  describe("match", () => {
+    it("should always return 0 for null buffers", () => {
+      const buf1 = type.toBuffer(null);
+      const buf2 = type.toBuffer(null);
+
+      assertEquals(type.match(new Tap(buf1), new Tap(buf2)), 0);
+    });
+  });
+
   describe("random", () => {
     it("should return null", () => {
       assertEquals(type.random(), null);

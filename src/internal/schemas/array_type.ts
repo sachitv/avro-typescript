@@ -195,6 +195,40 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     };
   }
 
+  public override match(tap1: Tap, tap2: Tap): number {
+    let n1 = this.#readArraySize(tap1);
+    let n2 = this.#readArraySize(tap2);
+    let f: number;
+    while (n1 !== 0n && n2 !== 0n) {
+      f = this.#itemsType.match(tap1, tap2);
+      if (f !== 0) {
+        return f;
+      }
+      if (n1 > 0n) {
+        n1--;
+      }
+      if (n1 === 0n) {
+        n1 = this.#readArraySize(tap1);
+      }
+      if (n2 > 0n) {
+        n2--;
+      }
+      if (n2 === 0n) {
+        n2 = this.#readArraySize(tap2);
+      }
+    }
+    return n1 === n2 ? 0 : n1 < n2 ? -1 : 1;
+  }
+
+  #readArraySize(tap: Tap): bigint {
+    let n = tap.readLong();
+    if (n < 0n) {
+      n = -n;
+      tap.skipLong(); // skip size
+    }
+    return n;
+  }
+
   public override createResolver(writerType: Type): Resolver {
     if (!(writerType instanceof ArrayType)) {
       return super.createResolver(writerType);

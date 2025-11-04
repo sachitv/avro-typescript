@@ -272,6 +272,38 @@ describe("ArrayType", () => {
     ];
     assertEquals(result, expected);
   });
+
+  it("should match encoded array buffers", () => {
+    const arr1 = [1, 2];
+    const arr2 = [1, 3];
+    const arr3 = [1, 2, 4];
+
+    const buf1 = intArray.toBuffer(arr1);
+    const buf2 = intArray.toBuffer(arr2);
+    const buf3 = intArray.toBuffer(arr3);
+
+    assertEquals(intArray.match(new Tap(buf1), new Tap(buf2)), -1); // [1,2] < [1,3]
+    assertEquals(intArray.match(new Tap(buf2), new Tap(buf1)), 1); // [1,3] > [1,2]
+    assertEquals(intArray.match(new Tap(buf1), new Tap(buf3)), -1); // [1,2] < [1,2,4] (shorter first)
+    assertEquals(intArray.match(new Tap(buf3), new Tap(buf1)), 1); // [1,2,4] > [1,2]
+    const buf1_copy = intArray.toBuffer(arr1);
+    assertEquals(intArray.match(new Tap(buf1), new Tap(buf1_copy)), 0); // equal
+
+    // Test size-prefixed block (negative count)
+    const sizePrefixedBuf = new ArrayBuffer(20);
+    const tap = new Tap(sizePrefixedBuf);
+    tap.writeLong(-2n); // negative count for size-prefixed
+    tap.writeLong(3n); // byte size of the block (1 byte for int 1 + 2 bytes for int 32)
+    tap.writeLong(1n);
+    tap.writeLong(32n); // int 32 requires 2 bytes in zigzag varint encoding
+    tap.writeLong(0n); // terminator
+
+    const normalBuf = intArray.toBuffer([1, 32]);
+    assertEquals(
+      intArray.match(new Tap(sizePrefixedBuf), new Tap(normalBuf)),
+      0,
+    ); // should be equal
+  });
 });
 
 describe("readArrayInto", () => {

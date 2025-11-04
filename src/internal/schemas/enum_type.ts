@@ -128,6 +128,10 @@ export class EnumType extends NamedType<string> {
     return "enum";
   }
 
+  public override match(tap1: Tap, tap2: Tap): number {
+    return tap1.matchLong(tap2);
+  }
+
   public override createResolver(writerType: Type): Resolver {
     if (!(writerType instanceof EnumType)) {
       return super.createResolver(writerType);

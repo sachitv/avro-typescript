@@ -62,6 +62,10 @@ class TestPrimitiveType extends PrimitiveType<number> {
   public override random(): number {
     return Math.floor(Math.random() * 101);
   }
+
+  public override match(tap1: Tap, tap2: Tap): number {
+    return tap1.matchInt(tap2);
+  }
 }
 
 /**
@@ -118,6 +122,10 @@ class FakePrimitiveType extends PrimitiveType<string> {
   public override random(): string {
     return "fake";
   }
+
+  public override match(tap1: Tap, tap2: Tap): number {
+    return tap1.matchString(tap2);
+  }
 }
 
 describe("PrimitiveType", () => {
@@ -148,6 +156,17 @@ describe("PrimitiveType", () => {
     it("should handle edge cases", () => {
       assertEquals(type.compare(0, 100), -1);
       assertEquals(type.compare(100, 0), 1);
+    });
+  });
+
+  describe("match", () => {
+    it("should match encoded buffers", () => {
+      const buf1 = type.toBuffer(1);
+      const buf2 = type.toBuffer(2);
+
+      assertEquals(type.match(new Tap(buf1), new Tap(buf2)), -1);
+      assertEquals(type.match(new Tap(buf2), new Tap(buf1)), 1);
+      assertEquals(type.match(new Tap(buf1), new Tap(type.toBuffer(1))), 0);
     });
   });
 

@@ -297,6 +297,22 @@ describe("EnumType", () => {
     );
   });
 
+  it("should match encoded enum buffers correctly", () => {
+    const type = createEnum({
+      name: "Letter",
+      symbols: ["A", "B", "C"],
+    });
+
+    const buf1 = type.toBuffer("A"); // index 0
+    const buf2 = type.toBuffer("B"); // index 1
+    const buf3 = type.toBuffer("C"); // index 2
+
+    assertEquals(type.match(new Tap(buf1), new Tap(buf1)), 0); // A == A
+    assertEquals(type.match(new Tap(buf1), new Tap(buf2)), -1); // A < B
+    assertEquals(type.match(new Tap(buf2), new Tap(buf1)), 1); // B > A
+    assertEquals(type.match(new Tap(buf1), new Tap(buf3)), -1); // A < C
+  });
+
   it("calls super createResolver for non-enum types", () => {
     const type = createEnum({
       name: "Test",

@@ -98,6 +98,24 @@ describe("BooleanType", () => {
     });
   });
 
+  describe("match", () => {
+    it("should match encoded boolean buffers", () => {
+      const trueBuf = type.toBuffer(true);
+      const falseBuf = type.toBuffer(false);
+
+      assertEquals(type.match(new Tap(falseBuf), new Tap(trueBuf)), -1);
+      assertEquals(type.match(new Tap(trueBuf), new Tap(falseBuf)), 1);
+      assertEquals(
+        type.match(new Tap(trueBuf), new Tap(type.toBuffer(true))),
+        0,
+      );
+      assertEquals(
+        type.match(new Tap(falseBuf), new Tap(type.toBuffer(false))),
+        0,
+      );
+    });
+  });
+
   describe("inheritance from PrimitiveType and BaseType", () => {
     it("should clone boolean values", () => {
       assertEquals(type.clone(true), true);
