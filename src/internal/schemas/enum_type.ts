@@ -8,6 +8,7 @@ import { type ErrorHook, throwInvalidError } from "./error.ts";
 
 export interface EnumTypeParams extends ResolvedNames {
   symbols: string[];
+  default?: string;
 }
 
 /**
@@ -17,13 +18,14 @@ export interface EnumTypeParams extends ResolvedNames {
 export class EnumType extends NamedType<string> {
   readonly #symbols: string[];
   readonly #indices: Map<string, number>;
+  readonly #default?: string;
 
   constructor(params: EnumTypeParams) {
     if (!(Array.isArray(params.symbols)) || params.symbols.length === 0) {
       throw new Error("EnumType requires a non-empty symbols array.");
     }
 
-    const { symbols, ...nameInfo } = params;
+    const { symbols, default: defaultValue, ...nameInfo } = params;
     super(nameInfo);
     this.#symbols = symbols.slice();
     this.#indices = new Map<string, number>();
@@ -37,10 +39,21 @@ export class EnumType extends NamedType<string> {
       }
       this.#indices.set(symbol, index);
     });
+
+    if (defaultValue !== undefined) {
+      if (!this.#symbols.includes(defaultValue)) {
+        throw new Error("Default value must be a member of the symbols array.");
+      }
+      this.#default = defaultValue;
+    }
   }
 
   public getSymbols(): string[] {
     return this.#symbols.slice();
+  }
+
+  public getDefault(): string | undefined {
+    return this.#default;
   }
 
   public override check(
@@ -125,12 +138,18 @@ export class EnumType extends NamedType<string> {
       ...this.getAliases(),
     ]);
     const writerName = writerType.getFullName();
+    if (!acceptableNames.has(writerName)) {
+      throw new Error(
+        `Schema evolution not supported from writer type: ${writerType.getFullName()} to reader type: ${this.getFullName()}`,
+      );
+    }
+
     const writerSymbols = writerType.getSymbols();
     const allSymbolsSupported = writerSymbols.every((symbol) =>
       this.#indices.has(symbol)
     );
 
-    if (acceptableNames.has(writerName) && allSymbolsSupported) {
+    if (allSymbolsSupported) {
       return new class extends Resolver<string> {
         #writer: EnumType;
 
@@ -143,10 +162,30 @@ export class EnumType extends NamedType<string> {
           return this.#writer.read(tap);
         }
       }(this, writerType);
-    }
+    } else if (this.#default !== undefined) {
+      return new class extends Resolver<string> {
+        #writer: EnumType;
+        #reader: EnumType;
 
-    throw new Error(
-      `Schema evolution not supported from writer type: ${writerType.getFullName()} to reader type: ${this.getFullName()}`,
-    );
+        constructor(reader: EnumType, writer: EnumType) {
+          super(reader);
+          this.#reader = reader;
+          this.#writer = writer;
+        }
+
+        public override read(tap: Tap): string {
+          const writerSymbol = this.#writer.read(tap);
+          if (this.#reader.#indices.has(writerSymbol)) {
+            return writerSymbol;
+          } else {
+            return this.#reader.#default!;
+          }
+        }
+      }(this, writerType);
+    } else {
+      throw new Error(
+        `Schema evolution not supported from writer type: ${writerType.getFullName()} to reader type: ${this.getFullName()}`,
+      );
+    }
   }
 }

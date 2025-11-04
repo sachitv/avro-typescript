@@ -11,10 +11,11 @@ function createEnum(params: {
   namespace?: string;
   aliases?: string[];
   symbols: string[];
+  default?: string;
 }): EnumType {
-  const { symbols, ...nameInfo } = params;
+  const { symbols, default: defaultValue, ...nameInfo } = params;
   const resolved = resolveNames(nameInfo);
-  return new EnumType({ ...resolved, symbols });
+  return new EnumType({ ...resolved, symbols, default: defaultValue });
 }
 
 describe("EnumType", () => {
@@ -52,6 +53,36 @@ describe("EnumType", () => {
       Error,
       "Duplicate enum symbol: A",
     );
+  });
+
+  it("rejects default not in symbols", () => {
+    assertThrows(
+      () =>
+        createEnum({
+          name: "Test",
+          symbols: ["A", "B"],
+          default: "C",
+        }),
+      Error,
+      "Default value must be a member of the symbols array.",
+    );
+  });
+
+  it("returns default value when set", () => {
+    const type = createEnum({
+      name: "Test",
+      symbols: ["A", "B"],
+      default: "A",
+    });
+    assertEquals(type.getDefault(), "A");
+  });
+
+  it("returns undefined when no default", () => {
+    const type = createEnum({
+      name: "Test",
+      symbols: ["A", "B"],
+    });
+    assertEquals(type.getDefault(), undefined);
   });
 
   it("serializes and deserializes values", () => {
@@ -156,6 +187,61 @@ describe("EnumType", () => {
     });
 
     assertThrows(() => reader.createResolver(writer));
+  });
+
+  it("throws when writer name is not acceptable", () => {
+    const reader = createEnum({
+      name: "Letter",
+      symbols: ["A", "B"],
+    });
+    const writer = createEnum({
+      name: "Number",
+      symbols: ["One", "Two"],
+    });
+
+    assertThrows(() => reader.createResolver(writer));
+  });
+
+  it("creates resolvers with default when writer symbols are partially compatible", () => {
+    const reader = createEnum({
+      name: "Letter",
+      symbols: ["A", "B", "D"],
+      default: "D",
+    });
+    const writer = createEnum({
+      name: "Letter",
+      symbols: ["A", "C"],
+    });
+
+    const resolver = reader.createResolver(writer);
+    const bufferA = writer.toBuffer("A");
+    const tapA = new Tap(bufferA);
+    assertEquals(resolver.read(tapA), "A");
+
+    const bufferC = writer.toBuffer("C");
+    const tapC = new Tap(bufferC);
+    assertEquals(resolver.read(tapC), "D");
+  });
+
+  it("uses default for all unknown writer symbols", () => {
+    const reader = createEnum({
+      name: "Letter",
+      symbols: ["A", "B"],
+      default: "B",
+    });
+    const writer = createEnum({
+      name: "Letter",
+      symbols: ["X", "Y"],
+    });
+
+    const resolver = reader.createResolver(writer);
+    const bufferX = writer.toBuffer("X");
+    const tapX = new Tap(bufferX);
+    assertEquals(resolver.read(tapX), "B");
+
+    const bufferY = writer.toBuffer("Y");
+    const tapY = new Tap(bufferY);
+    assertEquals(resolver.read(tapY), "B");
   });
 
   it("clones valid values", () => {
