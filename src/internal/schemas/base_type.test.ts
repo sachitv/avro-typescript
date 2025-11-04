@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { Tap } from "../serialization/tap.ts";
-import { Type } from "./type.ts";
+import { JSONType, Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
 import { BaseType } from "./base_type.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
@@ -11,7 +11,7 @@ import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
  * Handles string values.
  */
 class TestType extends BaseType<string> {
-  public override toJSON(): string {
+  public override toJSON(): JSONType {
     return "test";
   }
 
@@ -70,7 +70,7 @@ class TestType extends BaseType<string> {
  * Another type for testing incompatible resolvers.
  */
 class OtherType extends FixedSizeBaseType<number> {
-  public override toJSON(): string {
+  public override toJSON(): JSONType {
     return "other";
   }
 

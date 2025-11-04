@@ -9,6 +9,8 @@ type ErrorHook = (
 ) => void;
 type IsValidOptions = { errorHook?: ErrorHook };
 
+export type JSONType = string | Record<string, unknown>;
+
 /**
  * Pure abstract base class for all Avro schema types.
  * Provides the common interface for serialization, deserialization, validation, and cloning.
@@ -99,8 +101,8 @@ export abstract class Type<T = unknown> {
   public abstract random(): T;
 
   /**
-   * Returns the JSON schema representation (type name).
-   * @returns The type name as a string.
+   * Returns the JSON schema representation.
+   * @returns The JSON representation as JSONType.
    */
-  public abstract toJSON(): string;
+  public abstract toJSON(): JSONType;
 }

@@ -1,5 +1,6 @@
 import { Tap } from "../serialization/tap.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
+import { type JSONType } from "./type.ts";
 import { ErrorHook, throwInvalidError } from "./error.ts";
 
 /**
@@ -49,7 +50,7 @@ export class NullType extends FixedSizeBaseType<null> {
     return null;
   }
 
-  public toJSON(): string {
+  public override toJSON(): JSONType {
     return "null";
   }
 }

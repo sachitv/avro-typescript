@@ -1,5 +1,6 @@
 import { Tap } from "../serialization/tap.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
+import { type JSONType } from "./type.ts";
 import { ErrorHook, throwInvalidError } from "./error.ts";
 
 /**
@@ -50,7 +51,7 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     return Math.random() < 0.5;
   }
 
-  public toJSON(): string {
+  public override toJSON(): JSONType {
     return "boolean";
   }
 }

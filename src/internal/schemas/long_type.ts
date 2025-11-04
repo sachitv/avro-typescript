@@ -1,6 +1,6 @@
 import { Tap } from "../serialization/tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
-import { Type } from "./type.ts";
+import { Type, type JSONType } from "./type.ts";
 import { Resolver } from "./resolver.ts";
 import { IntType } from "./int_type.ts";
 import { ErrorHook, throwInvalidError } from "./error.ts";
@@ -73,7 +73,7 @@ export class LongType extends PrimitiveType<bigint> {
     }
   }
 
-  public toJSON(): string {
+  public override toJSON(): JSONType {
     return "long";
   }
 }

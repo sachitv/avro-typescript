@@ -3,6 +3,7 @@ import { describe, it } from "@std/testing/bdd";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
 import { Tap } from "../serialization/tap.ts";
 import { ErrorHook, ValidationError } from "./error.ts";
+import { JSONType } from "./type.ts";
 
 // Simple concrete implementation for testing
 class TestFixedSizeType extends FixedSizeBaseType<number> {
@@ -42,7 +43,7 @@ class TestFixedSizeType extends FixedSizeBaseType<number> {
     return Math.floor(Math.random() * 100);
   }
 
-  public toJSON(): string {
+  public override toJSON(): JSONType {
     return "test";
   }
 }

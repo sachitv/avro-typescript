@@ -1,5 +1,6 @@
 import { Tap } from "../serialization/tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
+import { type JSONType } from "./type.ts";
 import { calculateVarintSize } from "./varint.ts";
 import { ErrorHook, throwInvalidError } from "./error.ts";
 
@@ -53,7 +54,7 @@ export class IntType extends PrimitiveType<number> {
     return Math.floor(Math.random() * 1000);
   }
 
-  public override toJSON(): string {
+  public override toJSON(): JSONType {
     return "int";
   }
 }

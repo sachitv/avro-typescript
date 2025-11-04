@@ -2,7 +2,7 @@ import { assert, assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { Tap } from "../serialization/tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
-import { Type } from "./type.ts";
+import { JSONType, Type } from "./type.ts";
 import { throwInvalidError, ValidationError } from "./error.ts";
 import { encode } from "../serialization/text_encoding.ts";
 
@@ -55,7 +55,7 @@ class TestPrimitiveType extends PrimitiveType<number> {
     tap.skipInt();
   }
 
-  public override toJSON(): string {
+  public override toJSON(): JSONType {
     return "test";
   }
 
@@ -111,7 +111,7 @@ class FakePrimitiveType extends PrimitiveType<string> {
     tap.skipString();
   }
 
-  public override toJSON(): string {
+  public override toJSON(): JSONType {
     return "fake";
   }
 

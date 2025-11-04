@@ -1,6 +1,6 @@
 import { Tap } from "../serialization/tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
-import { Type } from "./type.ts";
+import { Type, type JSONType } from "./type.ts";
 import { Resolver } from "./resolver.ts";
 import { ErrorHook, throwInvalidError } from "./error.ts";
 import { calculateVarintSize } from "./varint.ts";
@@ -78,7 +78,7 @@ export class StringType extends PrimitiveType<string> {
     }
   }
 
-  public toJSON(): string {
+  public override toJSON(): JSONType {
     return "string";
   }
 }
