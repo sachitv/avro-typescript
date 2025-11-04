@@ -1,7 +1,7 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
-import { resolveNames } from "./resolve_names.ts";
+import { isValidName, resolveNames } from "./resolve_names.ts";
 
 describe("resolveNames", () => {
   it("qualifies a simple name using the provided namespace", () => {
@@ -121,5 +121,22 @@ describe("resolveNames", () => {
       Error,
       "Cannot rename primitive Avro alias: int",
     );
+  });
+});
+
+describe("isValidName", () => {
+  it("returns true for valid names", () => {
+    assertEquals(isValidName("ValidName"), true);
+    assertEquals(isValidName("_underscore"), true);
+    assertEquals(isValidName("name123"), true);
+    assertEquals(isValidName("A"), true);
+  });
+
+  it("returns false for invalid names", () => {
+    assertEquals(isValidName(""), false);
+    assertEquals(isValidName("123invalid"), false);
+    assertEquals(isValidName("invalid-name"), false);
+    assertEquals(isValidName("invalid.name"), false);
+    assertEquals(isValidName("invalid name"), false);
   });
 });

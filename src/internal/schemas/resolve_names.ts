@@ -1,4 +1,8 @@
-export const NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+export function isValidName(name: string): boolean {
+  return NAME_PATTERN.test(name);
+}
 
 const PRIMITIVE_TYPE_NAMES = new Set([
   "null",
@@ -84,7 +88,7 @@ function validateFullName(
 ): void {
   const parts = name.split(".");
   parts.forEach((part) => {
-    if (!NAME_PATTERN.test(part)) {
+    if (!isValidName(part)) {
       throw new Error(
         `${isAlias ? "Invalid Avro alias: " : "Invalid Avro name: "}${name}`,
       );

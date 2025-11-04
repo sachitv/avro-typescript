@@ -2,7 +2,7 @@ import { Tap } from "../serialization/tap.ts";
 import { Resolver } from "./resolver.ts";
 import { type JSONType, Type } from "./type.ts";
 import { NamedType } from "./named_type.ts";
-import { NAME_PATTERN, type ResolvedNames } from "./resolve_names.ts";
+import { isValidName, type ResolvedNames } from "./resolve_names.ts";
 import { calculateVarintSize } from "./varint.ts";
 import { type ErrorHook, throwInvalidError } from "./error.ts";
 
@@ -31,7 +31,7 @@ export class EnumType extends NamedType<string> {
     this.#indices = new Map<string, number>();
 
     this.#symbols.forEach((symbol, index) => {
-      if (!NAME_PATTERN.test(symbol)) {
+      if (!isValidName(symbol)) {
         throw new Error(`Invalid enum symbol: ${symbol}`);
       }
       if (this.#indices.has(symbol)) {
