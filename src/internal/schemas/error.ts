@@ -1,4 +1,5 @@
 import { Type } from "./type.ts";
+import { safeStringify } from "./json.ts";
 
 export type ErrorHook<T = unknown> = (
   path: string[],
@@ -15,13 +16,12 @@ export class ValidationError<T = unknown> extends Error {
   public readonly type: Type<T>;
 
   constructor(path: string[], invalidValue: unknown, schemaType: Type<T>) {
-    const serializedValue = typeof invalidValue === "bigint"
-      ? `${invalidValue}n`
-      : safeStringify(invalidValue);
+    const serializedValue = safeStringify(invalidValue);
+    const serializedJSON = safeStringify(schemaType.toJSON());
     let message =
-      `Invalid value: ${serializedValue} for type: ${schemaType.toJSON()}`;
+      `Invalid value: \'${serializedValue}\' for type: ${serializedJSON}`;
     if (path.length > 0) {
-      message += ` at path:\n${renderPathAsTree(path)}`;
+      message += ` at path: ${renderPathAsTree(path)}`;
     }
     super(message);
     this.name = "ValidationError";
@@ -37,15 +37,6 @@ export function throwInvalidError<T = unknown>(
   schemaType: Type<T>,
 ): never {
   throw new ValidationError(path, invalidValue, schemaType);
-}
-
-function safeStringify(value: unknown): string {
-  try {
-    const json = JSON.stringify(value);
-    return json === undefined ? String(value) : json;
-  } catch {
-    return String(value);
-  }
 }
 
 export function renderPathAsTree(path: string[]): string {

@@ -293,7 +293,7 @@ describe("EnumType", () => {
     assertThrows(
       () => type.write(tap, "B"),
       Error,
-      'Invalid value: "B" for type: enum',
+      "Invalid value: 'B' for type: enum",
     );
   });
 
