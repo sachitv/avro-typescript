@@ -1,6 +1,6 @@
 import { Tap } from "../serialization/tap.ts";
 import { Resolver } from "./resolver.ts";
-import { Type, type JSONType } from "./type.ts";
+import { type JSONType, Type } from "./type.ts";
 import { NamedType } from "./named_type.ts";
 import { NAME_PATTERN, type ResolvedNames } from "./resolve_names.ts";
 import { calculateVarintSize } from "./varint.ts";

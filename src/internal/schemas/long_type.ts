@@ -1,6 +1,6 @@
 import { Tap } from "../serialization/tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
-import { Type, type JSONType } from "./type.ts";
+import { type JSONType, Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
 import { IntType } from "./int_type.ts";
 import { ErrorHook, throwInvalidError } from "./error.ts";

@@ -1,5 +1,5 @@
 import { Tap } from "../serialization/tap.ts";
-import { Type, type JSONType } from "./type.ts";
+import { Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
 
 type ErrorHook = (

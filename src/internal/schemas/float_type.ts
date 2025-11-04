@@ -1,6 +1,6 @@
 import { Tap } from "../serialization/tap.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
-import { Type, type JSONType } from "./type.ts";
+import { type JSONType, Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
 import { IntType } from "./int_type.ts";
 import { LongType } from "./long_type.ts";
