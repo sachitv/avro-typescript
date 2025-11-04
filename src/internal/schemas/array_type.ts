@@ -1,11 +1,10 @@
 import { Tap } from "../serialization/tap.ts";
 import { bigIntToSafeNumber } from "../serialization/conversion.ts";
-import { NamedType } from "./named_type.ts";
+import { BaseType } from "./base_type.ts";
 import { Resolver } from "./resolver.ts";
 import { type JSONType, Type } from "./type.ts";
 import { type ErrorHook, throwInvalidError } from "./error.ts";
 import { calculateVarintSize } from "./varint.ts";
-import { ResolvedNames } from "./resolve_names.ts";
 
 export function readArrayInto<T>(
   tap: Tap,
@@ -30,20 +29,19 @@ export function readArrayInto<T>(
   }
 }
 
-export interface ArrayTypeParams<T> extends ResolvedNames {
+export interface ArrayTypeParams<T> {
   items: Type<T>;
 }
 
-export class ArrayType<T = unknown> extends NamedType<T[]> {
+export class ArrayType<T = unknown> extends BaseType<T[]> {
   readonly #itemsType: Type<T>;
 
   constructor(params: ArrayTypeParams<T>) {
-    const { items, ...names } = params;
-    super(names);
-    if (!items) {
+    super();
+    if (!params.items) {
       throw new Error("ArrayType requires an items type.");
     }
-    this.#itemsType = items;
+    this.#itemsType = params.items;
   }
 
   public getItemsType(): Type<T> {

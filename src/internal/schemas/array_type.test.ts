@@ -7,27 +7,15 @@ import { IntType } from "./int_type.ts";
 import { LongType } from "./long_type.ts";
 import { StringType } from "./string_type.ts";
 import { BytesType } from "./bytes_type.ts";
-import { resolveNames } from "./resolve_names.ts";
 import { Type } from "./type.ts";
 
-function createArray<T>(
-  options: {
-    name: string;
-    namespace?: string;
-    aliases?: string[];
-    items: Type<T>;
-  },
-): ArrayType<T> {
-  const { items, ...names } = options;
-  return new ArrayType({ ...resolveNames(names), items });
+function createArray<T>(items: Type<T>): ArrayType<T> {
+  return new ArrayType({ items });
 }
 
 describe("ArrayType", () => {
   const intItems = new IntType();
-  const intArray = createArray({
-    name: "example.IntArray",
-    items: intItems,
-  });
+  const intArray = createArray(intItems);
 
   it("validates valid arrays", () => {
     assert(intArray.check([1, 2, 3]));
@@ -92,15 +80,9 @@ describe("ArrayType", () => {
 
   it("creates resolver for compatible writer arrays", () => {
     // Writer schema: array of strings
-    const stringArray = createArray({
-      name: "example.StringArray",
-      items: new StringType(),
-    });
+    const stringArray = createArray(new StringType());
     // Reader schema: array of byte arrays (compatible evolution)
-    const bytesArray = createArray({
-      name: "example.BytesArray",
-      items: new BytesType(),
-    });
+    const bytesArray = createArray(new BytesType());
     // Create resolver to adapt from string array to byte array
     const resolver = bytesArray.createResolver(stringArray);
     // Write an array of 2 strings containing binary data
@@ -115,14 +97,8 @@ describe("ArrayType", () => {
   });
 
   it("throws resolver error for incompatible writer arrays", () => {
-    const stringArray = createArray({
-      name: "example.StringArray",
-      items: new StringType(),
-    });
-    const intArrayReader = createArray({
-      name: "example.IntArrayReader",
-      items: new IntType(),
-    });
+    const stringArray = createArray(new StringType());
+    const intArrayReader = createArray(new IntType());
     assertThrows(() => intArrayReader.createResolver(stringArray));
   });
 
@@ -130,9 +106,6 @@ describe("ArrayType", () => {
     assertThrows(
       () =>
         new ArrayType({
-          fullName: "test",
-          aliases: [],
-          namespace: "",
           items: undefined as unknown as Type<unknown>,
         }),
       Error,
@@ -241,10 +214,7 @@ describe("ArrayType", () => {
 
   it("handles nested arrays of ints", () => {
     // Create array of array of ints
-    const intArrayOfInts = createArray({
-      name: "example.IntArrayOfInts",
-      items: intArray,
-    });
+    const intArrayOfInts = createArray(intArray);
 
     // Test data: array of arrays
     const nestedData = [
@@ -272,24 +242,12 @@ describe("ArrayType", () => {
 
   it("resolves array of array of ints to array of array of longs", () => {
     // Writer schema: array of array of ints
-    const intArray = createArray({
-      name: "example.IntArray",
-      items: new IntType(),
-    });
-    const writerSchema = createArray({
-      name: "example.ArrayOfIntArrays",
-      items: intArray,
-    });
+    const intArray = createArray(new IntType());
+    const writerSchema = createArray(intArray);
 
     // Reader schema: array of array of longs
-    const longArray = createArray({
-      name: "example.LongArray",
-      items: new LongType(),
-    });
-    const readerSchema = createArray({
-      name: "example.ArrayOfLongArrays",
-      items: longArray,
-    });
+    const longArray = createArray(new LongType());
+    const readerSchema = createArray(longArray);
 
     // Create resolver
     const resolver = readerSchema.createResolver(writerSchema);
