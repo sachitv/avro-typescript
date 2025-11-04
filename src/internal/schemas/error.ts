@@ -45,5 +45,8 @@ export function renderPathAsTree(path: string[]): string {
   for (let i = 1; i < path.length; i++) {
     result += "\n" + "  ".repeat(i) + path[i];
   }
+  if (path.length > 1) {
+    result = "\n" + result;
+  }
   return result;
 }

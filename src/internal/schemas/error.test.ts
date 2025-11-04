@@ -85,7 +85,8 @@ describe("renderPathAsTree", () => {
   it("renders multi-element path with indentation", () => {
     assertEquals(
       renderPathAsTree(["root", "child", "leaf"]),
-      `root
+      `
+root
   child
     leaf`,
     );
