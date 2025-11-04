@@ -304,6 +304,36 @@ describe("ArrayType", () => {
       0,
     ); // should be equal
   });
+
+  it("handles size-prefixed blocks inside match loop", () => {
+    const items = [123, 456];
+
+    // Calculate size of the second element to build a size-prefixed block
+    const elementSize = intItems.toBuffer(items[1]).byteLength;
+
+    const multiBlockBuf = new ArrayBuffer(30);
+    const tap = new Tap(multiBlockBuf);
+
+    // First block: standard, one element
+    tap.writeLong(1n);
+    intItems.write(tap, items[0]);
+
+    // Second block: size-prefixed, one element
+    tap.writeLong(-1n);
+    tap.writeLong(BigInt(elementSize));
+    intItems.write(tap, items[1]);
+
+    // Terminator
+    tap.writeLong(0n);
+
+    const buf1 = multiBlockBuf.slice(0, tap._testOnlyPos);
+    const buf2 = intArray.toBuffer(items);
+
+    // This forces match() to call #readArraySize on a size-prefixed block
+    // from inside its loop.
+    assertEquals(intArray.match(new Tap(buf1), new Tap(buf2)), 0);
+    assertEquals(intArray.match(new Tap(buf2), new Tap(buf1)), 0);
+  });
 });
 
 describe("readArrayInto", () => {
