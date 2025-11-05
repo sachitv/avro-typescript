@@ -26,7 +26,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /** @internal */
-export function getBranchName(type: Type): string {
+export function getBranchTypeName(type: Type): string {
   if (type instanceof NamedType) {
     return type.getFullName();
   }
@@ -73,9 +73,9 @@ export class UnionType extends BaseType<UnionValue> {
       if (type instanceof UnionType) {
         throw new Error("Unions cannot be directly nested.");
       }
-      const name = getBranchName(type);
+      const name = getBranchTypeName(type);
       if (this.#indices.has(name)) {
-        throw new Error(`Duplicate union branch name: ${name}`);
+        throw new Error(`Duplicate union branch of type name: ${name}`);
       }
 
       const branch: BranchInfo = {

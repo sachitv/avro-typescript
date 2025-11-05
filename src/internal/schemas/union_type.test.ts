@@ -3,319 +3,441 @@ import { describe, it } from "@std/testing/bdd";
 import { UnionType } from "./union_type.ts";
 import { StringType } from "./string_type.ts";
 import { IntType } from "./int_type.ts";
+import { LongType } from "./long_type.ts";
+import { FloatType } from "./float_type.ts";
+import { DoubleType } from "./double_type.ts";
+import { BooleanType } from "./boolean_type.ts";
 import { NullType } from "./null_type.ts";
+import { BytesType } from "./bytes_type.ts";
 import { RecordType } from "./record_type.ts";
 import { ArrayType } from "./array_type.ts";
+import { EnumType } from "./enum_type.ts";
+import { MapType } from "./map_type.ts";
+import { FixedType } from "./fixed_type.ts";
 import { Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
 import { Tap } from "../serialization/tap.ts";
 
 describe("UnionType", () => {
   describe("union with null", () => {
+    /*
+     * Union Structure:
+     * Union
+     * ├── null
+     * └── string
+     */
     const nullType = new NullType();
     const stringType = new StringType();
     const unionType = new UnionType({ types: [nullType, stringType] });
 
-    it("should handle null values", () => {
-      assertEquals(unionType.check(null), true);
-      assertEquals(unionType.check({ string: "test" }), true);
-      assertEquals(unionType.check({ null: null }), false); // null is not wrapped
-      assertEquals(unionType.check({ null: "value" }), false); // {null: value} should be rejected
+    describe("check", () => {
+      it("handles null values", () => {
+        assertEquals(unionType.check(null), true);
+        assertEquals(unionType.check({ string: "test" }), true);
+        assertEquals(unionType.check({ null: null }), false); // null is not wrapped
+        assertEquals(unionType.check({ null: "value" }), false); // {null: value} should be rejected
+      });
     });
 
-    it("should serialize and deserialize null", () => {
-      const buf = unionType.toBuffer(null);
-      const tap = new Tap(buf);
-      const result = unionType.read(tap);
-      assertEquals(result, null);
-    });
-
-    it("clone should handle null", () => {
-      const cloned = unionType.clone(null);
-      assertEquals(cloned, null);
-    });
-
-    it("clone should handle null branch with undefined value", () => {
-      const cloned = unionType.clone({ null: undefined });
-      assertEquals(cloned, null);
-    });
-
-    it("compare should handle null", () => {
-      assertEquals(unionType.compare(null, { string: "a" }), -1);
-      assertEquals(unionType.compare({ string: "a" }, null), 1);
-      assertEquals(unionType.compare(null, null), 0);
-    });
-
-    it("random should generate null for null branch", () => {
-      const originalRandom = Math.random;
-      Math.random = () => 0; // Select first branch, which is null
-      try {
-        const result = unionType.random();
+    describe("toBuffer", () => {
+      it("serializes and deserializes null", () => {
+        const buf = unionType.toBuffer(null);
+        const tap = new Tap(buf);
+        const result = unionType.read(tap);
         assertEquals(result, null);
-      } finally {
-        Math.random = originalRandom;
-      }
+      });
     });
 
-    it("write should throw for non-undefined value in null branch", () => {
-      const buf = new ArrayBuffer(10);
-      const tap = new Tap(buf);
-      assertThrows(
-        // deno-lint-ignore no-explicit-any
-        () => unionType.write(tap, { null: "value" } as any),
-        Error,
-        "Invalid value:",
-      );
+    describe("clone", () => {
+      it("handles null", () => {
+        const cloned = unionType.clone(null);
+        assertEquals(cloned, null);
+      });
+
+      it("handles null branch with undefined value", () => {
+        const cloned = unionType.clone({ null: undefined });
+        assertEquals(cloned, null);
+      });
     });
 
-    it("should create resolver for null branch", () => {
-      const nullType = new NullType();
-      const resolver = unionType.createResolver(nullType);
-      const buf = unionType.toBuffer(null);
-      const tap = new Tap(buf);
-      const result = resolver.read(tap);
-      assertEquals(result, null);
+    describe("compare", () => {
+      it("handles null", () => {
+        assertEquals(unionType.compare(null, { string: "a" }), -1);
+        assertEquals(unionType.compare({ string: "a" }, null), 1);
+        assertEquals(unionType.compare(null, null), 0);
+      });
     });
 
-    it("match should handle null in union buffers", () => {
-      const buf1 = unionType.toBuffer(null);
-      const buf2 = unionType.toBuffer(null);
-      const buf3 = unionType.toBuffer({ string: "a" });
-      assertEquals(unionType.match(new Tap(buf1), new Tap(buf2)), 0);
-      assertEquals(unionType.match(new Tap(buf1), new Tap(buf3)), -1);
-      assertEquals(unionType.match(new Tap(buf3), new Tap(buf1)), 1);
+    describe("random", () => {
+      it("generates null for null branch", () => {
+        const originalRandom = Math.random;
+        Math.random = () => 0; // Select first branch, which is null
+        try {
+          const result = unionType.random();
+          assertEquals(result, null);
+        } finally {
+          Math.random = originalRandom;
+        }
+      });
+    });
+
+    describe("write", () => {
+      it("throws for non-undefined value in null branch", () => {
+        const buf = new ArrayBuffer(10);
+        const tap = new Tap(buf);
+        assertThrows(
+          // deno-lint-ignore no-explicit-any
+          () => unionType.write(tap, { null: "value" } as any),
+          Error,
+          "Invalid value:",
+        );
+      });
+    });
+
+    describe("createResolver", () => {
+      it("creates resolver for null branch", () => {
+        const nullType = new NullType();
+        const resolver = unionType.createResolver(nullType);
+        const buf = unionType.toBuffer(null);
+        const tap = new Tap(buf);
+        const result = resolver.read(tap);
+        assertEquals(result, null);
+      });
+    });
+
+    describe("match", () => {
+      it("handles null in union buffers", () => {
+        const buf1 = unionType.toBuffer(null);
+        const buf2 = unionType.toBuffer(null);
+        const buf3 = unionType.toBuffer({ string: "a" });
+        assertEquals(unionType.match(new Tap(buf1), new Tap(buf2)), 0);
+        assertEquals(unionType.match(new Tap(buf1), new Tap(buf3)), -1);
+        assertEquals(unionType.match(new Tap(buf3), new Tap(buf1)), 1);
+      });
     });
   });
   describe("basic union with string and int", () => {
+    /*
+     * Union Structure:
+     * Union
+     * ├── string
+     * └── int
+     */
     const stringType = new StringType();
     const intType = new IntType();
     const unionType = new UnionType({ types: [stringType, intType] });
 
-    it("check should validate union values", () => {
-      assertEquals(unionType.check({ string: "hello" }), true);
-      assertEquals(unionType.check({ int: 42 }), true);
-      assertEquals(unionType.check(null), false); // no null branch
-      assertEquals(unionType.check("hello"), false); // not wrapped
-      assertEquals(unionType.check({}), false); // empty object
-      assertEquals(unionType.check({ unknown: "value" }), false); // unknown branch
-      assertEquals(unionType.check({ string: 123 }), false); // wrong type in branch
+    describe("check", () => {
+      it("validates union values", () => {
+        assertEquals(unionType.check({ string: "hello" }), true);
+        assertEquals(unionType.check({ int: 42 }), true);
+        assertEquals(unionType.check(null), false); // no null branch
+        assertEquals(unionType.check("hello"), false); // not wrapped
+        assertEquals(unionType.check({}), false); // empty object
+        assertEquals(unionType.check({ unknown: "value" }), false); // unknown branch
+        assertEquals(unionType.check({ string: 123 }), false); // wrong type in branch
+      });
+
+      it("calls errorHook for invalid values", () => {
+        let errorCalled = false;
+        const errorHook = () => {
+          errorCalled = true;
+        };
+        assertEquals(unionType.check("invalid", errorHook), false);
+        assertEquals(errorCalled, true);
+      });
+
+      it("calls errorHook for null in union without null", () => {
+        let errorCalled = false;
+        const errorHook = () => {
+          errorCalled = true;
+        };
+        assertEquals(unionType.check(null, errorHook), false);
+        assertEquals(errorCalled, true);
+      });
+
+      it("calls errorHook for objects with multiple keys", () => {
+        let errorCalled = false;
+        const errorHook = () => {
+          errorCalled = true;
+        };
+        assertEquals(
+          unionType.check({ string: "test", int: 123 }, errorHook),
+          false,
+        );
+        assertEquals(errorCalled, true);
+      });
+
+      it("calls errorHook for objects with 'null' key", () => {
+        let errorCalled = false;
+        const errorHook = () => {
+          errorCalled = true;
+        };
+        assertEquals(unionType.check({ null: "value" }, errorHook), false);
+        assertEquals(errorCalled, true);
+      });
+
+      it("calls errorHook for unknown branch names", () => {
+        let errorCalled = false;
+        const errorHook = () => {
+          errorCalled = true;
+        };
+        assertEquals(unionType.check({ unknown: "value" }, errorHook), false);
+        assertEquals(errorCalled, true);
+      });
+
+      it("calls errorHook with extended path for invalid branch value", () => {
+        let capturedPath: string[] | undefined;
+        let capturedValue: unknown;
+        const errorHook = (path: string[], value: unknown) => {
+          capturedPath = path;
+          capturedValue = value;
+        };
+        assertEquals(unionType.check({ string: 123 }, errorHook), false);
+        assertEquals(capturedPath, ["string"]);
+        assertEquals(capturedValue, 123);
+      });
     });
 
-    it("check should call errorHook for invalid values", () => {
-      let errorCalled = false;
-      const errorHook = () => {
-        errorCalled = true;
-      };
-      assertEquals(unionType.check("invalid", errorHook), false);
-      assertEquals(errorCalled, true);
+    describe("toBuffer", () => {
+      it("serializes with toBuffer and deserializes with read", () => {
+        const testValues = [
+          { string: "hello" },
+          { int: 42 },
+          { string: "" },
+          { int: 0 },
+        ];
+
+        for (const value of testValues) {
+          const buf = unionType.toBuffer(value);
+          const tap = new Tap(buf);
+          const result = unionType.read(tap);
+          assertEquals(result, value);
+        }
+      });
     });
 
-    it("check should call errorHook for null in union without null", () => {
-      let errorCalled = false;
-      const errorHook = () => {
-        errorCalled = true;
-      };
-      assertEquals(unionType.check(null, errorHook), false);
-      assertEquals(errorCalled, true);
-    });
-
-    it("check should call errorHook for objects with multiple keys", () => {
-      let errorCalled = false;
-      const errorHook = () => {
-        errorCalled = true;
-      };
-      assertEquals(
-        unionType.check({ string: "test", int: 123 }, errorHook),
-        false,
-      );
-      assertEquals(errorCalled, true);
-    });
-
-    it("check should call errorHook for objects with 'null' key", () => {
-      let errorCalled = false;
-      const errorHook = () => {
-        errorCalled = true;
-      };
-      assertEquals(unionType.check({ null: "value" }, errorHook), false);
-      assertEquals(errorCalled, true);
-    });
-
-    it("check should call errorHook for unknown branch names", () => {
-      let errorCalled = false;
-      const errorHook = () => {
-        errorCalled = true;
-      };
-      assertEquals(unionType.check({ unknown: "value" }, errorHook), false);
-      assertEquals(errorCalled, true);
-    });
-
-    it("check should call errorHook with extended path for invalid branch value", () => {
-      let capturedPath: string[] | undefined;
-      let capturedValue: unknown;
-      const errorHook = (path: string[], value: unknown) => {
-        capturedPath = path;
-        capturedValue = value;
-      };
-      assertEquals(unionType.check({ string: 123 }, errorHook), false);
-      assertEquals(capturedPath, ["string"]);
-      assertEquals(capturedValue, 123);
-    });
-
-    it("toBuffer and read should serialize and deserialize", () => {
-      const testValues = [
-        { string: "hello" },
-        { int: 42 },
-        { string: "" },
-        { int: 0 },
-      ];
-
-      for (const value of testValues) {
-        const buf = unionType.toBuffer(value);
-        const tap = new Tap(buf);
-        const result = unionType.read(tap);
+    describe("write", () => {
+      it("round-trips with read", () => {
+        const buf = new ArrayBuffer(100);
+        const writeTap = new Tap(buf);
+        const value = { string: "test" };
+        unionType.write(writeTap, value);
+        const readTap = new Tap(buf);
+        const result = unionType.read(readTap);
         assertEquals(result, value);
-      }
+      });
+
+      it("throws for null in union without null", () => {
+        const buf = new ArrayBuffer(10);
+        const tap = new Tap(buf);
+        assertThrows(
+          () => unionType.write(tap, null),
+          Error,
+          "Invalid value: 'null' for type:",
+        );
+      });
+
+      it("throws for array value", () => {
+        const buf = new ArrayBuffer(10);
+        const tap = new Tap(buf);
+        assertThrows(
+          // deno-lint-ignore no-explicit-any
+          () => unionType.write(tap, [1, 2, 3] as any),
+          Error,
+          "Invalid value:",
+        );
+      });
+
+      it("throws for object with multiple keys", () => {
+        const buf = new ArrayBuffer(10);
+        const tap = new Tap(buf);
+        assertThrows(
+          // deno-lint-ignore no-explicit-any
+          () => unionType.write(tap, { string: "test", int: 123 } as any),
+          Error,
+          "Invalid value:",
+        );
+      });
+
+      it("throws for unknown branch name", () => {
+        const buf = new ArrayBuffer(10);
+        const tap = new Tap(buf);
+        assertThrows(
+          // deno-lint-ignore no-explicit-any
+          () => unionType.write(tap, { unknown: "value" } as any),
+          Error,
+          "Invalid value:",
+        );
+      });
+
+      it("throws for undefined branch value in non-null branch", () => {
+        const buf = new ArrayBuffer(10);
+        const tap = new Tap(buf);
+        assertThrows(
+          // deno-lint-ignore no-explicit-any
+          () => unionType.write(tap, { string: undefined } as any),
+          Error,
+          "Invalid value:",
+        );
+      });
     });
 
-    it("write and read should work", () => {
-      const buf = new ArrayBuffer(100);
-      const writeTap = new Tap(buf);
-      const value = { string: "test" };
-      unionType.write(writeTap, value);
-      const readTap = new Tap(buf);
-      const result = unionType.read(readTap);
-      assertEquals(result, value);
+    describe("read", () => {
+      it("throws for invalid union index", () => {
+        // Create a buffer with an invalid index (e.g., 999)
+        const buf = new ArrayBuffer(10);
+        const writeTap = new Tap(buf);
+        writeTap.writeLong(999n); // Invalid index
+        const readTap = new Tap(buf);
+        assertThrows(
+          () => unionType.read(readTap),
+          Error,
+          "Invalid union index: 999",
+        );
+      });
     });
 
-    it("write should throw for null in union without null", () => {
-      const buf = new ArrayBuffer(10);
-      const tap = new Tap(buf);
-      assertThrows(
-        () => unionType.write(tap, null),
-        Error,
-        "Invalid value: 'null' for type:",
-      );
+    describe("skip", () => {
+      it("skips union values", () => {
+        const value = { int: 123 };
+        const buffer = unionType.toBuffer(value);
+        const tap = new Tap(buffer);
+        const posBefore = tap._testOnlyPos;
+        unionType.skip(tap);
+        const posAfter = tap._testOnlyPos;
+        assertEquals(posAfter - posBefore, buffer.byteLength);
+      });
     });
 
-    it("write should throw for array value", () => {
-      const buf = new ArrayBuffer(10);
-      const tap = new Tap(buf);
-      assertThrows(
-        // deno-lint-ignore no-explicit-any
-        () => unionType.write(tap, [1, 2, 3] as any),
-        Error,
-        "Invalid value:",
-      );
+    describe("clone", () => {
+      it("deep clones union values", () => {
+        const original = { string: "test" };
+        const cloned = unionType.clone(original);
+        assertEquals(cloned, original);
+        assertEquals(cloned === original, false); // different objects
+      });
+
+      it("throws for null in union without null", () => {
+        assertThrows(
+          () => unionType.clone(null),
+          Error,
+          "Cannot clone null for a union without null branch.",
+        );
+      });
     });
 
-    it("write should throw for object with multiple keys", () => {
-      const buf = new ArrayBuffer(10);
-      const tap = new Tap(buf);
-      assertThrows(
-        // deno-lint-ignore no-explicit-any
-        () => unionType.write(tap, { string: "test", int: 123 } as any),
-        Error,
-        "Invalid value:",
-      );
+    describe("compare", () => {
+      it("compares union values", () => {
+        assertEquals(unionType.compare({ string: "a" }, { string: "b" }), -1);
+        assertEquals(unionType.compare({ int: 1 }, { int: 2 }), -1);
+        assertEquals(unionType.compare({ string: "a" }, { int: 1 }), -1); // string before int
+        assertEquals(unionType.compare({ int: 1 }, { string: "a" }), 1);
+        assertEquals(unionType.compare({ string: "a" }, { string: "a" }), 0);
+      });
     });
 
-    it("write should throw for unknown branch name", () => {
-      const buf = new ArrayBuffer(10);
-      const tap = new Tap(buf);
-      assertThrows(
-        // deno-lint-ignore no-explicit-any
-        () => unionType.write(tap, { unknown: "value" } as any),
-        Error,
-        "Invalid value:",
-      );
+    describe("random", () => {
+      it("generates valid union values", () => {
+        for (let i = 0; i < 10; i++) {
+          const rand = unionType.random();
+          assertEquals(unionType.check(rand), true);
+        }
+      });
     });
 
-    it("write should throw for undefined branch value in non-null branch", () => {
-      const buf = new ArrayBuffer(10);
-      const tap = new Tap(buf);
-      assertThrows(
-        // deno-lint-ignore no-explicit-any
-        () => unionType.write(tap, { string: undefined } as any),
-        Error,
-        "Invalid value:",
-      );
+    describe("toJSON", () => {
+      it("returns array of type JSONs", () => {
+        assertEquals(unionType.toJSON(), ["string", "int"]);
+      });
     });
 
-    it("read should throw for invalid union index", () => {
-      // Create a buffer with an invalid index (e.g., 999)
-      const buf = new ArrayBuffer(10);
-      const writeTap = new Tap(buf);
-      writeTap.writeLong(999n); // Invalid index
-      const readTap = new Tap(buf);
-      assertThrows(
-        () => unionType.read(readTap),
-        Error,
-        "Invalid union index: 999",
-      );
+    describe("getTypes", () => {
+      it("returns the branch types", () => {
+        const types = unionType.getTypes();
+        assertEquals(types.length, 2);
+        assertEquals(types[0], stringType);
+        assertEquals(types[1], intType);
+      });
     });
 
-    it("skip should skip union values", () => {
-      const value = { int: 123 };
-      const buffer = unionType.toBuffer(value);
-      const tap = new Tap(buffer);
-      const posBefore = tap._testOnlyPos;
-      unionType.skip(tap);
-      const posAfter = tap._testOnlyPos;
-      assertEquals(posAfter - posBefore, buffer.byteLength);
+    describe("match", () => {
+      it("compares encoded union buffers", () => {
+        const buf1 = unionType.toBuffer({ string: "a" });
+        const buf2 = unionType.toBuffer({ string: "a" });
+        const buf3 = unionType.toBuffer({ int: 1 });
+        assertEquals(unionType.match(new Tap(buf1), new Tap(buf2)), 0);
+        assertEquals(unionType.match(new Tap(buf1), new Tap(buf3)), -1);
+        assertEquals(unionType.match(new Tap(buf3), new Tap(buf1)), 1);
+      });
     });
 
-    it("clone should deep clone union values", () => {
-      const original = { string: "test" };
-      const cloned = unionType.clone(original);
-      assertEquals(cloned, original);
-      assertEquals(cloned === original, false); // different objects
-    });
+    describe("createResolver", () => {
+      it("creates resolver for same union type", () => {
+        const resolver = unionType.createResolver(unionType);
+        const value = { string: "test" };
+        const buffer = unionType.toBuffer(value);
+        const tap = new Tap(buffer);
+        const result = resolver.read(tap);
+        assertEquals(result, value);
+      });
 
-    it("clone should throw for null in union without null", () => {
-      assertThrows(
-        () => unionType.clone(null),
-        Error,
-        "Cannot clone null for a union without null branch.",
-      );
-    });
+      it("creates resolver for union to union", () => {
+        const writerUnion = new UnionType({ types: [intType, stringType] }); // different order
+        const resolver = unionType.createResolver(writerUnion);
+        const writerValue = { int: 42 }; // index 0 in writer
+        const buffer = writerUnion.toBuffer(writerValue);
+        const tap = new Tap(buffer);
+        const result = resolver.read(tap);
+        assertEquals(result, { int: 42 }); // should map to reader's int branch
+      });
 
-    it("compare should compare union values", () => {
-      assertEquals(unionType.compare({ string: "a" }, { string: "b" }), -1);
-      assertEquals(unionType.compare({ int: 1 }, { int: 2 }), -1);
-      assertEquals(unionType.compare({ string: "a" }, { int: 1 }), -1); // string before int
-      assertEquals(unionType.compare({ int: 1 }, { string: "a" }), 1);
-      assertEquals(unionType.compare({ string: "a" }, { string: "a" }), 0);
-    });
+      it("throws for incompatible writer type", () => {
+        const doubleType = new (class extends IntType {
+          override toJSON() {
+            return "double";
+          }
+        })();
+        assertThrows(
+          () => unionType.createResolver(doubleType),
+          Error,
+          "Schema evolution not supported",
+        );
+      });
 
-    it("random should generate valid union values", () => {
-      for (let i = 0; i < 10; i++) {
-        const rand = unionType.random();
-        assertEquals(unionType.check(rand), true);
-      }
-    });
+      it("creates resolver for compatible branch type", () => {
+        const resolver = unionType.createResolver(stringType);
+        const buf = stringType.toBuffer("test");
+        const tap = new Tap(buf);
+        const result = resolver.read(tap);
+        assertEquals(result, { string: "test" });
+      });
 
-    it("toJSON should return array of type JSONs", () => {
-      assertEquals(unionType.toJSON(), ["string", "int"]);
-    });
-
-    it("getTypes should return the branch types", () => {
-      const types = unionType.getTypes();
-      assertEquals(types.length, 2);
-      assertEquals(types[0], stringType);
-      assertEquals(types[1], intType);
-    });
-
-    it("match should compare encoded union buffers", () => {
-      const buf1 = unionType.toBuffer({ string: "a" });
-      const buf2 = unionType.toBuffer({ string: "a" });
-      const buf3 = unionType.toBuffer({ int: 1 });
-      assertEquals(unionType.match(new Tap(buf1), new Tap(buf2)), 0);
-      assertEquals(unionType.match(new Tap(buf1), new Tap(buf3)), -1);
-      assertEquals(unionType.match(new Tap(buf3), new Tap(buf1)), 1);
+      it("UnionFromUnionResolver throws for invalid index", () => {
+        const resolver = unionType.createResolver(unionType);
+        // Create buffer with invalid index 999
+        const buf = new ArrayBuffer(10);
+        const writeTap = new Tap(buf);
+        writeTap.writeLong(999n);
+        const readTap = new Tap(buf);
+        assertThrows(
+          () => resolver.read(readTap),
+          Error,
+          "Invalid union index: 999",
+        );
+      });
     });
   });
 
-  describe("union with complex types", () => {
+  describe("union with array and record of `array of ints` and string", () => {
+    /*
+     * Union Structure:
+     * Union
+     * ├── array<int>
+     * └── Record
+     *     ├── numbers: array<int>
+     *     └── text: string
+     */
     const arrayType = new ArrayType({ items: new IntType() });
     const recordType = new RecordType({
       fullName: "ComplexRecord",
@@ -345,7 +467,15 @@ describe("UnionType", () => {
     });
   });
 
-  describe("union with records", () => {
+  describe("union with record and integer", () => {
+    /*
+     * Union Structure:
+     * Union
+     * ├── Record
+     * │   ├── id: int
+     * │   └── name: string
+     * └── int
+     */
     const recordType = new RecordType({
       fullName: "TestRecord",
       namespace: "",
@@ -374,7 +504,13 @@ describe("UnionType", () => {
     });
   });
 
-  describe("union with arrays", () => {
+  describe("union with array of ints and string", () => {
+    /*
+     * Union Structure:
+     * Union
+     * ├── array<int>
+     * └── string
+     */
     const arrayType = new ArrayType({ items: new IntType() });
     const stringType = new StringType();
     const unionType = new UnionType({ types: [arrayType, stringType] });
@@ -393,10 +529,279 @@ describe("UnionType", () => {
     });
   });
 
-  describe("error cases", () => {
-    const stringType1 = new StringType();
-    const stringType2 = new StringType();
+  describe("union of union", () => {
+    /*
+     * Note: Unions cannot be directly nested in Avro.
+     * This test ensures that attempting to create a union containing another union throws an error.
+     */
+    it("should not be allowed", () => {
+      const innerUnion = new UnionType({ types: [new StringType()] });
+      assertThrows(
+        () => new UnionType({ types: [innerUnion] }),
+        Error,
+        "Unions cannot be directly nested.",
+      );
+    });
+  });
 
+  describe("union with British and American addresses", () => {
+    /*
+     * This test block demonstrates a complex union structure for addresses.
+     *
+     * In the UK, postal codes (pin codes) are alphanumeric strings of fixed length,
+     * typically 7 characters (e.g., "SW1A1AA" for London). Here, we model it as a
+     * fixed binary type of 7 bytes.
+     *
+     * In the US, ZIP codes can be either 5 digits (standard) or 9 digits (ZIP+4).
+     * We use a nested union to represent this: ShortZip (5 bytes) or LongZip (9 bytes).
+     *
+     * Union Structure:
+     * AddressUnion
+     * ├── BritishAddress (Record)
+     * │   └── pinCode: Fixed(7)
+     * └── AmericanAddress (Record)
+     *     └── zip: ZipUnion
+     *         ├── ShortZip: Fixed(5)
+     *         └── LongZip: Fixed(9)
+     */
+    const shortZip = new FixedType({
+      fullName: "ShortZip",
+      namespace: "",
+      aliases: [],
+      size: 5,
+    });
+    const longZip = new FixedType({
+      fullName: "LongZip",
+      namespace: "",
+      aliases: [],
+      size: 9,
+    });
+    const zipUnion = new UnionType({ types: [shortZip, longZip] });
+    const americanAddress = new RecordType({
+      fullName: "AmericanAddress",
+      namespace: "",
+      aliases: [],
+      fields: [
+        { name: "zip", type: zipUnion },
+      ],
+    });
+    const britishPin = new FixedType({
+      fullName: "BritishPin",
+      namespace: "",
+      aliases: [],
+      size: 7,
+    });
+    const britishAddress = new RecordType({
+      fullName: "BritishAddress",
+      namespace: "",
+      aliases: [],
+      fields: [
+        { name: "pinCode", type: britishPin },
+      ],
+    });
+    const addressUnion = new UnionType({
+      types: [britishAddress, americanAddress],
+    });
+
+    it("should serialize and deserialize British address", () => {
+      const pinBytes = new Uint8Array([83, 87, 49, 65, 49, 65, 65]); // "SW1A1AA"
+      const value = { BritishAddress: { pinCode: pinBytes } };
+      const buf = addressUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = addressUnion.read(tap);
+      assertEquals(result, value);
+    });
+
+    it("should serialize and deserialize American address with short zip", () => {
+      const zipBytes = new Uint8Array([49, 50, 51, 52, 53]); // "12345"
+      const value = { AmericanAddress: { zip: { ShortZip: zipBytes } } };
+      const buf = addressUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = addressUnion.read(tap);
+      assertEquals(result, value);
+    });
+
+    it("should serialize and deserialize American address with long zip", () => {
+      const zipBytes = new Uint8Array([49, 50, 51, 52, 53, 54, 55, 56, 57]); // "123456789"
+      const value = { AmericanAddress: { zip: { LongZip: zipBytes } } };
+      const buf = addressUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = addressUnion.read(tap);
+      assertEquals(result, value);
+    });
+  });
+
+  describe("union of all types", () => {
+    /*
+     * Union Structure:
+     * Union
+     * ├── int
+     * ├── long
+     * ├── float
+     * ├── double
+     * ├── string
+     * ├── boolean
+     * ├── null
+     * ├── bytes
+     * ├── Record
+     * │   └── value: string
+     * ├── array<int>
+     * ├── Enum
+     * ├── Map<string>
+     * └── Fixed(4)
+     */
+    const intType = new IntType();
+    const longType = new LongType();
+    const floatType = new FloatType();
+    const doubleType = new DoubleType();
+    const stringType = new StringType();
+    const booleanType = new BooleanType();
+    const nullType = new NullType();
+    const bytesType = new BytesType();
+    const recordType = new RecordType({
+      fullName: "TestRecord",
+      namespace: "",
+      aliases: [],
+      fields: [{ name: "value", type: new StringType() }],
+    });
+    const arrayType = new ArrayType({ items: new IntType() });
+    const enumType = new EnumType({
+      fullName: "TestEnum",
+      namespace: "",
+      aliases: [],
+      symbols: ["A", "B"],
+    });
+    const mapType = new MapType({ values: new StringType() });
+    const fixedType = new FixedType({
+      fullName: "TestFixed",
+      namespace: "",
+      aliases: [],
+      size: 4,
+    });
+    const allTypesUnion = new UnionType({
+      types: [
+        intType,
+        longType,
+        floatType,
+        doubleType,
+        stringType,
+        booleanType,
+        nullType,
+        bytesType,
+        recordType,
+        arrayType,
+        enumType,
+        mapType,
+        fixedType,
+      ],
+    });
+
+    it("round-trips int", () => {
+      const value = { int: 42 };
+      const buf = allTypesUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = allTypesUnion.read(tap);
+      assertEquals(result, value);
+    });
+
+    it("round-trips long", () => {
+      const value = { long: 42n };
+      const buf = allTypesUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = allTypesUnion.read(tap);
+      assertEquals(result, value);
+    });
+
+    it("round-trips float", () => {
+      const value = { float: 2.0 };
+      const buf = allTypesUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = allTypesUnion.read(tap);
+      assertEquals(result, value);
+    });
+
+    it("round-trips double", () => {
+      const value = { double: 3.14 };
+      const buf = allTypesUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = allTypesUnion.read(tap);
+      assertEquals(result, value);
+    });
+
+    it("round-trips string", () => {
+      const value = { string: "hello" };
+      const buf = allTypesUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = allTypesUnion.read(tap);
+      assertEquals(result, value);
+    });
+
+    it("round-trips boolean", () => {
+      const value = { boolean: true };
+      const buf = allTypesUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = allTypesUnion.read(tap);
+      assertEquals(result, value);
+    });
+
+    it("round-trips null", () => {
+      const value = null;
+      const buf = allTypesUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = allTypesUnion.read(tap);
+      assertEquals(result, value);
+    });
+
+    it("round-trips bytes", () => {
+      const value = { bytes: new Uint8Array([1, 2, 3]) };
+      const buf = allTypesUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = allTypesUnion.read(tap);
+      assertEquals(result, value);
+    });
+
+    it("round-trips record", () => {
+      const value = { TestRecord: { value: "test" } };
+      const buf = allTypesUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = allTypesUnion.read(tap);
+      assertEquals(result, value);
+    });
+
+    it("round-trips array", () => {
+      const value = { array: [1, 2, 3] };
+      const buf = allTypesUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = allTypesUnion.read(tap);
+      assertEquals(result, value);
+    });
+
+    it("round-trips enum", () => {
+      const value = { TestEnum: "A" };
+      const buf = allTypesUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = allTypesUnion.read(tap);
+      assertEquals(result, value);
+    });
+
+    it("round-trips map", () => {
+      const value = { map: new Map([["key", "value"]]) };
+      const buf = allTypesUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = allTypesUnion.read(tap);
+      assertEquals(result, value);
+    });
+
+    it("round-trips fixed", () => {
+      const value = { TestFixed: new Uint8Array([1, 2, 3, 4]) };
+      const buf = allTypesUnion.toBuffer(value);
+      const tap = new Tap(buf);
+      const result = allTypesUnion.read(tap);
+      assertEquals(result, value);
+    });
+  });
+
+  describe("other error cases", () => {
     it("should throw on empty types array", () => {
       assertThrows(
         () => new UnionType({ types: [] }),
@@ -424,20 +829,13 @@ describe("UnionType", () => {
       );
     });
 
-    it("should throw on nested unions", () => {
-      const innerUnion = new UnionType({ types: [new StringType()] });
-      assertThrows(
-        () => new UnionType({ types: [innerUnion] }),
-        Error,
-        "Unions cannot be directly nested.",
-      );
-    });
-
     it("should throw on duplicate branch names", () => {
+      const stringType1 = new StringType();
+      const stringType2 = new StringType();
       assertThrows(
         () => new UnionType({ types: [stringType1, stringType2] }),
         Error,
-        "Duplicate union branch name: string",
+        "Duplicate union branch of type name: string",
       );
     });
 
@@ -483,67 +881,6 @@ describe("UnionType", () => {
         () => new UnionType({ types: [invalidType] }),
         Error,
         "Unable to determine union branch name.",
-      );
-    });
-  });
-
-  describe("createResolver", () => {
-    const stringType = new StringType();
-    const intType = new IntType();
-    const unionType = new UnionType({ types: [stringType, intType] });
-
-    it("should create resolver for same union type", () => {
-      const resolver = unionType.createResolver(unionType);
-      const value = { string: "test" };
-      const buffer = unionType.toBuffer(value);
-      const tap = new Tap(buffer);
-      const result = resolver.read(tap);
-      assertEquals(result, value);
-    });
-
-    it("should create resolver for union to union", () => {
-      const writerUnion = new UnionType({ types: [intType, stringType] }); // different order
-      const resolver = unionType.createResolver(writerUnion);
-      const writerValue = { int: 42 }; // index 0 in writer
-      const buffer = writerUnion.toBuffer(writerValue);
-      const tap = new Tap(buffer);
-      const result = resolver.read(tap);
-      assertEquals(result, { int: 42 }); // should map to reader's int branch
-    });
-
-    it("should throw for incompatible writer type", () => {
-      const doubleType = new (class extends IntType {
-        override toJSON() {
-          return "double";
-        }
-      })();
-      assertThrows(
-        () => unionType.createResolver(doubleType),
-        Error,
-        "Schema evolution not supported",
-      );
-    });
-
-    it("should create resolver for compatible branch type", () => {
-      const stringType = new StringType();
-      const resolver = unionType.createResolver(stringType);
-      const buf = stringType.toBuffer("test");
-      const tap = new Tap(buf);
-      const result = resolver.read(tap);
-      assertEquals(result, { string: "test" });
-    });
-
-    it("UnionFromUnionResolver should throw for invalid index", () => {
-      const resolver = unionType.createResolver(unionType);
-      // Create buffer with invalid index 999
-      const buf = new ArrayBuffer(10);
-      const writeTap = new Tap(buf);
-      writeTap.writeLong(999n);
-      const readTap = new Tap(buf);
-      assertThrows(
-        () => resolver.read(readTap),
-        Error,
-        "Invalid union index: 999",
       );
     });
   });
