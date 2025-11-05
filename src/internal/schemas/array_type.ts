@@ -180,7 +180,8 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
   }
 
   public override random(): T[] {
-    const length = Math.floor(Math.random() * 10);
+    // There should be at least one element.
+    const length = Math.ceil(Math.random() * 10);
     const result: T[] = [];
     for (let i = 0; i < length; i++) {
       result.push(this.#itemsType.random());

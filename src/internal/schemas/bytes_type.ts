@@ -93,7 +93,8 @@ export class BytesType extends PrimitiveType<Uint8Array> {
   }
 
   public override random(): Uint8Array {
-    const len = Math.floor(Math.random() * 32);
+    // There should be at least one byte.
+    const len = Math.ceil(Math.random() * 32);
     const buf = new Uint8Array(len);
     for (let i = 0; i < len; i++) {
       buf[i] = Math.floor(Math.random() * 256);
