@@ -9,7 +9,14 @@ type ErrorHook = (
 ) => void;
 type IsValidOptions = { errorHook?: ErrorHook };
 
-export type JSONType = string | Record<string, unknown>;
+type InnerJSONType = (string | Record<string, unknown>)[];
+export type JSONType =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: JSONType }
+  | JSONType[];
 
 /**
  * Pure abstract base class for all Avro schema types.

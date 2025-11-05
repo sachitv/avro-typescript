@@ -270,19 +270,19 @@ export class RecordType extends NamedType<Record<string, unknown>> {
 
   public override toJSON(): JSONType {
     const fieldsJson = this.#fields.map((field) => {
-      const fieldJson: Record<string, unknown> = {
+      const fieldJson: JSONType = {
         name: field.getName(),
         type: field.getType().toJSON(),
       };
       if (field.hasDefault()) {
-        fieldJson.default = field.getDefault();
+        (fieldJson as Record<string, unknown>).default = field.getDefault();
       }
       const aliases = field.getAliases();
       if (aliases.length > 0) {
-        fieldJson.aliases = aliases;
+        (fieldJson as Record<string, unknown>).aliases = aliases;
       }
       if (field.getOrder() !== "ascending") {
-        fieldJson.order = field.getOrder();
+        (fieldJson as Record<string, unknown>).order = field.getOrder();
       }
       return fieldJson;
     });
