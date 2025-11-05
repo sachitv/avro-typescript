@@ -1,6 +1,8 @@
+/** @internal */
 export function safeJsonStringify(obj: unknown, indent = 2): string {
   const cache: unknown[] = [];
   const retVal = JSON.stringify(obj, (_key, value) => {
+    if (typeof value === "bigint") return String(value);
     if (typeof value === "object" && value !== null) {
       if (cache.includes(value)) return "[Circular]";
       cache.push(value);
@@ -12,14 +14,16 @@ export function safeJsonStringify(obj: unknown, indent = 2): string {
 }
 
 export function safeStringify(value: unknown): string {
-  if (typeof value === "string") return value;
-  try {
-    const jsonStr = safeJsonStringify(value);
-    if (jsonStr === undefined) {
-      return String(value);
-    }
-    return `\n${jsonStr}\n`;
-  } catch {
+  if (
+    typeof value === "string" || typeof value === "bigint" ||
+    typeof value === "number" || typeof value === "boolean" || value === null ||
+    typeof value === "undefined"
+  ) {
     return String(value);
   }
+  const jsonStr = safeJsonStringify(value);
+  if (jsonStr === undefined) {
+    return String(value);
+  }
+  return `\n${jsonStr}\n`;
 }

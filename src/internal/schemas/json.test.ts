@@ -21,8 +21,8 @@ describe("safeJsonStringify", () => {
     expect(result).toContain('"self": "[Circular]"');
   });
 
-  it("should throw for bigint", () => {
-    expect(() => safeJsonStringify(123n)).toThrow();
+  it("should handle bigint", () => {
+    expect(safeJsonStringify(123n)).toBe('"123"');
   });
 
   it("should return undefined for functions", () => {
@@ -58,6 +58,23 @@ describe("safeStringify", () => {
 
   it("should handle bigint", () => {
     expect(safeStringify(123n)).toBe("123");
+  });
+
+  it("should handle number", () => {
+    expect(safeStringify(42)).toBe("42");
+  });
+
+  it("should handle boolean", () => {
+    expect(safeStringify(true)).toBe("true");
+    expect(safeStringify(false)).toBe("false");
+  });
+
+  it("should handle null", () => {
+    expect(safeStringify(null)).toBe("null");
+  });
+
+  it("should handle undefined", () => {
+    expect(safeStringify(undefined)).toBe("undefined");
   });
 
   it("should handle functions", () => {

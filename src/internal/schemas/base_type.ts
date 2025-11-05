@@ -1,6 +1,7 @@
 import { Tap } from "../serialization/tap.ts";
 import { Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
+import { safeStringify } from "./json.ts";
 
 type ErrorHook = (
   path: string[],
@@ -52,7 +53,9 @@ export abstract class BaseType<T = unknown> extends Type<T> {
       }(this);
     } else {
       throw new Error(
-        `Schema evolution not supported from writer type: ${writerType.toJSON()} to reader type: ${this.toJSON()}`,
+        `Schema evolution not supported from writer type: ${
+          safeStringify(writerType.toJSON())
+        } to reader type: ${safeStringify(this.toJSON())}`,
       );
     }
   }
