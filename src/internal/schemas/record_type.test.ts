@@ -302,8 +302,8 @@ describe("RecordType", () => {
         Error,
         `Invalid value: 'undefined' for type: 
 {
+  "name": "example.Person",
   "type": "record",
-  "name": "Person",
   "fields": [
     {
       "name": "id",
@@ -314,8 +314,7 @@ describe("RecordType", () => {
       "type": "string",
       "default": "unknown"
     }
-  ],
-  "namespace": "example"
+  ]
 }
  at path: id`,
       );
@@ -347,8 +346,8 @@ describe("RecordType", () => {
         Error,
         `Invalid value: 'undefined' for type: 
 {
+  "name": "example.ChildRecord",
   "type": "record",
-  "name": "ChildRecord",
   "fields": [
     {
       "name": "id",
@@ -359,8 +358,7 @@ describe("RecordType", () => {
       "type": "string",
       "default": "unknown"
     }
-  ],
-  "namespace": "example"
+  ]
 }
  at path: id`,
       );
@@ -374,16 +372,16 @@ describe("RecordType", () => {
 
       const expectedTypeJson = `
 {
+  "name": "example.Person",
   "type": "record",
-  "name": "Person",
   "fields": [
     {
       "name": "id",
       "type": "int"
     }
-  ],
-  "namespace": "example"
-}`;
+  ]
+}
+`;
 
       const tap = new Tap(new ArrayBuffer(16));
       assertThrows(
@@ -449,8 +447,8 @@ describe("RecordType", () => {
         ValidationError,
         `Invalid value: 'undefined' for type: 
 {
+  "name": "example.Person",
   "type": "record",
-  "name": "Person",
   "fields": [
     {
       "name": "id",
@@ -461,8 +459,7 @@ describe("RecordType", () => {
       "type": "string",
       "default": "unknown"
     }
-  ],
-  "namespace": "example"
+  ]
 }
  at path: id`,
       );
@@ -957,15 +954,14 @@ describe("RecordType", () => {
         Error,
         `Schema evolution not supported from writer type: string to reader type: 
 {
+  "name": "example.Record",
   "type": "record",
-  "name": "Record",
   "fields": [
     {
       "name": "id",
       "type": "int"
     }
-  ],
-  "namespace": "example"
+  ]
 }
 `,
       );
@@ -1015,9 +1011,7 @@ describe("RecordType", () => {
 
       const json = type.toJSON() as Record<string, unknown>;
       assertEquals(json.type, "record");
-      assertEquals(json.name, "Person");
-      assertEquals(json.namespace, "example");
-      assertEquals(json.aliases, ["example.LegacyPerson"]);
+      assertEquals(json.name, "example.Person");
       assertEquals(json.fields, [
         {
           name: "name",
@@ -1047,8 +1041,6 @@ describe("RecordType", () => {
       const json = type.toJSON() as Record<string, unknown>;
       assertEquals(json.type, "record");
       assertEquals(json.name, "Simple");
-      assert(!("namespace" in json));
-      assert(!("aliases" in json));
       assertEquals(json.fields, [
         {
           name: "id",

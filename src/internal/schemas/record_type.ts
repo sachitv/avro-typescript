@@ -287,23 +287,11 @@ export class RecordType extends NamedType<Record<string, unknown>> {
       return fieldJson;
     });
 
-    const json: Record<string, unknown> = {
+    return {
+      name: this.getFullName(),
       type: "record",
-      name: this.#shortName(),
       fields: fieldsJson,
     };
-
-    const namespace = this.getNamespace();
-    if (namespace) {
-      json.namespace = namespace;
-    }
-
-    const aliases = this.getAliases();
-    if (aliases.length > 0) {
-      json.aliases = aliases;
-    }
-
-    return json;
   }
 
   public override match(tap1: Tap, tap2: Tap): number {
@@ -519,12 +507,6 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     throw new Error(
       `Missing comparable value for field '${field.getName()}' with no default.`,
     );
-  }
-
-  #shortName(): string {
-    const fullName = this.getFullName();
-    const idx = fullName.lastIndexOf(".");
-    return idx === -1 ? fullName : fullName.slice(idx + 1);
   }
 }
 
