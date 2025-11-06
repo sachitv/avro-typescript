@@ -20,10 +20,10 @@ export abstract class BaseType<T = unknown> extends Type<T> {
    * @param buffer The ArrayBuffer to deserialize.
    * @returns The deserialized value.
    */
-  public fromBuffer(buffer: ArrayBuffer): T {
+  public async fromBuffer(buffer: ArrayBuffer): Promise<T> {
     const tap = new Tap(buffer);
-    const value = this.read(tap);
-    if (!tap.isValid()) {
+    const value = await this.read(tap);
+    if (!await tap.isValid()) {
       throw new Error("Insufficient data for type");
     }
     return value;
@@ -47,8 +47,8 @@ export abstract class BaseType<T = unknown> extends Type<T> {
   public createResolver(writerType: Type): Resolver {
     if (this.constructor === writerType.constructor) {
       return new class extends Resolver {
-        read(tap: Tap) {
-          return this.readerType.read(tap);
+        async read(tap: Tap) {
+          return await this.readerType.read(tap);
         }
       }(this);
     } else {

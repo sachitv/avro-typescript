@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { Tap } from "../serialization/tap.ts";
@@ -141,115 +141,120 @@ describe("MapType", () => {
   });
 
   describe("serialization", () => {
-    it("serializes and deserializes using blocks", () => {
+    it("serializes and deserializes using blocks", async () => {
       const map = new Map([["x", 1]]);
-      const buffer = intMap.toBuffer(map);
-      const result = intMap.fromBuffer(buffer);
+      const buffer = await intMap.toBuffer(map);
+      const result = await intMap.fromBuffer(buffer);
       assertEquals(result, map);
     });
 
-    it("round-trips via toBuffer/fromBuffer", () => {
+    it("round-trips via toBuffer/fromBuffer", async () => {
       const map = new Map([["key1", 4], ["key2", 5]]);
-      const buffer = intMap.toBuffer(map);
-      assertEquals(intMap.fromBuffer(buffer), map);
+      const buffer = await intMap.toBuffer(map);
+      assertEquals(await intMap.fromBuffer(buffer), map);
     });
 
-    it("serializes and deserializes nested maps using blocks", () => {
+    it("serializes and deserializes nested maps using blocks", async () => {
       const nestedMap = createMap(intMap);
       const map = new Map([
         ["outer1", new Map([["inner1", 1]])],
         ["outer2", new Map([["inner2", 2], ["inner3", 3]])],
       ]);
-      const buffer = nestedMap.toBuffer(map);
-      const result = nestedMap.fromBuffer(buffer);
+      const buffer = await nestedMap.toBuffer(map);
+      const result = await nestedMap.fromBuffer(buffer);
       assertEquals(result, map);
     });
 
-    it("round-trips nested maps via toBuffer/fromBuffer", () => {
+    it("round-trips nested maps via toBuffer/fromBuffer", async () => {
       const nestedMap = createMap(intMap);
       const map = new Map([
         ["a", new Map([["x", 10], ["y", 20]])],
         ["b", new Map([["z", 30]])],
       ]);
-      const buffer = nestedMap.toBuffer(map);
-      assertEquals(nestedMap.fromBuffer(buffer), map);
+      const buffer = await nestedMap.toBuffer(map);
+      assertEquals(await nestedMap.fromBuffer(buffer), map);
     });
 
-    it("skips encoded map blocks", () => {
+    it("skips encoded map blocks", async () => {
       const map = new Map([["a", 7], ["b", 8]]);
-      const buffer = intMap.toBuffer(map);
+      const buffer = await intMap.toBuffer(map);
       const tap = new Tap(buffer);
-      intMap.skip(tap);
+      await intMap.skip(tap);
       assertEquals(tap._testOnlyPos, buffer.byteLength);
     });
 
-    it("skips encoded nested map blocks", () => {
+    it("skips encoded nested map blocks", async () => {
       const nestedMap = createMap(intMap);
       const map = new Map([
         ["outer", new Map([["inner1", 1], ["inner2", 2]])],
       ]);
-      const buffer = nestedMap.toBuffer(map);
+      const buffer = await nestedMap.toBuffer(map);
       const tap = new Tap(buffer);
-      nestedMap.skip(tap);
+      await nestedMap.skip(tap);
       assertEquals(tap._testOnlyPos, buffer.byteLength);
     });
 
-    it("writes empty map correctly", () => {
-      const buffer = intMap.toBuffer(new Map());
+    it("writes empty map correctly", async () => {
+      const buffer = await intMap.toBuffer(new Map());
       const tap = new Tap(buffer);
-      assertEquals(tap.readLong(), 0n);
+      assertEquals(await tap.readLong(), 0n);
     });
 
-    it("round-trips empty map via toBuffer/fromBuffer", () => {
+    it("round-trips empty map via toBuffer/fromBuffer", async () => {
       const map: Map<string, number> = new Map();
-      const buffer = intMap.toBuffer(map);
-      assertEquals(intMap.fromBuffer(buffer), map);
+      const buffer = await intMap.toBuffer(map);
+      assertEquals(await intMap.fromBuffer(buffer), map);
     });
 
-    it("writes maps correctly via write method", () => {
+    it("writes maps correctly via write method", async () => {
       const buffer = new ArrayBuffer(50);
       const writeTap = new Tap(buffer);
       const map = new Map([["a", 10], ["b", 20]]);
-      intMap.write(writeTap, map);
+      await intMap.write(writeTap, map);
 
       const readTap = new Tap(buffer);
-      const result = intMap.read(readTap);
+      const result = await intMap.read(readTap);
       assertEquals(result, map);
     });
 
-    it("throws error in write when value is not a map", () => {
+    it("throws error in write when value is not a map", async () => {
       const buffer = new ArrayBuffer(10);
       const tap = new Tap(buffer);
-      assertThrows(
-        () => intMap.write(tap, "not a map" as unknown as Map<string, number>),
+      await assertRejects(
+        async () =>
+          await intMap.write(
+            tap,
+            "not a map" as unknown as Map<string, number>,
+          ),
         Error,
         "Invalid value",
       );
     });
 
-    it("throws error in write when key is not a string", () => {
+    it("throws error in write when key is not a string", async () => {
       const buffer = new ArrayBuffer(10);
       const tap = new Tap(buffer);
       const map = new Map([[1 as unknown as string, 1]]);
-      assertThrows(
-        () => intMap.write(tap, map),
+      await assertRejects(
+        async () => await intMap.write(tap, map),
         Error,
         "Invalid value",
       );
     });
 
-    it("throws error in toBuffer when value is not a map", () => {
-      assertThrows(
-        () => intMap.toBuffer("not a map" as unknown as Map<string, number>),
+    it("throws error in toBuffer when value is not a map", async () => {
+      await assertRejects(
+        async () =>
+          await intMap.toBuffer("not a map" as unknown as Map<string, number>),
         Error,
         "Invalid value",
       );
     });
 
-    it("throws error in toBuffer when key is not a string", () => {
+    it("throws error in toBuffer when key is not a string", async () => {
       const map = new Map([[1 as unknown as string, 1]]);
-      assertThrows(
-        () => intMap.toBuffer(map),
+      await assertRejects(
+        async () => await intMap.toBuffer(map),
         Error,
         "Invalid value",
       );
@@ -318,11 +323,11 @@ describe("MapType", () => {
   });
 
   describe("match()", () => {
-    it("throws error when matching maps", () => {
-      const buffer1 = intMap.toBuffer(new Map([["a", 1]]));
-      const buffer2 = intMap.toBuffer(new Map([["b", 2]]));
-      assertThrows(
-        () => intMap.match(new Tap(buffer1), new Tap(buffer2)),
+    it("throws error when matching maps", async () => {
+      const buffer1 = await intMap.toBuffer(new Map([["a", 1]]));
+      const buffer2 = await intMap.toBuffer(new Map([["b", 2]]));
+      await assertRejects(
+        async () => await intMap.match(new Tap(buffer1), new Tap(buffer2)),
         Error,
         "maps cannot be compared",
       );
@@ -356,7 +361,7 @@ describe("MapType", () => {
   });
 
   describe("integration", () => {
-    it("round-trips, validates, and clones nested maps correctly", () => {
+    it("round-trips, validates, and clones nested maps correctly", async () => {
       // Create map of maps of ints
       const intMapOfInts = createMap(intMap);
 
@@ -367,8 +372,8 @@ describe("MapType", () => {
       ]);
 
       // Round-trip via toBuffer/fromBuffer
-      const buffer = intMapOfInts.toBuffer(nestedData);
-      const result = intMapOfInts.fromBuffer(buffer);
+      const buffer = await intMapOfInts.toBuffer(nestedData);
+      const result = await intMapOfInts.fromBuffer(buffer);
       assertEquals(result, nestedData);
 
       // Test validation
@@ -385,7 +390,7 @@ describe("MapType", () => {
   });
 
   describe("createResolver()", () => {
-    it("creates resolver for promotable writer maps -> string to bytes", () => {
+    it("creates resolver for promotable writer maps -> string to bytes", async () => {
       // Writer schema: map of strings
       const stringMap = createMap(new StringType());
       // Reader schema: map of byte arrays (promotable evolution)
@@ -394,17 +399,17 @@ describe("MapType", () => {
       const resolver = bytesMap.createResolver(stringMap);
       // Write a map with binary data as strings
       const map = new Map([["key1", "\x01\x02"], ["key2", "\x03\x04"]]);
-      const buffer = stringMap.toBuffer(map);
+      const buffer = await stringMap.toBuffer(map);
       const tap = new Tap(buffer);
       // Read using resolver: strings evolve to Uint8Arrays
-      const result = resolver.read(tap) as Map<string, Uint8Array>;
+      const result = (await resolver.read(tap)) as Map<string, Uint8Array>;
       // Result should be a map with Uint8Arrays
       assertEquals(result.size, 2);
       assertEquals([...result.get("key1")!], [1, 2]);
       assertEquals([...result.get("key2")!], [3, 4]);
     });
 
-    it("creates resolver for promotable writer maps -> int to long", () => {
+    it("creates resolver for promotable writer maps -> int to long", async () => {
       // Writer schema: map of ints
       const writerSchema = createMap(new IntType());
 
@@ -418,18 +423,18 @@ describe("MapType", () => {
       const testData = new Map([["a", 1], ["b", 2]]);
 
       // Write with writer schema
-      const buffer = writerSchema.toBuffer(testData);
+      const buffer = await writerSchema.toBuffer(testData);
       const tap = new Tap(buffer);
 
       // Read with resolver (evolves ints to longs)
-      const result = resolver.read(tap) as Map<string, bigint>;
+      const result = (await resolver.read(tap)) as Map<string, bigint>;
 
       // Expected: map of bigints
       const expected = new Map([["a", 1n], ["b", 2n]]);
       assertEquals(result, expected);
     });
 
-    it("creates resolver for identical writer/reader map types", () => {
+    it("creates resolver for identical writer/reader map types", async () => {
       // Both writer and reader are maps of ints
       const writerMap = createMap(new IntType());
       const readerMap = createMap(new IntType());
@@ -437,14 +442,14 @@ describe("MapType", () => {
       const resolver = readerMap.createResolver(writerMap);
       // Test data
       const map = new Map([["a", 1], ["b", 2]]);
-      const buffer = writerMap.toBuffer(map);
+      const buffer = await writerMap.toBuffer(map);
       const tap = new Tap(buffer);
       // Read using resolver
-      const result = resolver.read(tap) as Map<string, number>;
+      const result = (await resolver.read(tap)) as Map<string, number>;
       assertEquals(result, map);
     });
 
-    it("creates resolver for nested identical map types", () => {
+    it("creates resolver for nested identical map types", async () => {
       // Nested maps of ints
       const writerNested = createMap(createMap(new IntType()));
       const readerNested = createMap(createMap(new IntType()));
@@ -452,14 +457,17 @@ describe("MapType", () => {
       const resolver = readerNested.createResolver(writerNested);
       // Test data
       const map = new Map([["outer", new Map([["inner", 42]])]]);
-      const buffer = writerNested.toBuffer(map);
+      const buffer = await writerNested.toBuffer(map);
       const tap = new Tap(buffer);
       // Read using resolver
-      const result = resolver.read(tap) as Map<string, Map<string, number>>;
+      const result = (await resolver.read(tap)) as Map<
+        string,
+        Map<string, number>
+      >;
       assertEquals(result, map);
     });
 
-    it("creates resolver for nested promotable map types", () => {
+    it("creates resolver for nested promotable map types", async () => {
       // Writer: nested map of strings
       const writerNested = createMap(createMap(new StringType()));
       // Reader: nested map of byte arrays
@@ -468,10 +476,13 @@ describe("MapType", () => {
       const resolver = readerNested.createResolver(writerNested);
       // Test data: nested map with binary strings
       const map = new Map([["outer", new Map([["inner", "\x01\x02"]])]]);
-      const buffer = writerNested.toBuffer(map);
+      const buffer = await writerNested.toBuffer(map);
       const tap = new Tap(buffer);
       // Read using resolver: strings evolve to Uint8Arrays
-      const result = resolver.read(tap) as Map<string, Map<string, Uint8Array>>;
+      const result = (await resolver.read(tap)) as Map<
+        string,
+        Map<string, Uint8Array>
+      >;
       assertEquals(result.size, 1);
       const innerMap = result.get("outer")!;
       assertEquals([...innerMap.get("inner")!], [1, 2]);
@@ -511,81 +522,81 @@ describe("readMapInto", () => {
   const intValues = new IntType();
   const intMap = createMap(intValues);
 
-  it("reads positive block count", () => {
+  it("reads positive block count", async () => {
     const buffer = new ArrayBuffer(50);
     const writeTap = new Tap(buffer);
-    writeTap.writeLong(2n); // block count
-    writeTap.writeString("key1");
-    writeTap.writeLong(10n);
-    writeTap.writeString("key2");
-    writeTap.writeLong(20n);
-    writeTap.writeLong(0n); // terminator
+    await writeTap.writeLong(2n); // block count
+    await writeTap.writeString("key1");
+    await writeTap.writeLong(10n);
+    await writeTap.writeString("key2");
+    await writeTap.writeLong(20n);
+    await writeTap.writeLong(0n); // terminator
 
     const readTap = new Tap(buffer);
     const results = new Map<string, bigint>();
-    readMapInto(
+    await readMapInto(
       readTap,
-      (t) => t.readLong(),
+      async (t) => await t.readLong(),
       (key, value) => results.set(key, value),
     );
     assertEquals(results, new Map([["key1", 10n], ["key2", 20n]]));
   });
 
-  it("reads negative block count (size-prefixed)", () => {
+  it("reads negative block count (size-prefixed)", async () => {
     const buffer = new ArrayBuffer(50);
     const writeTap = new Tap(buffer);
-    writeTap.writeLong(-2n); // negative block count
-    writeTap.writeLong(100n); // block size, ignored
-    writeTap.writeString("key1");
-    writeTap.writeLong(30n);
-    writeTap.writeString("key2");
-    writeTap.writeLong(40n);
-    writeTap.writeLong(0n);
+    await writeTap.writeLong(-2n); // negative block count
+    await writeTap.writeLong(100n); // block size, ignored
+    await writeTap.writeString("key1");
+    await writeTap.writeLong(30n);
+    await writeTap.writeString("key2");
+    await writeTap.writeLong(40n);
+    await writeTap.writeLong(0n);
 
     const readTap = new Tap(buffer);
     const results = new Map<string, bigint>();
-    readMapInto(
+    await readMapInto(
       readTap,
-      (t) => t.readLong(),
+      async (t) => await t.readLong(),
       (key, value) => results.set(key, value),
     );
     assertEquals(results, new Map([["key1", 30n], ["key2", 40n]]));
   });
 
-  it("stops at terminator", () => {
+  it("stops at terminator", async () => {
     const buffer = new ArrayBuffer(50);
     const writeTap = new Tap(buffer);
-    writeTap.writeLong(1n);
-    writeTap.writeString("key1");
-    writeTap.writeLong(50n);
-    writeTap.writeLong(0n); // terminator
-    writeTap.writeLong(1n); // more, but should stop
-    writeTap.writeString("key2");
-    writeTap.writeLong(60n);
+    await writeTap.writeLong(1n);
+    await writeTap.writeString("key1");
+    await writeTap.writeLong(50n);
+    await writeTap.writeLong(0n); // terminator
+    await writeTap.writeLong(1n); // more, but should stop
+    await writeTap.writeString("key2");
+    await writeTap.writeLong(60n);
 
     const readTap = new Tap(buffer);
     const results = new Map<string, bigint>();
-    readMapInto(
+    await readMapInto(
       readTap,
-      (t) => t.readLong(),
+      async (t) => await t.readLong(),
       (key, value) => results.set(key, value),
     );
     assertEquals(results, new Map([["key1", 50n]]));
   });
 
-  it("throws on bigint outside safe integer range", () => {
+  it("throws on bigint outside safe integer range", async () => {
     const buffer = new ArrayBuffer(15);
     const writeTap = new Tap(buffer);
     // Write a large bigint > MAX_SAFE_INTEGER
     const largeBigInt = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
-    writeTap.writeLong(largeBigInt);
+    await writeTap.writeLong(largeBigInt);
 
     const readTap = new Tap(buffer);
-    assertThrows(
-      () => {
-        readMapInto(
+    await assertRejects(
+      async () => {
+        await readMapInto(
           readTap,
-          (t) => t.readLong(),
+          async (t) => await t.readLong(),
           () => {},
         );
       },
@@ -594,36 +605,36 @@ describe("readMapInto", () => {
     );
   });
 
-  it("skips size-prefixed map blocks", () => {
+  it("skips size-prefixed map blocks", async () => {
     // Create a buffer with negative count manually
     const buffer = new ArrayBuffer(20);
     const writeTap = new Tap(buffer);
-    writeTap.writeLong(-2n); // negative count
-    writeTap.writeLong(6n); // block size: "a"(2) + int7(1) + "b"(2) + int8(1)
-    writeTap.writeString("a");
-    intValues.write(writeTap, 7);
-    writeTap.writeString("b");
-    intValues.write(writeTap, 8);
-    writeTap.writeLong(0n); // terminator
+    await writeTap.writeLong(-2n); // negative count
+    await writeTap.writeLong(6n); // block size: "a"(2) + int7(1) + "b"(2) + int8(1)
+    await writeTap.writeString("a");
+    await intValues.write(writeTap, 7);
+    await writeTap.writeString("b");
+    await intValues.write(writeTap, 8);
+    await writeTap.writeLong(0n); // terminator
 
     const skipTap = new Tap(buffer);
-    intMap.skip(skipTap);
+    await intMap.skip(skipTap);
     // After skipping, should be at end
     assertEquals(skipTap._testOnlyPos, writeTap._testOnlyPos);
   });
 
-  it("throws on insufficient data for map key", () => {
+  it("throws on insufficient data for map key", async () => {
     // Create a buffer with count=1 but no string data
     const buffer = new ArrayBuffer(1); // Only space for the count
     const writeTap = new Tap(buffer);
-    writeTap.writeLong(1n); // count = 1
+    await writeTap.writeLong(1n); // count = 1
 
     const readTap = new Tap(buffer);
-    assertThrows(
-      () => {
-        readMapInto(
+    await assertRejects(
+      async () => {
+        await readMapInto(
           readTap,
-          (t) => t.readLong(),
+          async (t) => await t.readLong(),
           () => {},
         );
       },

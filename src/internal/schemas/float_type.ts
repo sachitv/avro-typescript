@@ -22,23 +22,23 @@ export class FloatType extends FixedSizeBaseType<number> {
     return isValid;
   }
 
-  public read(tap: Tap): number {
-    const val = tap.readFloat();
+  public async read(tap: Tap): Promise<number> {
+    const val = await tap.readFloat();
     if (val === undefined) {
       throw new Error("Insufficient data for float");
     }
     return val;
   }
 
-  public write(tap: Tap, value: number): void {
+  public async write(tap: Tap, value: number): Promise<void> {
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
-    tap.writeFloat(value);
+    await tap.writeFloat(value);
   }
 
-  public override skip(tap: Tap): void {
-    tap.skipFloat();
+  public override async skip(tap: Tap): Promise<void> {
+    await tap.skipFloat();
   }
 
   public sizeBytes(): number {
@@ -62,16 +62,16 @@ export class FloatType extends FixedSizeBaseType<number> {
     if (writerType instanceof IntType) {
       // Float can promote from int (32-bit to 32-bit float)
       return new class extends Resolver {
-        public override read(tap: Tap): number {
-          const intValue = tap.readInt();
+        public override async read(tap: Tap): Promise<number> {
+          const intValue = await tap.readInt();
           return intValue;
         }
       }(this);
     } else if (writerType instanceof LongType) {
       // Float can promote from long (64-bit to 32-bit float, lossy)
       return new class extends Resolver {
-        public override read(tap: Tap): number {
-          const longValue = tap.readLong();
+        public override async read(tap: Tap): Promise<number> {
+          const longValue = await tap.readLong();
           return Number(longValue);
         }
       }(this);
@@ -84,7 +84,7 @@ export class FloatType extends FixedSizeBaseType<number> {
     return "float";
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    return tap1.matchFloat(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    return await tap1.matchFloat(tap2);
   }
 }

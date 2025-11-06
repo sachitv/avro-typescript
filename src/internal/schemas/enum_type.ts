@@ -68,20 +68,20 @@ export class EnumType extends NamedType<string> {
     return isValid;
   }
 
-  public override write(tap: Tap, value: string): void {
+  public override async write(tap: Tap, value: string): Promise<void> {
     const index = this.#indices.get(value);
     if (index === undefined) {
       throwInvalidError([], value, this);
     }
-    tap.writeLong(BigInt(index));
+    await tap.writeLong(BigInt(index));
   }
 
-  public override skip(tap: Tap): void {
-    tap.skipLong();
+  public override async skip(tap: Tap): Promise<void> {
+    await tap.skipLong();
   }
 
-  public override read(tap: Tap): string {
-    const rawIndex = tap.readLong();
+  public override async read(tap: Tap): Promise<string> {
+    const rawIndex = await tap.readLong();
     const index = Number(rawIndex);
     if (
       !Number.isSafeInteger(index) || index < 0 || index >= this.#symbols.length
@@ -93,13 +93,13 @@ export class EnumType extends NamedType<string> {
     return this.#symbols[index];
   }
 
-  public override toBuffer(value: string): ArrayBuffer {
+  public override async toBuffer(value: string): Promise<ArrayBuffer> {
     this.check(value, throwInvalidError, []);
     const index = this.#indices.get(value)!;
     const size = calculateVarintSize(index);
     const buffer = new ArrayBuffer(size);
     const tap = new Tap(buffer);
-    this.write(tap, value);
+    await this.write(tap, value);
     return buffer;
   }
 
@@ -128,8 +128,8 @@ export class EnumType extends NamedType<string> {
     return "enum";
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    return tap1.matchLong(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    return await tap1.matchLong(tap2);
   }
 
   public override createResolver(writerType: Type): Resolver {
@@ -162,8 +162,8 @@ export class EnumType extends NamedType<string> {
           this.#writer = writer;
         }
 
-        public override read(tap: Tap): string {
-          return this.#writer.read(tap);
+        public override async read(tap: Tap): Promise<string> {
+          return await this.#writer.read(tap);
         }
       }(this, writerType);
     } else if (this.#default !== undefined) {
@@ -177,8 +177,8 @@ export class EnumType extends NamedType<string> {
           this.#writer = writer;
         }
 
-        public override read(tap: Tap): string {
-          const writerSymbol = this.#writer.read(tap);
+        public override async read(tap: Tap): Promise<string> {
+          const writerSymbol = await this.#writer.read(tap);
           if (this.#reader.#indices.has(writerSymbol)) {
             return writerSymbol;
           } else {

@@ -21,28 +21,28 @@ export class IntType extends PrimitiveType<number> {
     return isValid;
   }
 
-  public override read(tap: Tap): number {
-    return tap.readInt();
+  public override async read(tap: Tap): Promise<number> {
+    return await tap.readInt();
   }
 
-  public override write(tap: Tap, value: number): void {
+  public override async write(tap: Tap, value: number): Promise<void> {
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
-    tap.writeInt(value);
+    await tap.writeInt(value);
   }
 
-  public override skip(tap: Tap): void {
-    tap.skipInt();
+  public override async skip(tap: Tap): Promise<void> {
+    await tap.skipInt();
   }
 
-  public override toBuffer(value: number): ArrayBuffer {
+  public override async toBuffer(value: number): Promise<ArrayBuffer> {
     this.check(value, throwInvalidError, []);
     // For int, allocate exact size based on value
     const size = calculateVarintSize(value);
     const buf = new ArrayBuffer(size);
     const tap = new Tap(buf);
-    this.write(tap, value);
+    await this.write(tap, value);
     return buf;
   }
 
@@ -58,7 +58,7 @@ export class IntType extends PrimitiveType<number> {
     return "int";
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    return tap1.matchInt(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    return await tap1.matchInt(tap2);
   }
 }

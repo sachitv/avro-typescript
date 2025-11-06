@@ -21,34 +21,34 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     return isValid;
   }
 
-  public override read(tap: Tap): Uint8Array {
-    const val = tap.readBytes();
+  public override async read(tap: Tap): Promise<Uint8Array> {
+    const val = await tap.readBytes();
     if (val === undefined) {
       throw new Error("Insufficient data for bytes");
     }
     return val;
   }
 
-  public override write(tap: Tap, value: Uint8Array): void {
+  public override async write(tap: Tap, value: Uint8Array): Promise<void> {
     if (!(value instanceof Uint8Array)) {
       throwInvalidError([], value, this);
     }
-    tap.writeBytes(value);
+    await tap.writeBytes(value);
   }
 
-  public override skip(tap: Tap): void {
-    tap.skipBytes();
+  public override async skip(tap: Tap): Promise<void> {
+    await tap.skipBytes();
   }
 
-  public override toBuffer(value: Uint8Array): ArrayBuffer {
+  public override async toBuffer(value: Uint8Array): Promise<ArrayBuffer> {
     this.check(value, throwInvalidError, []);
     // Pre-allocate buffer based on value length for efficiency
     const lengthSize = calculateVarintSize(value.length);
     const totalSize = lengthSize + value.length;
     const buf = new ArrayBuffer(totalSize);
     const tap = new Tap(buf);
-    this.write(tap, value);
-    const result = tap.getValue();
+    await this.write(tap, value);
+    const result = await tap.getValue();
     return (result.buffer as ArrayBuffer).slice(
       result.byteOffset,
       result.byteOffset + result.byteLength,
@@ -60,8 +60,8 @@ export class BytesType extends PrimitiveType<Uint8Array> {
       // Bytes can promote from string. We use an anonymous class here to avoid a
       // cyclic dependency between this file and the string type file.
       return new class extends Resolver {
-        public override read(tap: Tap): Uint8Array {
-          const str = tap.readString();
+        public override async read(tap: Tap): Promise<Uint8Array> {
+          const str = await tap.readString();
           if (str === undefined) {
             throw new Error("Insufficient data for string");
           }
@@ -106,7 +106,7 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     return "bytes";
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    return tap1.matchBytes(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    return await tap1.matchBytes(tap2);
   }
 }

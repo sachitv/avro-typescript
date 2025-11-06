@@ -2,6 +2,7 @@ import {
   assert,
   assertEquals,
   assertInstanceOf,
+  assertRejects,
   assertThrows,
 } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
@@ -31,81 +32,81 @@ describe("createType", () => {
   });
 
   describe("creates and round trips primitive types by name", () => {
-    it("creates boolean type and round-trips values", () => {
+    it("creates boolean type and round-trips values", async () => {
       const type = createType("boolean");
       assertInstanceOf(type, BooleanType);
       const value = true;
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
-    it("creates int type and round-trips values", () => {
+    it("creates int type and round-trips values", async () => {
       const type = createType("int");
       assertInstanceOf(type, IntType);
       const value = 42;
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
-    it("creates long type and round-trips values", () => {
+    it("creates long type and round-trips values", async () => {
       const type = createType("long");
       assertInstanceOf(type, LongType);
       const value = 1234567890123456789n;
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
-    it("creates float type and round-trips values", () => {
+    it("creates float type and round-trips values", async () => {
       const type = createType("float");
       assertInstanceOf(type, FloatType);
       const value = 3.5;
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
-    it("creates double type and round-trips values", () => {
+    it("creates double type and round-trips values", async () => {
       const type = createType("double");
       assertInstanceOf(type, DoubleType);
       const value = 2.718281828459045;
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
-    it("creates string type and round-trips values", () => {
+    it("creates string type and round-trips values", async () => {
       const type = createType("string");
       assertInstanceOf(type, StringType);
       const value = "hello world";
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
-    it("creates bytes type and round-trips values", () => {
+    it("creates bytes type and round-trips values", async () => {
       const type = createType("bytes");
       assertInstanceOf(type, BytesType);
       const value = new Uint8Array([1, 2, 3, 4, 5]);
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
-    it("creates null type and round-trips values", () => {
+    it("creates null type and round-trips values", async () => {
       const type = createType("null");
       assertInstanceOf(type, NullType);
       const value = null;
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
   });
 
   describe("creates primitive types from object schemas", () => {
-    it("creates primitive types from object with type field", () => {
+    it("creates primitive types from object with type field", async () => {
       // Test that { type: "string" } creates a StringType
       const stringType = createType({ type: "string" });
       assertInstanceOf(stringType, StringType);
@@ -120,24 +121,24 @@ describe("createType", () => {
 
       // Test round-trip for all of them
       const stringValue = "hello world";
-      const stringBuffer = stringType.toBuffer(stringValue);
-      const stringDecoded = stringType.fromBuffer(stringBuffer);
+      const stringBuffer = await stringType.toBuffer(stringValue);
+      const stringDecoded = await stringType.fromBuffer(stringBuffer);
       assertEquals(stringDecoded, stringValue);
 
       const intValue = 42;
-      const intBuffer = intType.toBuffer(intValue);
-      const intDecoded = intType.fromBuffer(intBuffer);
+      const intBuffer = await intType.toBuffer(intValue);
+      const intDecoded = await intType.fromBuffer(intBuffer);
       assertEquals(intDecoded, intValue);
 
       const boolValue = true;
-      const boolBuffer = boolType.toBuffer(boolValue);
-      const boolDecoded = boolType.fromBuffer(boolBuffer);
+      const boolBuffer = await boolType.toBuffer(boolValue);
+      const boolDecoded = await boolType.fromBuffer(boolBuffer);
       assertEquals(boolDecoded, boolValue);
     });
   });
 
   describe("creates and round trips complex types", () => {
-    it("creates array type and round-trips values", () => {
+    it("creates array type and round-trips values", async () => {
       const schema = { type: "array", items: "string" } as const;
       const type = createType(schema);
       assertInstanceOf(type, ArrayType);
@@ -146,12 +147,12 @@ describe("createType", () => {
 
       // Round trip test
       const value = ["hello", "world"];
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
-    it("creates record type and round-trips values", () => {
+    it("creates record type and round-trips values", async () => {
       const schema = {
         type: "record",
         name: "Person",
@@ -170,24 +171,24 @@ describe("createType", () => {
 
       // Round trip test
       const value = { name: "Alice", age: 30 };
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
-    it("creates union type and round-trips values", () => {
+    it("creates union type and round-trips values", async () => {
       const schema = ["null", "string"];
       const type = createType(schema);
       assertInstanceOf(type, UnionType);
 
       // Round trip test
       const value = { string: "hello" };
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
-    it("creates union type from object schema with array type", () => {
+    it("creates union type from object schema with array type", async () => {
       // Test union defined as { type: ["null", "string"] }
       const schema = { type: ["null", "string"] } as const;
       const type = createType(schema);
@@ -195,12 +196,12 @@ describe("createType", () => {
 
       // Round trip test
       const value = { string: "hello" };
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
-    it("creates type from object schema with nested type object", () => {
+    it("creates type from object schema with nested type object", async () => {
       // Test nested type definition: { type: { type: "record", ... } }
       const schema = {
         type: {
@@ -217,12 +218,12 @@ describe("createType", () => {
 
       // Round trip test
       const value = { id: 123, name: "test" };
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
-    it("creates enum type and round-trips values", () => {
+    it("creates enum type and round-trips values", async () => {
       const schema = {
         type: "enum",
         name: "Color",
@@ -237,24 +238,24 @@ describe("createType", () => {
 
       // Round trip test
       const value = "GREEN";
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
-    it("creates map type and round-trips values", () => {
+    it("creates map type and round-trips values", async () => {
       const schema = { type: "map", values: "int" } as const;
       const type = createType(schema);
       assertInstanceOf(type, MapType);
 
       // Round trip test
       const value = new Map([["one", 1], ["two", 2]]);
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
-    it("creates fixed type and round-trips values", () => {
+    it("creates fixed type and round-trips values", async () => {
       const schema = {
         type: "fixed",
         name: "MD5",
@@ -265,14 +266,14 @@ describe("createType", () => {
 
       // Round trip test
       const value = new Uint8Array(16).fill(42);
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
   });
 
   describe("creates and round trips recursive types", () => {
-    it("creates map self-reference and round-trips values", () => {
+    it("creates map self-reference and round-trips values", async () => {
       const schema = {
         type: "record",
         name: "Category",
@@ -307,12 +308,12 @@ describe("createType", () => {
         ]),
       };
 
-      const buffer = categoryType.toBuffer(sampleValue);
-      const decoded = categoryType.fromBuffer(buffer);
+      const buffer = await categoryType.toBuffer(sampleValue);
+      const decoded = await categoryType.fromBuffer(buffer);
       assertEquals(decoded, sampleValue);
     });
 
-    it("creates nested record self-reference and round-trips values", () => {
+    it("creates nested record self-reference and round-trips values", async () => {
       const schema = {
         type: "record",
         name: "TreeNode",
@@ -357,12 +358,12 @@ describe("createType", () => {
         },
       };
 
-      const buffer = treeNodeType.toBuffer(sampleValue);
-      const decoded = treeNodeType.fromBuffer(buffer);
+      const buffer = await treeNodeType.toBuffer(sampleValue);
+      const decoded = await treeNodeType.fromBuffer(buffer);
       assertEquals(decoded, sampleValue);
     });
 
-    it("creates mutual recursion and round-trips values", () => {
+    it("creates mutual recursion and round-trips values", async () => {
       // Mutual recursion: Parent -> Child -> Parent
       // Use a shared registry for both types
       const registry = new Map<string, Type>();
@@ -400,12 +401,12 @@ describe("createType", () => {
         },
       };
 
-      const buffer = parentType.toBuffer(sampleParent);
-      const decoded = parentType.fromBuffer(buffer);
+      const buffer = await parentType.toBuffer(sampleParent);
+      const decoded = await parentType.fromBuffer(buffer);
       assertEquals(decoded, sampleParent);
     });
 
-    it("creates union with self-reference and round-trips values", () => {
+    it("creates union with self-reference and round-trips values", async () => {
       const schema = {
         type: "record",
         name: "Expression",
@@ -448,12 +449,12 @@ describe("createType", () => {
         },
       };
 
-      const buffer = expressionType.toBuffer(sampleValue);
-      const decoded = expressionType.fromBuffer(buffer);
+      const buffer = await expressionType.toBuffer(sampleValue);
+      const decoded = await expressionType.fromBuffer(buffer);
       assertEquals(decoded, sampleValue);
     });
 
-    it("creates complex nested structure and round-trips values", () => {
+    it("creates complex nested structure and round-trips values", async () => {
       const schema = {
         type: "record",
         name: "Document",
@@ -507,14 +508,14 @@ describe("createType", () => {
         ],
       };
 
-      const buffer = documentType.toBuffer(sampleValue);
-      const decoded = documentType.fromBuffer(buffer);
+      const buffer = await documentType.toBuffer(sampleValue);
+      const decoded = await documentType.fromBuffer(buffer);
       assertEquals(decoded, sampleValue);
     });
   });
 
   describe("namespace resolution", () => {
-    it("handles empty namespace strings", () => {
+    it("handles empty namespace strings", async () => {
       /**
        * Tests that empty namespace strings are treated as no namespace.
        * Schema contains: Record with empty namespace string.
@@ -533,8 +534,8 @@ describe("createType", () => {
       // Check that no namespace is set (fullName is just "TestRecord")
       // Since RecordType may not expose fullName, perhaps just ensure it works
       const value = { value: "test" };
-      const buffer = type.toBuffer(value);
-      const decoded = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
     });
 
@@ -627,7 +628,7 @@ describe("createType", () => {
       assertEquals(employeeStateField.getType(), statusField.getType());
     });
 
-    it("resolves aliases for schema evolution", () => {
+    it("resolves aliases for schema evolution", async () => {
       // Test schema evolution using aliases - write with one schema, read with another
       // Writer schema: no aliases
       const writerSchema = {
@@ -682,10 +683,10 @@ describe("createType", () => {
         role: "ADMIN",
       };
 
-      const buffer = writerType.toBuffer(originalData);
+      const buffer = await writerType.toBuffer(originalData);
 
       // Read with evolved schema (should work due to aliases)
-      const decoded = readerType.fromBuffer(buffer);
+      const decoded = await readerType.fromBuffer(buffer);
 
       // Should map to new field names
       assertEquals(decoded.login, "alice");
@@ -1242,7 +1243,7 @@ describe("createType", () => {
       );
     });
 
-    it("throws error when serializing data with unresolved forward references", () => {
+    it("throws error when serializing data with unresolved forward references", async () => {
       /**
        * Tests that errors are thrown when trying to serialize data using
        * a type that contains unresolved forward references.
@@ -1271,8 +1272,8 @@ describe("createType", () => {
       };
 
       // Try to serialize, which should trigger resolution and fail
-      assertThrows(
-        () => treeType.toBuffer(testData),
+      await assertRejects(
+        async () => await treeType.toBuffer(testData),
         Error,
         "Undefined Avro type reference",
       );
@@ -2378,7 +2379,7 @@ describe("createType", () => {
     );
   });
 
-  it("round-trips recursive record values", () => {
+  it("round-trips recursive record values", async () => {
     const schema = {
       type: "record",
       name: "Node",
@@ -2401,13 +2402,13 @@ describe("createType", () => {
       },
     };
 
-    const buffer = nodeType.toBuffer(sampleValue);
-    const decoded = nodeType.fromBuffer(buffer);
+    const buffer = await nodeType.toBuffer(sampleValue);
+    const decoded = await nodeType.fromBuffer(buffer);
 
     assertEquals(decoded, sampleValue);
   });
 
-  it("round-trips recursive array-based records", () => {
+  it("round-trips recursive array-based records", async () => {
     const schema = {
       type: "record",
       name: "Employee",
@@ -2445,8 +2446,8 @@ describe("createType", () => {
       ],
     };
 
-    const encoded = employeeType.toBuffer(sample);
-    const decoded = employeeType.fromBuffer(encoded);
+    const encoded = await employeeType.toBuffer(sample);
+    const decoded = await employeeType.fromBuffer(encoded);
     assertEquals(decoded, sample);
   });
 });

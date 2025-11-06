@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { FixedType } from "./fixed_type.ts";
 import { Tap } from "../serialization/tap.ts";
@@ -106,46 +106,46 @@ describe("FixedType", () => {
     assertEquals(errorCalled, false);
   });
 
-  it("serializes and deserializes fixed-size byte arrays", () => {
+  it("serializes and deserializes fixed-size byte arrays", async () => {
     const fixedType = createFixedType("Test", 4);
     const originalBytes = new Uint8Array([1, 2, 3, 4]);
 
     // Test write and read
     const buf = new ArrayBuffer(4);
     const tap = new Tap(buf);
-    fixedType.write(tap, originalBytes);
+    await fixedType.write(tap, originalBytes);
 
     const tap2 = new Tap(buf);
-    const readBytes = fixedType.read(tap2);
+    const readBytes = await fixedType.read(tap2);
 
     assertEquals(readBytes, originalBytes);
   });
 
-  it("throws error when writing invalid values", () => {
+  it("throws error when writing invalid values", async () => {
     const fixedType = createFixedType("Test", 4);
     const buf = new ArrayBuffer(4);
     const tap = new Tap(buf);
 
-    assertThrows(
-      () => fixedType.write(tap, new Uint8Array([1, 2, 3])),
+    await assertRejects(
+      async () => await fixedType.write(tap, new Uint8Array([1, 2, 3])),
       Error,
       "Invalid value",
     );
 
-    assertThrows(
-      () => fixedType.write(tap, new Uint8Array([1, 2, 3, 4, 5])),
+    await assertRejects(
+      async () => await fixedType.write(tap, new Uint8Array([1, 2, 3, 4, 5])),
       Error,
       "Invalid value",
     );
   });
 
-  it("throws error when reading insufficient data", () => {
+  it("throws error when reading insufficient data", async () => {
     const fixedType = createFixedType("Test", 4);
     const buf = new ArrayBuffer(2); // Not enough data
     const tap = new Tap(buf);
 
-    assertThrows(
-      () => fixedType.read(tap),
+    await assertRejects(
+      async () => await fixedType.read(tap),
       Error,
       "Insufficient data for fixed type",
     );
@@ -249,27 +249,27 @@ describe("FixedType", () => {
     });
   });
 
-  it("converts values to ArrayBuffer", () => {
+  it("converts values to ArrayBuffer", async () => {
     const fixedType = createFixedType("Test", 4);
     const bytes = new Uint8Array([1, 2, 3, 4]);
-    const buffer = fixedType.toBuffer(bytes);
+    const buffer = await fixedType.toBuffer(bytes);
 
     assertEquals(buffer.byteLength, 4);
     const view = new Uint8Array(buffer);
     assertEquals(view, bytes);
   });
 
-  it("validates values before converting to buffer", () => {
+  it("validates values before converting to buffer", async () => {
     const fixedType = createFixedType("Test", 4);
 
-    assertThrows(
-      () => fixedType.toBuffer(new Uint8Array([1, 2, 3])),
+    await assertRejects(
+      async () => await fixedType.toBuffer(new Uint8Array([1, 2, 3])),
       Error,
       "Invalid value",
     );
   });
 
-  it("skips fixed-size values in tap", () => {
+  it("skips fixed-size values in tap", async () => {
     const fixedType = createFixedType("Test", 4);
     const buf = new ArrayBuffer(8);
     const view = new Uint8Array(buf);
@@ -278,14 +278,14 @@ describe("FixedType", () => {
     const tap = new Tap(buf);
     assertEquals(tap._testOnlyPos, 0);
 
-    fixedType.skip(tap);
+    await fixedType.skip(tap);
     assertEquals(tap._testOnlyPos, 4);
 
-    fixedType.skip(tap);
+    await fixedType.skip(tap);
     assertEquals(tap._testOnlyPos, 8);
   });
 
-  it("matches encoded fixed-size buffers", () => {
+  it("matches encoded fixed-size buffers", async () => {
     const fixedType = createFixedType("Test", 4);
     const bytes1 = new Uint8Array([1, 2, 3, 4]);
     const bytes2 = new Uint8Array([1, 2, 3, 4]);
@@ -303,8 +303,8 @@ describe("FixedType", () => {
     const tap2 = new Tap(buf2);
     const tap3 = new Tap(buf3);
 
-    assertEquals(fixedType.match(tap1, tap2), 0); // Match
-    assertEquals(fixedType.match(tap1, tap3), 0); // No match
+    assertEquals(await fixedType.match(tap1, tap2), 0); // Match
+    assertEquals(await fixedType.match(tap1, tap3), 0); // No match
   });
 
   it("creates resolver for identical FixedType", () => {
@@ -348,7 +348,7 @@ describe("FixedType", () => {
     );
   });
 
-  it("reads values through FixedType resolver", () => {
+  it("reads values through FixedType resolver", async () => {
     const readerType = createFixedType("MD5", 16, "org.example.types");
     const writerType = createFixedType("MD5", 16, "org.example.types");
 
@@ -374,10 +374,10 @@ describe("FixedType", () => {
 
     const buf = new ArrayBuffer(16);
     const tap = new Tap(buf);
-    tap.writeFixed(testData, 16);
+    await tap.writeFixed(testData, 16);
 
     const tap2 = new Tap(buf);
-    const readData = resolver.read(tap2);
+    const readData = await resolver.read(tap2);
 
     assertEquals(readData, testData);
   });

@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { Tap } from "../serialization/tap.ts";
 import { BytesType } from "./bytes_type.ts";
@@ -33,22 +33,22 @@ describe("BytesType", () => {
   });
 
   describe("read", () => {
-    it("should read bytes from tap", () => {
+    it("should read bytes from tap", async () => {
       const data = new Uint8Array([1, 2, 3, 4]);
       const buffer = new ArrayBuffer(10);
       const writeTap = new Tap(buffer);
-      writeTap.writeBytes(data);
+      await writeTap.writeBytes(data);
       const readTap = new Tap(buffer);
-      const result = type.read(readTap);
+      const result = await type.read(readTap);
       assertEquals(result, data);
     });
 
-    it("should throw when insufficient data", () => {
+    it("should throw when insufficient data", async () => {
       const buffer = new ArrayBuffer(0); // Empty buffer
       const tap = new Tap(buffer);
-      assertThrows(
-        () => {
-          type.read(tap);
+      await assertRejects(
+        async () => {
+          await type.read(tap);
         },
         Error,
         "Insufficient data for bytes",
@@ -57,49 +57,49 @@ describe("BytesType", () => {
   });
 
   describe("write", () => {
-    it("should write bytes to tap", () => {
+    it("should write bytes to tap", async () => {
       const data = new Uint8Array([5, 6, 7]);
       const buffer = new ArrayBuffer(10);
       const writeTap = new Tap(buffer);
-      type.write(writeTap, data);
+      await type.write(writeTap, data);
       const readTap = new Tap(buffer);
-      const result = readTap.readBytes();
+      const result = await readTap.readBytes();
       assertEquals(result, data);
     });
 
-    it("should throw for invalid value", () => {
+    it("should throw for invalid value", async () => {
       const buffer = new ArrayBuffer(10);
       const tap = new Tap(buffer);
-      assertThrows(() => {
+      await assertRejects(async () => {
         // deno-lint-ignore no-explicit-any
-        (type as any).write(tap, "invalid");
+        await (type as any).write(tap, "invalid");
       }, ValidationError);
     });
   });
 
   describe("skip", () => {
-    it("should skip bytes in tap", () => {
+    it("should skip bytes in tap", async () => {
       const data = new Uint8Array([1, 2, 3]);
-      const buffer = type.toBuffer(data);
+      const buffer = await type.toBuffer(data);
       const tap = new Tap(buffer);
       const posBefore = tap._testOnlyPos;
-      type.skip(tap);
+      await type.skip(tap);
       const posAfter = tap._testOnlyPos;
       assertEquals(posAfter - posBefore, buffer.byteLength);
     });
   });
 
   describe("toBuffer", () => {
-    it("should serialize bytes correctly", () => {
+    it("should serialize bytes correctly", async () => {
       const data = new Uint8Array([10, 20, 30]);
-      const buffer = type.toBuffer(data);
-      const result = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(data);
+      const result = await type.fromBuffer(buffer);
       assertEquals(result, data);
     });
 
-    it("should throw ValidationError for invalid value", () => {
-      assertThrows(() => {
-        type.toBuffer("invalid" as unknown as Uint8Array);
+    it("should throw ValidationError for invalid value", async () => {
+      await assertRejects(async () => {
+        await type.toBuffer("invalid" as unknown as Uint8Array);
       }, ValidationError);
     });
   });
@@ -143,35 +143,35 @@ describe("BytesType", () => {
   });
 
   describe("createResolver", () => {
-    it("should create resolver for same type", () => {
+    it("should create resolver for same type", async () => {
       const resolver = type.createResolver(type);
       const value = new Uint8Array([1, 2, 3]);
-      const buffer = type.toBuffer(value);
+      const buffer = await type.toBuffer(value);
       const tap = new Tap(buffer);
-      const result = resolver.read(tap);
+      const result = await resolver.read(tap);
       assertEquals(result, value);
     });
 
-    it("should create resolver for StringType writer", () => {
+    it("should create resolver for StringType writer", async () => {
       const stringType = new StringType();
       const resolver = type.createResolver(stringType);
       const str = "hello";
-      const buffer = stringType.toBuffer(str);
+      const buffer = await stringType.toBuffer(str);
       const tap = new Tap(buffer);
-      const result = resolver.read(tap);
+      const result = await resolver.read(tap);
       const expected = new TextEncoder().encode(str);
       assertEquals(result, expected);
     });
 
-    it("should throw when reading string with insufficient data in resolver", () => {
+    it("should throw when reading string with insufficient data in resolver", async () => {
       const stringType = new StringType();
       const resolver = type.createResolver(stringType);
       const buf = new ArrayBuffer(5);
       const writeTap = new Tap(buf);
-      writeTap.writeLong(10n);
+      await writeTap.writeLong(10n);
       const readTap = new Tap(buf);
-      assertThrows(
-        () => resolver.read(readTap),
+      await assertRejects(
+        async () => await resolver.read(readTap),
         Error,
         "Insufficient data for string",
       );
@@ -193,22 +193,22 @@ describe("BytesType", () => {
   });
 
   describe("match", () => {
-    it("should match encoded bytes buffers correctly", () => {
+    it("should match encoded bytes buffers correctly", async () => {
       const val1 = new Uint8Array([1, 2, 3]);
       const val2 = new Uint8Array([1, 2, 3]);
       const val3 = new Uint8Array([1, 2, 4]);
       const val4 = new Uint8Array([1, 2]);
 
-      const buf1 = type.toBuffer(val1);
-      const buf2 = type.toBuffer(val2);
-      const buf3 = type.toBuffer(val3);
-      const buf4 = type.toBuffer(val4);
+      const buf1 = await type.toBuffer(val1);
+      const buf2 = await type.toBuffer(val2);
+      const buf3 = await type.toBuffer(val3);
+      const buf4 = await type.toBuffer(val4);
 
-      assertEquals(type.match(new Tap(buf1), new Tap(buf2)), 0); // equal
-      assertEquals(type.match(new Tap(buf1), new Tap(buf3)), -1); // [1,2,3] < [1,2,4]
-      assertEquals(type.match(new Tap(buf3), new Tap(buf1)), 1); // [1,2,4] > [1,2,3]
-      assertEquals(type.match(new Tap(buf1), new Tap(buf4)), 1); // longer > shorter
-      assertEquals(type.match(new Tap(buf4), new Tap(buf1)), -1); // shorter < longer
+      assertEquals(await type.match(new Tap(buf1), new Tap(buf2)), 0); // equal
+      assertEquals(await type.match(new Tap(buf1), new Tap(buf3)), -1); // [1,2,3] < [1,2,4]
+      assertEquals(await type.match(new Tap(buf3), new Tap(buf1)), 1); // [1,2,4] > [1,2,3]
+      assertEquals(await type.match(new Tap(buf1), new Tap(buf4)), 1); // longer > shorter
+      assertEquals(await type.match(new Tap(buf4), new Tap(buf1)), -1); // shorter < longer
     });
   });
 
@@ -227,10 +227,10 @@ describe("BytesType", () => {
       }, ValidationError);
     });
 
-    it("should have fromBuffer", () => {
+    it("should have fromBuffer", async () => {
       const data = new Uint8Array([100, 101]);
-      const buffer = type.toBuffer(data);
-      const result = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(data);
+      const result = await type.fromBuffer(buffer);
       assertEquals(result, data);
     });
 

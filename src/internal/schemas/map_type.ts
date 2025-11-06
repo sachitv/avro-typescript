@@ -11,27 +11,27 @@ export interface MapTypeParams<T> {
   values: Type<T>;
 }
 
-export function readMapInto<T>(
+export async function readMapInto<T>(
   tap: Tap,
-  readValue: (tap: Tap) => T,
+  readValue: (tap: Tap) => Promise<T>,
   collect: (key: string, value: T) => void,
-): void {
+): Promise<void> {
   while (true) {
-    let rawCount = tap.readLong();
+    let rawCount = await tap.readLong();
     if (rawCount === 0n) {
       break;
     }
     if (rawCount < 0n) {
       rawCount = -rawCount;
-      tap.skipLong(); // skip block size
+      await tap.skipLong(); // skip block size
     }
     const count = bigIntToSafeNumber(rawCount, "Map block length");
     for (let i = 0; i < count; i++) {
-      const key = tap.readString();
+      const key = await tap.readString();
       if (key === undefined) {
         throw new Error("Insufficient data for map key");
       }
-      const value = readValue(tap);
+      const value = await readValue(tap);
       collect(key, value);
     }
   }
@@ -88,29 +88,29 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     return isValid;
   }
 
-  public override write(tap: Tap, value: Map<string, T>): void {
+  public override async write(tap: Tap, value: Map<string, T>): Promise<void> {
     if (!(value instanceof Map)) {
       throwInvalidError([], value, this);
     }
 
     if (value.size > 0) {
-      tap.writeLong(BigInt(value.size));
+      await tap.writeLong(BigInt(value.size));
       for (const [key, entry] of value) {
         if (typeof key !== "string") {
           throwInvalidError([], value, this);
         }
-        tap.writeString(key);
-        this.#valuesType.write(tap, entry);
+        await tap.writeString(key);
+        await this.#valuesType.write(tap, entry);
       }
     }
-    tap.writeLong(0n);
+    await tap.writeLong(0n);
   }
 
-  public override read(tap: Tap): Map<string, T> {
+  public override async read(tap: Tap): Promise<Map<string, T>> {
     const result = new Map<string, T>();
-    readMapInto(
+    await readMapInto(
       tap,
-      (innerTap) => this.#valuesType.read(innerTap),
+      async (innerTap) => await this.#valuesType.read(innerTap),
       (key, value) => {
         result.set(key, value);
       },
@@ -118,29 +118,29 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     return result;
   }
 
-  public override skip(tap: Tap): void {
+  public override async skip(tap: Tap): Promise<void> {
     while (true) {
-      const rawCount = tap.readLong();
+      const rawCount = await tap.readLong();
       if (rawCount === 0n) {
         break;
       }
       if (rawCount < 0n) {
-        const blockSize = tap.readLong();
+        const blockSize = await tap.readLong();
         const size = bigIntToSafeNumber(blockSize, "Map block size");
         if (size > 0) {
-          tap.skipFixed(size);
+          await tap.skipFixed(size);
         }
         continue;
       }
       const count = bigIntToSafeNumber(rawCount, "Map block length");
       for (let i = 0; i < count; i++) {
-        tap.skipString();
-        this.#valuesType.skip(tap);
+        await tap.skipString();
+        await this.#valuesType.skip(tap);
       }
     }
   }
 
-  public override toBuffer(value: Map<string, T>): ArrayBuffer {
+  public override async toBuffer(value: Map<string, T>): Promise<ArrayBuffer> {
     if (!(value instanceof Map)) {
       throwInvalidError([], value, this);
     }
@@ -157,7 +157,7 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
         throwInvalidError([], value, this);
       }
       const keyBytes = encode(key);
-      const valueBytes = new Uint8Array(this.#valuesType.toBuffer(entry));
+      const valueBytes = new Uint8Array(await this.#valuesType.toBuffer(entry));
       totalSize += calculateVarintSize(keyBytes.length) + keyBytes.length;
       totalSize += valueBytes.length;
       serializedEntries.push({ keyBytes, valueBytes });
@@ -171,14 +171,14 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     const tap = new Tap(buffer);
 
     if (serializedEntries.length > 0) {
-      tap.writeLong(BigInt(serializedEntries.length));
+      await tap.writeLong(BigInt(serializedEntries.length));
       for (const { keyBytes, valueBytes } of serializedEntries) {
-        tap.writeLong(BigInt(keyBytes.length));
-        tap.writeFixed(keyBytes);
-        tap.writeFixed(valueBytes);
+        await tap.writeLong(BigInt(keyBytes.length));
+        await tap.writeFixed(keyBytes);
+        await tap.writeFixed(valueBytes);
       }
     }
-    tap.writeLong(0n);
+    await tap.writeLong(0n);
 
     return buffer;
   }
@@ -225,7 +225,8 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     };
   }
 
-  public override match(_tap1: Tap, _tap2: Tap): number {
+  // deno-lint-ignore require-await
+  public override async match(_tap1: Tap, _tap2: Tap): Promise<number> {
     throw new Error("maps cannot be compared");
   }
 
@@ -250,11 +251,11 @@ class MapResolver<T> extends Resolver<Map<string, T>> {
     this.#valueResolver = valueResolver;
   }
 
-  public override read(tap: Tap): Map<string, T> {
+  public override async read(tap: Tap): Promise<Map<string, T>> {
     const result = new Map<string, T>();
-    readMapInto(
+    await readMapInto(
       tap,
-      (innerTap) => this.#valueResolver.read(innerTap),
+      async (innerTap) => await this.#valueResolver.read(innerTap),
       (key, value) => {
         result.set(key, value);
       },

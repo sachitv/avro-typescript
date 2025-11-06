@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { Tap } from "../serialization/tap.ts";
@@ -85,35 +85,35 @@ describe("EnumType", () => {
     assertEquals(type.getDefault(), undefined);
   });
 
-  it("serializes and deserializes values", () => {
+  it("serializes and deserializes values", async () => {
     const type = createEnum({
       name: "Letter",
       symbols: ["A", "B", "C"],
     });
 
-    const buffer = type.toBuffer("B");
-    const value = type.fromBuffer(buffer);
+    const buffer = await type.toBuffer("B");
+    const value = await type.fromBuffer(buffer);
 
     assertEquals(value, "B");
   });
 
-  it("throws when writing an unknown value", () => {
+  it("throws when writing an unknown value", async () => {
     const type = createEnum({
       name: "Letter",
       symbols: ["A"],
     });
-    assertThrows(() => type.toBuffer("B"));
+    await assertRejects(async () => await type.toBuffer("B"));
   });
 
-  it("throws when reading an out-of-range index", () => {
+  it("throws when reading an out-of-range index", async () => {
     const type = createEnum({
       name: "Letter",
       symbols: ["A"],
     });
     const tap = new Tap(new ArrayBuffer(1));
-    tap.writeLong(2n);
+    await tap.writeLong(2n);
     tap.resetPos();
-    assertThrows(() => type.read(tap));
+    await assertRejects(async () => await type.read(tap));
   });
 
   it("validates values and triggers error hooks", () => {
@@ -147,18 +147,18 @@ describe("EnumType", () => {
     assertEquals(type.getSymbols(), ["A", "B"]);
   });
 
-  it("skips encoded values", () => {
+  it("skips encoded values", async () => {
     const type = createEnum({
       name: "Letter",
       symbols: ["A", "B", "C"],
     });
-    const buffer = type.toBuffer("C");
+    const buffer = await type.toBuffer("C");
     const tap = new Tap(buffer);
-    type.skip(tap);
+    await type.skip(tap);
     assertEquals(tap._testOnlyPos, buffer.byteLength);
   });
 
-  it("creates resolvers when writer symbols are compatible", () => {
+  it("creates resolvers when writer symbols are compatible", async () => {
     const reader = createEnum({
       name: "Letter",
       symbols: ["A", "B", "C"],
@@ -170,10 +170,10 @@ describe("EnumType", () => {
     });
 
     const resolver = reader.createResolver(writer);
-    const buffer = writer.toBuffer("A");
+    const buffer = await writer.toBuffer("A");
     const tap = new Tap(buffer);
 
-    assertEquals(resolver.read(tap), "A");
+    assertEquals(await resolver.read(tap), "A");
   });
 
   it("throws when writer symbols are incompatible", () => {
@@ -202,7 +202,7 @@ describe("EnumType", () => {
     assertThrows(() => reader.createResolver(writer));
   });
 
-  it("creates resolvers with default when writer symbols are partially compatible", () => {
+  it("creates resolvers with default when writer symbols are partially compatible", async () => {
     const reader = createEnum({
       name: "Letter",
       symbols: ["A", "B", "D"],
@@ -214,16 +214,16 @@ describe("EnumType", () => {
     });
 
     const resolver = reader.createResolver(writer);
-    const bufferA = writer.toBuffer("A");
+    const bufferA = await writer.toBuffer("A");
     const tapA = new Tap(bufferA);
-    assertEquals(resolver.read(tapA), "A");
+    assertEquals(await resolver.read(tapA), "A");
 
-    const bufferC = writer.toBuffer("C");
+    const bufferC = await writer.toBuffer("C");
     const tapC = new Tap(bufferC);
-    assertEquals(resolver.read(tapC), "D");
+    assertEquals(await resolver.read(tapC), "D");
   });
 
-  it("uses default for all unknown writer symbols", () => {
+  it("uses default for all unknown writer symbols", async () => {
     const reader = createEnum({
       name: "Letter",
       symbols: ["A", "B"],
@@ -235,13 +235,13 @@ describe("EnumType", () => {
     });
 
     const resolver = reader.createResolver(writer);
-    const bufferX = writer.toBuffer("X");
+    const bufferX = await writer.toBuffer("X");
     const tapX = new Tap(bufferX);
-    assertEquals(resolver.read(tapX), "B");
+    assertEquals(await resolver.read(tapX), "B");
 
-    const bufferY = writer.toBuffer("Y");
+    const bufferY = await writer.toBuffer("Y");
     const tapY = new Tap(bufferY);
-    assertEquals(resolver.read(tapY), "B");
+    assertEquals(await resolver.read(tapY), "B");
   });
 
   it("clones valid values", () => {
@@ -283,34 +283,34 @@ describe("EnumType", () => {
     );
   });
 
-  it("throws when writing invalid value directly", () => {
+  it("throws when writing invalid value directly", async () => {
     const type = createEnum({
       name: "Letter",
       symbols: ["A"],
     });
     const buffer = new ArrayBuffer(1);
     const tap = new Tap(buffer);
-    assertThrows(
-      () => type.write(tap, "B"),
+    await assertRejects(
+      async () => await type.write(tap, "B"),
       Error,
       "Invalid value: 'B' for type: enum",
     );
   });
 
-  it("should match encoded enum buffers correctly", () => {
+  it("should match encoded enum buffers correctly", async () => {
     const type = createEnum({
       name: "Letter",
       symbols: ["A", "B", "C"],
     });
 
-    const buf1 = type.toBuffer("A"); // index 0
-    const buf2 = type.toBuffer("B"); // index 1
-    const buf3 = type.toBuffer("C"); // index 2
+    const buf1 = await type.toBuffer("A"); // index 0
+    const buf2 = await type.toBuffer("B"); // index 1
+    const buf3 = await type.toBuffer("C"); // index 2
 
-    assertEquals(type.match(new Tap(buf1), new Tap(buf1)), 0); // A == A
-    assertEquals(type.match(new Tap(buf1), new Tap(buf2)), -1); // A < B
-    assertEquals(type.match(new Tap(buf2), new Tap(buf1)), 1); // B > A
-    assertEquals(type.match(new Tap(buf1), new Tap(buf3)), -1); // A < C
+    assertEquals(await type.match(new Tap(buf1), new Tap(buf1)), 0); // A == A
+    assertEquals(await type.match(new Tap(buf1), new Tap(buf2)), -1); // A < B
+    assertEquals(await type.match(new Tap(buf2), new Tap(buf1)), 1); // B > A
+    assertEquals(await type.match(new Tap(buf1), new Tap(buf3)), -1); // A < C
   });
 
   it("calls super createResolver for non-enum types", () => {

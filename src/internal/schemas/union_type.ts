@@ -153,49 +153,49 @@ export class UnionType extends BaseType<UnionValue> {
     return isValid;
   }
 
-  public override write(tap: Tap, value: UnionValue): void {
+  public override async write(tap: Tap, value: UnionValue): Promise<void> {
     const { index, branchValue } = this.#resolveBranch(value);
-    tap.writeLong(BigInt(index));
+    await tap.writeLong(BigInt(index));
     if (branchValue !== undefined) {
-      this.#branches[index].type.write(tap, branchValue);
+      await this.#branches[index].type.write(tap, branchValue);
     }
   }
 
-  public override read(tap: Tap): UnionValue {
-    const index = this.#readBranchIndex(tap);
+  public override async read(tap: Tap): Promise<UnionValue> {
+    const index = await this.#readBranchIndex(tap);
     const branch = this.#branches[index];
     if (branch.isNull) {
       return null;
     }
-    const branchValue = branch.type.read(tap);
+    const branchValue = await branch.type.read(tap);
     return { [branch.name]: branchValue };
   }
 
-  public override skip(tap: Tap): void {
-    const index = this.#readBranchIndex(tap);
+  public override async skip(tap: Tap): Promise<void> {
+    const index = await this.#readBranchIndex(tap);
     const branch = this.#branches[index];
     if (!branch.isNull) {
-      branch.type.skip(tap);
+      await branch.type.skip(tap);
     }
   }
 
-  public override toBuffer(value: UnionValue): ArrayBuffer {
+  public override async toBuffer(value: UnionValue): Promise<ArrayBuffer> {
     const { index, branchValue } = this.#resolveBranch(value);
     const indexSize = calculateVarintSize(index);
     let totalSize = indexSize;
     let branchBytes: Uint8Array | undefined;
     if (branchValue !== undefined) {
       branchBytes = new Uint8Array(
-        this.#branches[index].type.toBuffer(branchValue),
+        await this.#branches[index].type.toBuffer(branchValue),
       );
       totalSize += branchBytes.byteLength;
     }
 
     const buffer = new ArrayBuffer(totalSize);
     const tap = new Tap(buffer);
-    tap.writeLong(BigInt(index));
+    await tap.writeLong(BigInt(index));
     if (branchBytes) {
-      tap.writeFixed(branchBytes);
+      await tap.writeFixed(branchBytes);
     }
     return buffer;
   }
@@ -251,15 +251,15 @@ export class UnionType extends BaseType<UnionValue> {
     return this.#types.map((type) => type.toJSON());
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    const idx1 = this.#readBranchIndex(tap1);
-    const idx2 = this.#readBranchIndex(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    const idx1 = await this.#readBranchIndex(tap1);
+    const idx2 = await this.#readBranchIndex(tap2);
     if (idx1 === idx2) {
       const branch = this.#branches[idx1];
       if (branch.isNull) {
         return 0;
       }
-      return branch.type.match(tap1, tap2);
+      return await branch.type.match(tap1, tap2);
     }
     return idx1 < idx2 ? -1 : 1;
   }
@@ -325,8 +325,8 @@ export class UnionType extends BaseType<UnionValue> {
     return { index: branchIndex, branchValue };
   }
 
-  #readBranchIndex(tap: Tap): number {
-    const indexBigInt = tap.readLong();
+  async #readBranchIndex(tap: Tap): Promise<number> {
+    const indexBigInt = await tap.readLong();
     const index = bigIntToSafeNumber(indexBigInt, "Union branch index");
     if (index < 0 || index >= this.#branches.length) {
       throw new Error(`Invalid union index: ${index}`);
@@ -349,8 +349,8 @@ class UnionBranchResolver extends Resolver<UnionValue> {
     this.#branchResolver = branchResolver;
   }
 
-  public override read(tap: Tap): UnionValue {
-    const resolvedValue = this.#branchResolver.read(tap);
+  public override async read(tap: Tap): Promise<UnionValue> {
+    const resolvedValue = await this.#branchResolver.read(tap);
     if (this.#branch.isNull) {
       return null;
     }
@@ -366,13 +366,13 @@ class UnionFromUnionResolver extends Resolver<UnionValue> {
     this.#resolvers = resolvers;
   }
 
-  public override read(tap: Tap): UnionValue {
-    const indexBigInt = tap.readLong();
+  public override async read(tap: Tap): Promise<UnionValue> {
+    const indexBigInt = await tap.readLong();
     const index = bigIntToSafeNumber(indexBigInt, "Union branch index");
     const resolver = this.#resolvers[index];
     if (!resolver) {
       throw new Error(`Invalid union index: ${index}`);
     }
-    return resolver.read(tap);
+    return await resolver.read(tap);
   }
 }

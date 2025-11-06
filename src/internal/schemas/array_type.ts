@@ -6,25 +6,25 @@ import { type JSONType, Type } from "./type.ts";
 import { type ErrorHook, throwInvalidError } from "./error.ts";
 import { calculateVarintSize } from "./varint.ts";
 
-export function readArrayInto<T>(
+export async function readArrayInto<T>(
   tap: Tap,
-  readElement: (tap: Tap) => T,
+  readElement: (tap: Tap) => Promise<T>,
   collect: (value: T) => void,
-): void {
+): Promise<void> {
   while (true) {
-    const rawCount = tap.readLong();
+    const rawCount = await tap.readLong();
     if (rawCount === 0n) {
       break;
     }
     let count = bigIntToSafeNumber(rawCount, "Array block length");
     if (count < 0) {
-      // Negative counts signal a size-prefixed block; the absolute value is
+      // Negative counts signal a size-prefixed block; absolute value is
       // the element count and the trailing long is the block's byte size.
       count = -count;
-      tap.skipLong();
+      await tap.skipLong();
     }
     for (let i = 0; i < count; i++) {
-      collect(readElement(tap));
+      collect(await readElement(tap));
     }
   }
 }
@@ -79,24 +79,24 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     return isValid;
   }
 
-  public override write(tap: Tap, value: T[]): void {
+  public override async write(tap: Tap, value: T[]): Promise<void> {
     if (!Array.isArray(value)) {
       throwInvalidError([], value, this);
     }
 
     if (value.length > 0) {
-      tap.writeLong(BigInt(value.length));
+      await tap.writeLong(BigInt(value.length));
       for (const element of value) {
-        this.#itemsType.write(tap, element);
+        await this.#itemsType.write(tap, element);
       }
     }
-    tap.writeLong(0n);
+    await tap.writeLong(0n);
   }
 
-  public override skip(tap: Tap): void {
+  public override async skip(tap: Tap): Promise<void> {
     // Skip blocks until terminator.
     while (true) {
-      const rawCount = tap.readLong();
+      const rawCount = await tap.readLong();
       if (rawCount === 0n) {
         break;
       }
@@ -106,23 +106,23 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
         // length for the block. Taking the absolute value yields the element
         // count while the size lets us skip the entire block efficiently.
         count = -count;
-        const blockSize = Number(tap.readLong());
+        const blockSize = Number(await tap.readLong());
         if (blockSize > 0) {
-          tap.skipFixed(blockSize);
+          await tap.skipFixed(blockSize);
         }
       } else {
         for (let i = 0; i < count; i++) {
-          this.#itemsType.skip(tap);
+          await this.#itemsType.skip(tap);
         }
       }
     }
   }
 
-  public override read(tap: Tap): T[] {
+  public override async read(tap: Tap): Promise<T[]> {
     const result: T[] = [];
-    readArrayInto(
+    await readArrayInto(
       tap,
-      (innerTap) => this.#itemsType.read(innerTap),
+      async (innerTap) => await this.#itemsType.read(innerTap),
       (value) => {
         result.push(value);
       },
@@ -130,16 +130,16 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     return result;
   }
 
-  public override toBuffer(value: T[]): ArrayBuffer {
+  public override async toBuffer(value: T[]): Promise<ArrayBuffer> {
     if (!Array.isArray(value)) {
       throwInvalidError([], value, this);
     }
 
-    const elementBuffers = value.length === 0
-      ? []
-      : value.map((element) =>
-        new Uint8Array(this.#itemsType.toBuffer(element))
-      );
+    const elementBuffers = value.length === 0 ? [] : await Promise.all(
+      value.map(async (element) =>
+        new Uint8Array(await this.#itemsType.toBuffer(element))
+      ),
+    );
 
     let totalSize = 1; // final zero block terminator
     if (value.length > 0) {
@@ -153,12 +153,12 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     const tap = new Tap(buffer);
 
     if (value.length > 0) {
-      tap.writeLong(BigInt(value.length));
+      await tap.writeLong(BigInt(value.length));
       for (const buf of elementBuffers) {
-        tap.writeFixed(buf);
+        await tap.writeFixed(buf);
       }
     }
-    tap.writeLong(0n);
+    await tap.writeLong(0n);
 
     return buffer;
   }
@@ -201,12 +201,12 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     };
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    let n1 = this.#readArraySize(tap1);
-    let n2 = this.#readArraySize(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    let n1 = await this.#readArraySize(tap1);
+    let n2 = await this.#readArraySize(tap2);
     let f: number;
     while (n1 !== 0n && n2 !== 0n) {
-      f = this.#itemsType.match(tap1, tap2);
+      f = await this.#itemsType.match(tap1, tap2);
       if (f !== 0) {
         return f;
       }
@@ -214,23 +214,23 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
         n1--;
       }
       if (n1 === 0n) {
-        n1 = this.#readArraySize(tap1);
+        n1 = await this.#readArraySize(tap1);
       }
       if (n2 > 0n) {
         n2--;
       }
       if (n2 === 0n) {
-        n2 = this.#readArraySize(tap2);
+        n2 = await this.#readArraySize(tap2);
       }
     }
     return n1 === n2 ? 0 : n1 < n2 ? -1 : 1;
   }
 
-  #readArraySize(tap: Tap): bigint {
-    let n = tap.readLong();
+  async #readArraySize(tap: Tap): Promise<bigint> {
+    let n = await tap.readLong();
     if (n < 0n) {
       n = -n;
-      tap.skipLong(); // skip size
+      await tap.skipLong(); // skip size
     }
     return n;
   }
@@ -259,13 +259,13 @@ class ArrayResolver<T> extends Resolver<T[]> {
     this.#itemResolver = itemResolver;
   }
 
-  public override read(tap: Tap): T[] {
+  public override async read(tap: Tap): Promise<T[]> {
     const result: T[] = [];
     // Reuse the generic array-block reader so we respect negative block counts
     // (size-prefixed blocks) just like the base implementation.
-    readArrayInto(
+    await readArrayInto(
       tap,
-      (innerTap) => this.#itemResolver.read(innerTap),
+      async (innerTap) => await this.#itemResolver.read(innerTap),
       (value) => {
         result.push(value);
       },

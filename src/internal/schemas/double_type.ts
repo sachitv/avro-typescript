@@ -23,23 +23,23 @@ export class DoubleType extends FixedSizeBaseType<number> {
     return isValid;
   }
 
-  public override read(tap: Tap): number {
-    const val = tap.readDouble();
+  public override async read(tap: Tap): Promise<number> {
+    const val = await tap.readDouble();
     if (val === undefined) {
       throw new Error("Insufficient data for double");
     }
     return val;
   }
 
-  public override write(tap: Tap, value: number): void {
+  public override async write(tap: Tap, value: number): Promise<void> {
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
-    tap.writeDouble(value);
+    await tap.writeDouble(value);
   }
 
-  public override skip(tap: Tap): void {
-    tap.skipDouble();
+  public override async skip(tap: Tap): Promise<void> {
+    await tap.skipDouble();
   }
 
   public sizeBytes(): number {
@@ -63,24 +63,24 @@ export class DoubleType extends FixedSizeBaseType<number> {
     if (writerType instanceof IntType) {
       // Double can promote from int (32-bit to 64-bit double)
       return new class extends Resolver {
-        public override read(tap: Tap): number {
-          const intValue = tap.readInt();
+        public override async read(tap: Tap): Promise<number> {
+          const intValue = await tap.readInt();
           return intValue;
         }
       }(this);
     } else if (writerType instanceof LongType) {
       // Double can promote from long (64-bit to 64-bit double, lossy for large values)
       return new class extends Resolver {
-        public override read(tap: Tap): number {
-          const longValue = tap.readLong();
+        public override async read(tap: Tap): Promise<number> {
+          const longValue = await tap.readLong();
           return Number(longValue);
         }
       }(this);
     } else if (writerType instanceof FloatType) {
       // Double can promote from float (32-bit to 64-bit double)
       return new class extends Resolver {
-        public override read(tap: Tap): number {
-          const floatValue = tap.readFloat();
+        public override async read(tap: Tap): Promise<number> {
+          const floatValue = await tap.readFloat();
           if (floatValue === undefined) {
             throw new Error("Insufficient data for float");
           }
@@ -96,7 +96,7 @@ export class DoubleType extends FixedSizeBaseType<number> {
     return "double";
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    return tap1.matchDouble(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    return await tap1.matchDouble(tap2);
   }
 }

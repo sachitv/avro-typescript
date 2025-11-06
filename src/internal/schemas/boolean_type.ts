@@ -19,19 +19,19 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     return isValid;
   }
 
-  public read(tap: Tap): boolean {
-    return tap.readBoolean();
+  public async read(tap: Tap): Promise<boolean> {
+    return await tap.readBoolean();
   }
 
-  public write(tap: Tap, value: boolean): void {
+  public async write(tap: Tap, value: boolean): Promise<void> {
     if (typeof value !== "boolean") {
       throwInvalidError([], value, this);
     }
-    tap.writeBoolean(value);
+    await tap.writeBoolean(value);
   }
 
-  public override skip(tap: Tap): void {
-    tap.skipBoolean();
+  public override async skip(tap: Tap): Promise<void> {
+    await tap.skipBoolean();
   }
 
   public sizeBytes(): number {
@@ -55,7 +55,7 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     return "boolean";
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    return tap1.matchBoolean(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    return await tap1.matchBoolean(tap2);
   }
 }

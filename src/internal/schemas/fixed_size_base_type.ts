@@ -18,12 +18,12 @@ export abstract class FixedSizeBaseType<T = unknown> extends BaseType<T> {
    * @param value The value to serialize.
    * @returns The serialized ArrayBuffer.
    */
-  public toBuffer(value: T): ArrayBuffer {
+  public override async toBuffer(value: T): Promise<ArrayBuffer> {
     this.check(value, throwInvalidError, []);
     const size = this.sizeBytes();
     const buf = new ArrayBuffer(size);
     const tap = new Tap(buf);
-    this.write(tap, value);
+    await this.write(tap, value);
     return buf;
   }
 
@@ -31,7 +31,7 @@ export abstract class FixedSizeBaseType<T = unknown> extends BaseType<T> {
    * Skips a fixed-size value by advancing the tap by the fixed size.
    * @param tap The tap to skip from.
    */
-  public skip(tap: Tap): void {
-    tap.skipFixed(this.sizeBytes());
+  public async skip(tap: Tap): Promise<void> {
+    await tap.skipFixed(this.sizeBytes());
   }
 }

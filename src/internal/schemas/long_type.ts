@@ -26,28 +26,28 @@ export class LongType extends PrimitiveType<bigint> {
     return isValid;
   }
 
-  public override read(tap: Tap): bigint {
-    return tap.readLong();
+  public override async read(tap: Tap): Promise<bigint> {
+    return await tap.readLong();
   }
 
-  public override write(tap: Tap, value: bigint): void {
+  public override async write(tap: Tap, value: bigint): Promise<void> {
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
-    tap.writeLong(value);
+    await tap.writeLong(value);
   }
 
-  public override skip(tap: Tap): void {
-    tap.skipLong();
+  public override async skip(tap: Tap): Promise<void> {
+    await tap.skipLong();
   }
 
-  public override toBuffer(value: bigint): ArrayBuffer {
+  public override async toBuffer(value: bigint): Promise<ArrayBuffer> {
     this.check(value, throwInvalidError, []);
     // For long, allocate exact size based on value
     const size = calculateVarintSize(value);
     const buf = new ArrayBuffer(size);
     const tap = new Tap(buf);
-    this.write(tap, value);
+    await this.write(tap, value);
     return buf;
   }
 
@@ -63,8 +63,8 @@ export class LongType extends PrimitiveType<bigint> {
     if (writerType instanceof IntType) {
       // Long can promote from int (32-bit to 64-bit)
       return new class extends Resolver {
-        public override read(tap: Tap): bigint {
-          const intValue = tap.readInt();
+        public override async read(tap: Tap): Promise<bigint> {
+          const intValue = await tap.readInt();
           return BigInt(intValue);
         }
       }(this);
@@ -77,7 +77,7 @@ export class LongType extends PrimitiveType<bigint> {
     return "long";
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    return tap1.matchLong(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    return await tap1.matchLong(tap2);
   }
 }

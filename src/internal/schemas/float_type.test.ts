@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { Tap } from "../serialization/tap.ts";
 import { FloatType } from "./float_type.ts";
@@ -38,19 +38,19 @@ describe("FloatType", () => {
   });
 
   describe("read", () => {
-    it("should read float from tap", () => {
+    it("should read float from tap", async () => {
       const buffer = new ArrayBuffer(4);
       const writeTap = new Tap(buffer);
-      writeTap.writeFloat(123.5);
+      await writeTap.writeFloat(123.5);
       const readTap = new Tap(buffer);
-      assertEquals(type.read(readTap), 123.5);
+      assertEquals(await type.read(readTap), 123.5);
     });
 
-    it("should handle NaN and infinity", () => {
+    it("should handle NaN and infinity", async () => {
       const values = [NaN, Infinity, -Infinity];
       for (const val of values) {
-        const buffer = type.toBuffer(val);
-        const result = type.fromBuffer(buffer);
+        const buffer = await type.toBuffer(val);
+        const result = await type.fromBuffer(buffer);
         if (isNaN(val)) {
           assert(isNaN(result));
         } else {
@@ -59,12 +59,12 @@ describe("FloatType", () => {
       }
     });
 
-    it("should throw when insufficient data", () => {
+    it("should throw when insufficient data", async () => {
       const buffer = new ArrayBuffer(2); // Less than 4 bytes needed for float
       const tap = new Tap(buffer);
-      assertThrows(
-        () => {
-          type.read(tap);
+      await assertRejects(
+        async () => {
+          await type.read(tap);
         },
         Error,
         "Insufficient data for float",
@@ -73,31 +73,31 @@ describe("FloatType", () => {
   });
 
   describe("write", () => {
-    it("should write float to tap", () => {
+    it("should write float to tap", async () => {
       const buffer = new ArrayBuffer(4);
       const writeTap = new Tap(buffer);
-      type.write(writeTap, 456.0);
+      await type.write(writeTap, 456.0);
       const readTap = new Tap(buffer);
-      assertEquals(readTap.readFloat(), 456.0);
+      assertEquals(await readTap.readFloat(), 456.0);
     });
 
-    it("should throw for invalid value", () => {
+    it("should throw for invalid value", async () => {
       const buffer = new ArrayBuffer(4);
       const tap = new Tap(buffer);
-      assertThrows(() => {
+      await assertRejects(async () => {
         // deno-lint-ignore no-explicit-any
-        (type as any).write(tap, "invalid");
+        await (type as any).write(tap, "invalid");
       }, ValidationError);
     });
   });
 
   describe("skip", () => {
-    it("should skip float in tap", () => {
+    it("should skip float in tap", async () => {
       const buffer = new ArrayBuffer(8);
       const tap = new Tap(buffer);
-      tap.writeFloat(123.5); // write something first
+      await tap.writeFloat(123.5); // write something first
       const posBefore = tap._testOnlyPos;
-      type.skip(tap);
+      await type.skip(tap);
       const posAfter = tap._testOnlyPos;
       assertEquals(posAfter - posBefore, 4);
     });
@@ -132,44 +132,44 @@ describe("FloatType", () => {
   });
 
   describe("createResolver", () => {
-    it("should create resolver for same type", () => {
+    it("should create resolver for same type", async () => {
       const resolver = type.createResolver(type);
       const value = 789.5;
-      const buffer = type.toBuffer(value);
+      const buffer = await type.toBuffer(value);
       const tap = new Tap(buffer);
-      const result = resolver.read(tap);
+      const result = await resolver.read(tap);
       assertEquals(result, value);
     });
 
-    it("should create resolver for IntType writer", () => {
+    it("should create resolver for IntType writer", async () => {
       const intType = new IntType();
       const resolver = type.createResolver(intType);
       const intValue = 123;
-      const buffer = intType.toBuffer(intValue);
+      const buffer = await intType.toBuffer(intValue);
       const tap = new Tap(buffer);
-      const result = resolver.read(tap);
+      const result = await resolver.read(tap);
       assertEquals(result, 123);
     });
 
-    it("should create resolver for LongType writer", () => {
+    it("should create resolver for LongType writer", async () => {
       const longType = new LongType();
       const resolver = type.createResolver(longType);
       const longValue = 123n;
-      const buffer = longType.toBuffer(longValue);
+      const buffer = await longType.toBuffer(longValue);
       const tap = new Tap(buffer);
-      const result = resolver.read(tap);
+      const result = await resolver.read(tap);
       assertEquals(result, 123);
     });
 
-    it("should demonstrate lossy promotion from long to float", () => {
+    it("should demonstrate lossy promotion from long to float", async () => {
       const longType = new LongType();
       const resolver = type.createResolver(longType);
       // Use a large bigint that loses precision when converted to float
       const largeLong = 2n ** 53n + 1n; // Larger than MAX_SAFE_INTEGER
       assert(largeLong > BigInt(Number.MAX_SAFE_INTEGER));
-      const buffer = longType.toBuffer(largeLong);
+      const buffer = await longType.toBuffer(largeLong);
       const tap = new Tap(buffer);
-      const result = resolver.read(tap);
+      const result = await resolver.read(tap);
       // The result should be rounded to the nearest representable float
       assertEquals(result, 2 ** 53); // Rounded down to 2^53
     });
@@ -187,18 +187,18 @@ describe("FloatType", () => {
   });
 
   describe("match", () => {
-    it("should match encoded float buffers correctly", () => {
+    it("should match encoded float buffers correctly", async () => {
       const val1 = 1.0;
       const val2 = 1.0;
       const val3 = 2.0;
 
-      const buf1 = type.toBuffer(val1);
-      const buf2 = type.toBuffer(val2);
-      const buf3 = type.toBuffer(val3);
+      const buf1 = await type.toBuffer(val1);
+      const buf2 = await type.toBuffer(val2);
+      const buf3 = await type.toBuffer(val3);
 
-      assertEquals(type.match(new Tap(buf1), new Tap(buf2)), 0); // 1.0 == 1.0
-      assertEquals(type.match(new Tap(buf1), new Tap(buf3)), -1); // 1.0 < 2.0
-      assertEquals(type.match(new Tap(buf3), new Tap(buf1)), 1); // 2.0 > 1.0
+      assertEquals(await type.match(new Tap(buf1), new Tap(buf2)), 0); // 1.0 == 1.0
+      assertEquals(await type.match(new Tap(buf1), new Tap(buf3)), -1); // 1.0 < 2.0
+      assertEquals(await type.match(new Tap(buf3), new Tap(buf1)), 1); // 2.0 > 1.0
     });
   });
 
@@ -215,10 +215,10 @@ describe("FloatType", () => {
       }, ValidationError);
     });
 
-    it("should have toBuffer and fromBuffer", () => {
+    it("should have toBuffer and fromBuffer", async () => {
       const value = 123.5;
-      const buffer = type.toBuffer(value);
-      const result = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const result = await type.fromBuffer(buffer);
       assertEquals(result, value);
     });
 

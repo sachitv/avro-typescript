@@ -19,17 +19,19 @@ export class NullType extends FixedSizeBaseType<null> {
     return isValid;
   }
 
-  public read(_tap: Tap): null {
+  // deno-lint-ignore require-await
+  public override async read(_tap: Tap): Promise<null> {
     return null;
   }
 
-  public write(_tap: Tap, value: null): void {
+  // deno-lint-ignore require-await
+  public override async write(_tap: Tap, value: null): Promise<void> {
     if (value !== null) {
       throwInvalidError([], value, this);
     }
   }
 
-  public override skip(_tap: Tap): void {
+  public override async skip(_tap: Tap): Promise<void> {
     // Null takes no space
   }
 
@@ -54,7 +56,8 @@ export class NullType extends FixedSizeBaseType<null> {
     return "null";
   }
 
-  public override match(_tap1: Tap, _tap2: Tap): number {
+  // deno-lint-ignore require-await
+  public override async match(_tap1: Tap, _tap2: Tap): Promise<number> {
     return 0;
   }
 }

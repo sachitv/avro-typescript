@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { Tap } from "../serialization/tap.ts";
 import { JSONType, Type } from "./type.ts";
@@ -15,24 +15,24 @@ class TestType extends BaseType<string> {
     return "test";
   }
 
-  public override toBuffer(value: string): ArrayBuffer {
+  public override async toBuffer(value: string): Promise<ArrayBuffer> {
     const buf = new ArrayBuffer(value.length + 10); // extra space for length encoding
     const tap = new Tap(buf);
-    this.write(tap, value);
+    await this.write(tap, value);
     return buf;
   }
 
-  public override write(tap: Tap, value: string): void {
-    tap.writeString(value);
+  public override async write(tap: Tap, value: string): Promise<void> {
+    await tap.writeString(value);
   }
 
-  public override read(tap: Tap): string {
-    const val = tap.readString();
+  public override async read(tap: Tap): Promise<string> {
+    const val = await tap.readString();
     return val ?? "";
   }
 
-  public override skip(tap: Tap): void {
-    tap.skipString();
+  public override async skip(tap: Tap): Promise<void> {
+    await tap.skipString();
   }
 
   public override check(
@@ -65,8 +65,8 @@ class TestType extends BaseType<string> {
     return Math.random().toString(36).substring(2);
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    return tap1.matchString(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    return await tap1.matchString(tap2);
   }
 }
 
@@ -83,20 +83,20 @@ class OtherType extends FixedSizeBaseType<number> {
     return 8;
   }
 
-  public override write(tap: Tap, value: number): void {
-    tap.writeDouble(value);
+  public override async write(tap: Tap, value: number): Promise<void> {
+    await tap.writeDouble(value);
   }
 
-  public override read(tap: Tap): number {
-    const val = tap.readDouble();
+  public override async read(tap: Tap): Promise<number> {
+    const val = await tap.readDouble();
     if (val === undefined) {
       throw new Error("Insufficient data");
     }
     return val;
   }
 
-  public override skip(tap: Tap): void {
-    tap.skipDouble();
+  public override async skip(tap: Tap): Promise<void> {
+    await tap.skipDouble();
   }
 
   public override check(value: unknown): boolean {
@@ -118,8 +118,8 @@ class OtherType extends FixedSizeBaseType<number> {
     return Math.random();
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    return tap1.matchDouble(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    return await tap1.matchDouble(tap2);
   }
 }
 
@@ -127,30 +127,30 @@ describe("Type", () => {
   const type = new TestType();
 
   describe("toBuffer and fromBuffer", () => {
-    it("should serialize and deserialize a string", () => {
+    it("should serialize and deserialize a string", async () => {
       const value = "hello world";
-      const buffer = type.toBuffer(value);
-      const result = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const result = await type.fromBuffer(buffer);
       assertEquals(result, value);
     });
 
-    it("should handle empty string", () => {
+    it("should handle empty string", async () => {
       const value = "";
-      const buffer = type.toBuffer(value);
-      const result = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const result = await type.fromBuffer(buffer);
       assertEquals(result, value);
     });
 
-    it("should handle unicode strings", () => {
+    it("should handle unicode strings", async () => {
       const value = "héllo wörld 🌍";
-      const buffer = type.toBuffer(value);
-      const result = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const result = await type.fromBuffer(buffer);
       assertEquals(result, value);
     });
 
-    it("should throw for truncated buffers", () => {
+    it("should throw for truncated buffers", async () => {
       const buffer = new ArrayBuffer(0);
-      assertThrows(
+      await assertRejects(
         () => type.fromBuffer(buffer),
         Error,
         "Insufficient data for type",
@@ -214,12 +214,12 @@ describe("Type", () => {
       assert(typeof resolver.read === "function");
     });
 
-    it("should resolve data correctly", () => {
+    it("should resolve data correctly", async () => {
       const resolver = type.createResolver(type);
       const value = "test";
-      const buffer = type.toBuffer(value);
+      const buffer = await type.toBuffer(value);
       const tap = new Tap(buffer);
-      const resolved = resolver.read(tap);
+      const resolved = await resolver.read(tap);
       assertEquals(resolved, value);
     });
 
@@ -268,44 +268,50 @@ describe("Type", () => {
   });
 
   describe("match", () => {
-    it("should match encoded buffers correctly", () => {
+    it("should match encoded buffers correctly", async () => {
       const value1 = "apple";
       const value2 = "banana";
       const value3 = "apple";
 
-      const buffer1 = type.toBuffer(value1);
-      const buffer2 = type.toBuffer(value2);
-      const buffer3 = type.toBuffer(value3);
+      const buffer1 = await type.toBuffer(value1);
+      const buffer2 = await type.toBuffer(value2);
+      const buffer3 = await type.toBuffer(value3);
 
       // apple < banana
-      assertEquals(type.match(new Tap(buffer1), new Tap(buffer2)), -1);
+      assertEquals(await type.match(new Tap(buffer1), new Tap(buffer2)), -1);
       // banana > apple
-      assertEquals(type.match(new Tap(buffer2), new Tap(buffer1)), 1);
+      assertEquals(await type.match(new Tap(buffer2), new Tap(buffer1)), 1);
       // apple == apple
-      assertEquals(type.match(new Tap(buffer1), new Tap(buffer3)), 0);
+      assertEquals(await type.match(new Tap(buffer1), new Tap(buffer3)), 0);
     });
 
-    it("should handle empty strings", () => {
-      const emptyBuf = type.toBuffer("");
-      const nonEmptyBuf = type.toBuffer("a");
+    it("should handle empty strings", async () => {
+      const emptyBuf = await type.toBuffer("");
+      const nonEmptyBuf = await type.toBuffer("a");
 
-      assertEquals(type.match(new Tap(emptyBuf), new Tap(nonEmptyBuf)), -1);
-      assertEquals(type.match(new Tap(nonEmptyBuf), new Tap(emptyBuf)), 1);
       assertEquals(
-        type.match(new Tap(emptyBuf), new Tap(type.toBuffer(""))),
+        await type.match(new Tap(emptyBuf), new Tap(nonEmptyBuf)),
+        -1,
+      );
+      assertEquals(
+        await type.match(new Tap(nonEmptyBuf), new Tap(emptyBuf)),
+        1,
+      );
+      assertEquals(
+        await type.match(new Tap(emptyBuf), new Tap(await type.toBuffer(""))),
         0,
       );
     });
 
-    it("should handle unicode strings", () => {
+    it("should handle unicode strings", async () => {
       const value1 = "héllo";
       const value2 = "wörld";
 
-      const buffer1 = type.toBuffer(value1);
-      const buffer2 = type.toBuffer(value2);
+      const buffer1 = await type.toBuffer(value1);
+      const buffer2 = await type.toBuffer(value2);
 
       // Compare based on encoded byte order
-      const result = type.match(new Tap(buffer1), new Tap(buffer2));
+      const result = await type.match(new Tap(buffer1), new Tap(buffer2));
       assert(typeof result === "number");
       assert(result !== 0); // They should be different
     });

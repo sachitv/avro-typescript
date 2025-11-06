@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { Tap } from "../serialization/tap.ts";
 import { IntType } from "./int_type.ts";
@@ -40,53 +40,53 @@ describe("IntType", () => {
   });
 
   describe("read", () => {
-    it("should read int from tap", () => {
+    it("should read int from tap", async () => {
       const buffer = new ArrayBuffer(5);
       const writeTap = new Tap(buffer);
-      writeTap.writeInt(123);
+      await writeTap.writeInt(123);
       const readTap = new Tap(buffer);
-      assertEquals(type.read(readTap), 123);
+      assertEquals(await type.read(readTap), 123);
     });
   });
 
   describe("write", () => {
-    it("should write int to tap", () => {
+    it("should write int to tap", async () => {
       const buffer = new ArrayBuffer(5);
       const writeTap = new Tap(buffer);
-      type.write(writeTap, 456);
+      await type.write(writeTap, 456);
       const readTap = new Tap(buffer);
-      assertEquals(readTap.readInt(), 456);
+      assertEquals(await readTap.readInt(), 456);
     });
 
-    it("should throw for invalid value", () => {
+    it("should throw for invalid value", async () => {
       const buffer = new ArrayBuffer(5);
       const tap = new Tap(buffer);
-      assertThrows(() => {
-        type.write(tap, 2147483648 as unknown as number);
+      await assertRejects(() => {
+        return type.write(tap, 2147483648 as unknown as number);
       }, ValidationError);
     });
   });
 
   describe("skip", () => {
-    it("should skip int in tap", () => {
+    it("should skip int in tap", async () => {
       const value = 42;
       const size = calculateVarintSize(value);
       const buffer = new ArrayBuffer(size + 1);
       const tap = new Tap(buffer);
-      type.write(tap, value);
+      await type.write(tap, value);
       const posAfterWrite = tap._testOnlyPos;
       assertEquals(posAfterWrite, size);
       tap.resetPos();
-      type.skip(tap);
+      await type.skip(tap);
       const posAfterSkip = tap._testOnlyPos;
       assertEquals(posAfterSkip, size);
     });
   });
 
   describe("toBuffer", () => {
-    it("should throw ValidationError for invalid value", () => {
-      assertThrows(() => {
-        type.toBuffer(1.5 as unknown as number);
+    it("should throw ValidationError for invalid value", async () => {
+      await assertRejects(() => {
+        return type.toBuffer(1.5 as unknown as number);
       }, ValidationError);
     });
   });
@@ -105,15 +105,21 @@ describe("IntType", () => {
   });
 
   describe("match", () => {
-    it("should match encoded int buffers", () => {
-      const buf1 = type.toBuffer(1);
-      const buf2 = type.toBuffer(2);
-      const bufNeg = type.toBuffer(-1);
+    it("should match encoded int buffers", async () => {
+      const buf1 = await type.toBuffer(1);
+      const buf2 = await type.toBuffer(2);
+      const bufNeg = await type.toBuffer(-1);
 
-      assertEquals(type.match(new Tap(buf1), new Tap(buf2)), -1);
-      assertEquals(type.match(new Tap(buf2), new Tap(buf1)), 1);
-      assertEquals(type.match(new Tap(buf1), new Tap(type.toBuffer(1))), 0);
-      assertEquals(type.match(new Tap(bufNeg), new Tap(type.toBuffer(-1))), 0);
+      assertEquals(await type.match(new Tap(buf1), new Tap(buf2)), -1);
+      assertEquals(await type.match(new Tap(buf2), new Tap(buf1)), 1);
+      assertEquals(
+        await type.match(new Tap(buf1), new Tap(await type.toBuffer(1))),
+        0,
+      );
+      assertEquals(
+        await type.match(new Tap(bufNeg), new Tap(await type.toBuffer(-1))),
+        0,
+      );
     });
   });
 
@@ -144,10 +150,10 @@ describe("IntType", () => {
       }, ValidationError);
     });
 
-    it("should have toBuffer and fromBuffer", () => {
+    it("should have toBuffer and fromBuffer", async () => {
       const value = 123;
-      const buffer = type.toBuffer(value);
-      const result = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const result = await type.fromBuffer(buffer);
       assertEquals(result, value);
     });
 
@@ -156,12 +162,12 @@ describe("IntType", () => {
       assert(!type.isValid(2147483648));
     });
 
-    it("should create resolver for same type", () => {
+    it("should create resolver for same type", async () => {
       const resolver = type.createResolver(type);
       const value = 789;
-      const buffer = type.toBuffer(value);
+      const buffer = await type.toBuffer(value);
       const tap = new Tap(buffer);
-      const result = resolver.read(tap);
+      const result = await resolver.read(tap);
       assertEquals(result, value);
     });
 

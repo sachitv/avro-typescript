@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { Tap } from "../serialization/tap.ts";
 import { BooleanType } from "./boolean_type.ts";
@@ -31,40 +31,40 @@ describe("BooleanType", () => {
   });
 
   describe("read", () => {
-    it("should read boolean from tap", () => {
+    it("should read boolean from tap", async () => {
       const buffer = new ArrayBuffer(1);
       const writeTap = new Tap(buffer);
-      writeTap.writeBoolean(true);
+      await writeTap.writeBoolean(true);
       const readTap = new Tap(buffer);
-      assertEquals(type.read(readTap), true);
+      assertEquals(await type.read(readTap), true);
     });
   });
 
   describe("write", () => {
-    it("should write boolean to tap", () => {
+    it("should write boolean to tap", async () => {
       const buffer = new ArrayBuffer(1);
       const writeTap = new Tap(buffer);
-      type.write(writeTap, true);
+      await type.write(writeTap, true);
       const readTap = new Tap(buffer);
-      assertEquals(readTap.readBoolean(), true);
+      assertEquals(await readTap.readBoolean(), true);
     });
 
-    it("should throw for invalid value", () => {
+    it("should throw for invalid value", async () => {
       const buffer = new ArrayBuffer(1);
       const tap = new Tap(buffer);
-      assertThrows(() => {
-        type.write(tap, 123 as unknown as boolean);
+      await assertRejects(async () => {
+        await type.write(tap, 123 as unknown as boolean);
       }, ValidationError);
     });
   });
 
   describe("skip", () => {
-    it("should skip boolean in tap", () => {
+    it("should skip boolean in tap", async () => {
       const buffer = new ArrayBuffer(2);
       const tap = new Tap(buffer);
-      tap.writeBoolean(true); // write something first
+      await tap.writeBoolean(true); // write something first
       const posBefore = tap._testOnlyPos;
-      type.skip(tap);
+      await type.skip(tap);
       const posAfter = tap._testOnlyPos;
       assertEquals(posAfter - posBefore, 1);
     });
@@ -99,18 +99,21 @@ describe("BooleanType", () => {
   });
 
   describe("match", () => {
-    it("should match encoded boolean buffers", () => {
-      const trueBuf = type.toBuffer(true);
-      const falseBuf = type.toBuffer(false);
+    it("should match encoded boolean buffers", async () => {
+      const trueBuf = await type.toBuffer(true);
+      const falseBuf = await type.toBuffer(false);
 
-      assertEquals(type.match(new Tap(falseBuf), new Tap(trueBuf)), -1);
-      assertEquals(type.match(new Tap(trueBuf), new Tap(falseBuf)), 1);
+      assertEquals(await type.match(new Tap(falseBuf), new Tap(trueBuf)), -1);
+      assertEquals(await type.match(new Tap(trueBuf), new Tap(falseBuf)), 1);
       assertEquals(
-        type.match(new Tap(trueBuf), new Tap(type.toBuffer(true))),
+        await type.match(new Tap(trueBuf), new Tap(await type.toBuffer(true))),
         0,
       );
       assertEquals(
-        type.match(new Tap(falseBuf), new Tap(type.toBuffer(false))),
+        await type.match(
+          new Tap(falseBuf),
+          new Tap(await type.toBuffer(false)),
+        ),
         0,
       );
     });
@@ -128,16 +131,16 @@ describe("BooleanType", () => {
       }, ValidationError);
     });
 
-    it("should have toBuffer and fromBuffer", () => {
+    it("should have toBuffer and fromBuffer", async () => {
       const value = true;
-      const buffer = type.toBuffer(value);
-      const result = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const result = await type.fromBuffer(buffer);
       assertEquals(result, value);
     });
 
-    it("should throw for truncated buffer", () => {
+    it("should throw for truncated buffer", async () => {
       const buffer = new ArrayBuffer(0);
-      assertThrows(
+      await assertRejects(
         () => type.fromBuffer(buffer),
         Error,
         "Insufficient data for type",
@@ -149,12 +152,12 @@ describe("BooleanType", () => {
       assert(!type.isValid("true"));
     });
 
-    it("should create resolver for same type", () => {
+    it("should create resolver for same type", async () => {
       const resolver = type.createResolver(type);
       const value = false;
-      const buffer = type.toBuffer(value);
+      const buffer = await type.toBuffer(value);
       const tap = new Tap(buffer);
-      const result = resolver.read(tap);
+      const result = await resolver.read(tap);
       assertEquals(result, value);
     });
 

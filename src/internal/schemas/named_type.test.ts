@@ -13,7 +13,8 @@ class DummyNamedType extends NamedType<string> {
     super(params);
   }
 
-  public override toBuffer(_value: string): ArrayBuffer {
+  // deno-lint-ignore require-await
+  public override async toBuffer(_value: string): Promise<ArrayBuffer> {
     return new ArrayBuffer(0);
   }
 
@@ -21,13 +22,14 @@ class DummyNamedType extends NamedType<string> {
     return value;
   }
 
-  public override write(_tap: Tap, _value: string): void {}
+  public override async write(_tap: Tap, _value: string): Promise<void> {}
 
-  public override read(_tap: Tap): string {
+  // deno-lint-ignore require-await
+  public override async read(_tap: Tap): Promise<string> {
     return "";
   }
 
-  public override skip(_tap: Tap): void {}
+  public override async skip(_tap: Tap): Promise<void> {}
 
   public override check(
     _value: unknown,
@@ -49,7 +51,8 @@ class DummyNamedType extends NamedType<string> {
     return "dummy";
   }
 
-  public override match(_tap1: Tap, _tap2: Tap): number {
+  // deno-lint-ignore require-await
+  public override async match(_tap1: Tap, _tap2: Tap): Promise<number> {
     return 0;
   }
 }
@@ -72,7 +75,7 @@ describe("NamedType", () => {
     assert(type.matchesName("other.Alias"));
   });
 
-  it("match should return 0", () => {
+  it("match should return 0", async () => {
     const params = {
       name: "Test",
       namespace: "test",
@@ -80,9 +83,9 @@ describe("NamedType", () => {
     const resolved = resolveNames(params);
     const type = new DummyNamedType(resolved);
 
-    const buf1 = type.toBuffer("a");
-    const buf2 = type.toBuffer("b");
+    const buf1 = await type.toBuffer("a");
+    const buf2 = await type.toBuffer("b");
 
-    assertEquals(type.match(new Tap(buf1), new Tap(buf2)), 0);
+    assertEquals(await type.match(new Tap(buf1), new Tap(buf2)), 0);
   });
 });

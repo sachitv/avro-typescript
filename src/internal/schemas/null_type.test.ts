@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { Tap } from "../serialization/tap.ts";
 import { NullType } from "./null_type.ts";
@@ -30,37 +30,37 @@ describe("NullType", () => {
   });
 
   describe("read", () => {
-    it("should return null", () => {
+    it("should return null", async () => {
       const buffer = new ArrayBuffer(0);
       const tap = new Tap(buffer);
-      assertEquals(type.read(tap), null);
+      assertEquals(await type.read(tap), null);
     });
   });
 
   describe("write", () => {
-    it("should write null to tap", () => {
+    it("should write null to tap", async () => {
       const buffer = new ArrayBuffer(0);
       const tap = new Tap(buffer);
-      type.write(tap, null);
+      await type.write(tap, null);
       // Nothing to assert, just shouldn't throw
     });
 
-    it("should throw for non-null value", () => {
+    it("should throw for non-null value", async () => {
       const buffer = new ArrayBuffer(0);
       const tap = new Tap(buffer);
-      assertThrows(() => {
+      await assertRejects(async () => {
         // deno-lint-ignore no-explicit-any
-        (type as any).write(tap, "invalid");
+        await ((type as any).write(tap, "invalid"));
       }, ValidationError);
     });
   });
 
   describe("skip", () => {
-    it("should skip null in tap", () => {
+    it("should skip null in tap", async () => {
       const buffer = new ArrayBuffer(1);
       const tap = new Tap(buffer);
       const posBefore = tap._testOnlyPos;
-      type.skip(tap);
+      await type.skip(tap);
       const posAfter = tap._testOnlyPos;
       assertEquals(posAfter - posBefore, 0);
     });
@@ -79,11 +79,11 @@ describe("NullType", () => {
   });
 
   describe("match", () => {
-    it("should always return 0 for null buffers", () => {
-      const buf1 = type.toBuffer(null);
-      const buf2 = type.toBuffer(null);
+    it("should always return 0 for null buffers", async () => {
+      const buf1 = await type.toBuffer(null);
+      const buf2 = await type.toBuffer(null);
 
-      assertEquals(type.match(new Tap(buf1), new Tap(buf2)), 0);
+      assertEquals(await type.match(new Tap(buf1), new Tap(buf2)), 0);
     });
   });
 
@@ -111,16 +111,16 @@ describe("NullType", () => {
       }, ValidationError);
     });
 
-    it("should have toBuffer and fromBuffer", () => {
+    it("should have toBuffer and fromBuffer", async () => {
       const value = null;
-      const buffer = type.toBuffer(value);
+      const buffer = await type.toBuffer(value);
       assertEquals(buffer.byteLength, 0);
-      const result = type.fromBuffer(buffer);
+      const result = await type.fromBuffer(buffer);
       assertEquals(result, value);
     });
 
-    it("should deserialize from an empty buffer", () => {
-      const result = type.fromBuffer(new ArrayBuffer(0));
+    it("should deserialize from an empty buffer", async () => {
+      const result = await type.fromBuffer(new ArrayBuffer(0));
       assertEquals(result, null);
     });
 

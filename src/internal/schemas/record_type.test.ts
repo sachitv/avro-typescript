@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { Tap } from "../serialization/tap.ts";
@@ -46,7 +46,7 @@ describe("RecordType", () => {
       );
     });
 
-    it("supports lazy field thunks for recursive schemas", () => {
+    it("supports lazy field thunks for recursive schemas", async () => {
       const names = resolveNames({ name: "example.Node" });
 
       // Build the record in two stages: register the named type first, then
@@ -82,8 +82,8 @@ describe("RecordType", () => {
           },
         },
       };
-      const buffer = nodeType.toBuffer(value);
-      const decoded = nodeType.fromBuffer(buffer);
+      const buffer = await nodeType.toBuffer(value);
+      const decoded = await nodeType.fromBuffer(buffer);
 
       assertEquals(decoded, value);
     });
@@ -290,7 +290,7 @@ describe("RecordType", () => {
   });
 
   describe("Serialization", () => {
-    it("serializes and deserializes records with defaults", () => {
+    it("serializes and deserializes records with defaults", async () => {
       const type = createRecord({
         name: "example.Person",
         fields: [
@@ -299,16 +299,16 @@ describe("RecordType", () => {
         ],
       });
 
-      const buffer = type.toBuffer({ id: 5 });
+      const buffer = await type.toBuffer({ id: 5 });
       const tap = new Tap(buffer);
-      const decoded = type.read(tap);
+      const decoded = await type.read(tap);
       assertEquals(decoded, { id: 5, name: "unknown" });
 
-      const roundTrip = type.fromBuffer(buffer);
+      const roundTrip = await type.fromBuffer(buffer);
       assertEquals(roundTrip, { id: 5, name: "unknown" });
     });
 
-    it("writes records with default values for missing fields", () => {
+    it("writes records with default values for missing fields", async () => {
       const type = createRecord({
         name: "example.Person",
         fields: [
@@ -319,15 +319,15 @@ describe("RecordType", () => {
 
       const buffer = new ArrayBuffer(16);
       const tap = new Tap(buffer);
-      type.write(tap, { id: 42 }); // name is missing but has default
+      await type.write(tap, { id: 42 }); // name is missing but has default
 
       // Verify the written data can be read back correctly
       const readTap = new Tap(buffer);
-      const decoded = type.read(readTap);
+      const decoded = await type.read(readTap);
       assertEquals(decoded, { id: 42, name: "unknown" });
     });
 
-    it("throws when missing required field during write for non-nested records", () => {
+    it("throws when missing required field during write for non-nested records", async () => {
       const type = createRecord({
         name: "example.Person",
         fields: [
@@ -337,9 +337,9 @@ describe("RecordType", () => {
       });
 
       const tap = new Tap(new ArrayBuffer(16));
-      assertThrows(
-        () =>
-          type.write(
+      await assertRejects(
+        async () =>
+          await type.write(
             tap,
             { name: "Ann" } as unknown as Record<string, unknown>,
           ),
@@ -364,7 +364,7 @@ describe("RecordType", () => {
       );
     });
 
-    it("throws when missing required field during write for nested records", () => {
+    it("throws when missing required field during write for nested records", async () => {
       const childRecord = createRecord({
         name: "example.ChildRecord",
         fields: [
@@ -381,9 +381,9 @@ describe("RecordType", () => {
       });
 
       const tap = new Tap(new ArrayBuffer(16));
-      assertThrows(
-        () =>
-          parentRecord.write(
+      await assertRejects(
+        async () =>
+          await parentRecord.write(
             tap,
             { child: { name: "Ann" } } as unknown as Record<string, unknown>,
           ),
@@ -408,7 +408,7 @@ describe("RecordType", () => {
       );
     });
 
-    it("throws on non-record values in write", () => {
+    it("throws on non-record values in write", async () => {
       const type = createRecord({
         name: "example.Person",
         fields: [{ name: "id", type: new IntType() }],
@@ -424,27 +424,33 @@ describe("RecordType", () => {
       "type": "int"
     }
   ]
-}
-`;
+}`;
 
       const tap = new Tap(new ArrayBuffer(16));
-      assertThrows(
-        () => type.write(tap, "string" as unknown as Record<string, unknown>),
+      await assertRejects(
+        async () =>
+          await type.write(tap, "string" as unknown as Record<string, unknown>),
         ValidationError,
         `Invalid value: 'string' for type: ${expectedTypeJson}`,
       );
-      assertThrows(
-        () => type.write(tap, 42 as unknown as Record<string, unknown>),
+      await assertRejects(
+        async () =>
+          await type.write(tap, 42 as unknown as Record<string, unknown>),
         ValidationError,
         `Invalid value: '42' for type: ${expectedTypeJson}`,
       );
-      assertThrows(
-        () => type.write(tap, null as unknown as Record<string, unknown>),
+      await assertRejects(
+        async () =>
+          await type.write(tap, null as unknown as Record<string, unknown>),
         ValidationError,
         `Invalid value: 'null' for type: ${expectedTypeJson}`,
       );
-      assertThrows(
-        () => type.write(tap, [1, 2, 3] as unknown as Record<string, unknown>),
+      await assertRejects(
+        async () =>
+          await type.write(
+            tap,
+            [1, 2, 3] as unknown as Record<string, unknown>,
+          ),
         ValidationError,
         `Invalid value: '
 [
@@ -456,27 +462,27 @@ describe("RecordType", () => {
       );
     });
 
-    it("throws on non-record values in toBuffer", () => {
+    it("throws on non-record values in toBuffer", async () => {
       const type = createRecord({
         name: "example.Person",
         fields: [{ name: "id", type: new IntType() }],
       });
 
-      assertThrows(() =>
-        type.toBuffer("string" as unknown as Record<string, unknown>)
+      await assertRejects(async () =>
+        await type.toBuffer("string" as unknown as Record<string, unknown>)
       );
-      assertThrows(() =>
-        type.toBuffer(42 as unknown as Record<string, unknown>)
+      await assertRejects(async () =>
+        await type.toBuffer(42 as unknown as Record<string, unknown>)
       );
-      assertThrows(() =>
-        type.toBuffer(null as unknown as Record<string, unknown>)
+      await assertRejects(async () =>
+        await type.toBuffer(null as unknown as Record<string, unknown>)
       );
-      assertThrows(() =>
-        type.toBuffer([1, 2, 3] as unknown as Record<string, unknown>)
+      await assertRejects(async () =>
+        await type.toBuffer([1, 2, 3] as unknown as Record<string, unknown>)
       );
     });
 
-    it("throws when missing required field during toBuffer", () => {
+    it("throws when missing required field during toBuffer", async () => {
       const type = createRecord({
         name: "example.Person",
         fields: [
@@ -485,9 +491,11 @@ describe("RecordType", () => {
         ],
       });
 
-      assertThrows(
-        () =>
-          type.toBuffer({ name: "Ann" } as unknown as Record<string, unknown>),
+      await assertRejects(
+        async () =>
+          await type.toBuffer(
+            { name: "Ann" } as unknown as Record<string, unknown>,
+          ),
         ValidationError,
         `Invalid value: 'undefined' for type: 
 {
@@ -509,7 +517,7 @@ describe("RecordType", () => {
       );
     });
 
-    it("throws on invalid nested record values in toBuffer", () => {
+    it("throws on invalid nested record values in toBuffer", async () => {
       const nestedType = createRecord({
         name: "example.Address",
         fields: [{ name: "street", type: new StringType() }],
@@ -523,9 +531,9 @@ describe("RecordType", () => {
         ],
       });
 
-      assertThrows(
-        () =>
-          type.toBuffer(
+      await assertRejects(
+        async () =>
+          await type.toBuffer(
             { id: 1, address: { street: 123 } } as unknown as Record<
               string,
               unknown
@@ -536,7 +544,7 @@ describe("RecordType", () => {
       );
     });
 
-    it("skips encoded records", () => {
+    it("skips encoded records", async () => {
       const type = createRecord({
         name: "example.Person",
         fields: [
@@ -544,9 +552,9 @@ describe("RecordType", () => {
           { name: "name", type: new StringType() },
         ],
       });
-      const buffer = type.toBuffer({ id: 1, name: "Ann" });
+      const buffer = await type.toBuffer({ id: 1, name: "Ann" });
       const tap = new Tap(buffer);
-      type.skip(tap);
+      await type.skip(tap);
       assertEquals(tap._testOnlyPos, buffer.byteLength);
     });
   });
@@ -786,7 +794,7 @@ describe("RecordType", () => {
   });
 
   describe("match", () => {
-    it("matches encoded record buffers", () => {
+    it("matches encoded record buffers", async () => {
       const type = createRecord({
         name: "example.Score",
         fields: [
@@ -799,17 +807,20 @@ describe("RecordType", () => {
       const a = { score: 10, name: "Ann", ignored: "x" };
       const b = { score: 5, name: "Bob", ignored: "y" };
 
-      const bufA = type.toBuffer(a);
-      const bufB = type.toBuffer(b);
+      const bufA = await type.toBuffer(a);
+      const bufB = await type.toBuffer(b);
 
-      assertEquals(type.match(new Tap(bufA), new Tap(bufB)), -1); // a has higher score (10 > 5), descending order makes a < b
-      assertEquals(type.match(new Tap(bufB), new Tap(bufA)), 1); // b has lower score, so b > a
-      assertEquals(type.match(new Tap(bufA), new Tap(type.toBuffer(a))), 0); // identical buffers compare equal
+      assertEquals(await type.match(new Tap(bufA), new Tap(bufB)), -1); // a has higher score (10 > 5), descending order makes a < b
+      assertEquals(await type.match(new Tap(bufB), new Tap(bufA)), 1); // b has lower score, so b > a
+      assertEquals(
+        await type.match(new Tap(bufA), new Tap(await type.toBuffer(a))),
+        0,
+      ); // identical buffers compare equal
     });
   });
 
   describe("createResolver", () => {
-    it("creates resolver that adds defaulted fields", () => {
+    it("creates resolver that adds defaulted fields", async () => {
       const writer = createRecord({
         name: "example.Person",
         fields: [{ name: "name", type: new StringType() }],
@@ -823,12 +834,12 @@ describe("RecordType", () => {
       });
 
       const resolver = reader.createResolver(writer);
-      const buffer = writer.toBuffer({ name: "Ann" });
+      const buffer = await writer.toBuffer({ name: "Ann" });
       const tap = new Tap(buffer);
-      assertEquals(resolver.read(tap), { name: "Ann", age: 42 });
+      assertEquals(await resolver.read(tap), { name: "Ann", age: 42 });
     });
 
-    it("maps writer record aliases to reader", () => {
+    it("maps writer record aliases to reader", async () => {
       // This tests record-level aliases: writer record "LegacyPerson" is aliased to reader record "NewPerson".
       // Field names are identical ("name"), so no field aliasing is needed.
       const writer = createRecord({
@@ -842,12 +853,12 @@ describe("RecordType", () => {
       });
 
       const resolver = reader.createResolver(writer);
-      const buffer = writer.toBuffer({ name: "Sam" });
+      const buffer = await writer.toBuffer({ name: "Sam" });
       const tap = new Tap(buffer);
-      assertEquals(resolver.read(tap), { name: "Sam" });
+      assertEquals(await resolver.read(tap), { name: "Sam" });
     });
 
-    it("maps writer field aliases to reader field names", () => {
+    it("maps writer field aliases to reader field names", async () => {
       // This tests field-level aliases: record names are identical ("Person"), but writer field "fullName" is aliased to reader field "name".
       const writer = createRecord({
         name: "example.Person",
@@ -866,12 +877,12 @@ describe("RecordType", () => {
       });
 
       const resolver = reader.createResolver(writer);
-      const buffer = writer.toBuffer({ fullName: "Sam" });
+      const buffer = await writer.toBuffer({ fullName: "Sam" });
       const tap = new Tap(buffer);
-      assertEquals(resolver.read(tap), { name: "Sam" });
+      assertEquals(await resolver.read(tap), { name: "Sam" });
     });
 
-    it("maps writer record and field aliases to reader", () => {
+    it("maps writer record and field aliases to reader", async () => {
       // This tests both record-level and field-level aliases: writer record "LegacyPerson" and field "fullName" are aliased to reader record "NewPerson" and field "name".
       const writer = createRecord({
         name: "example.LegacyPerson",
@@ -888,12 +899,12 @@ describe("RecordType", () => {
       });
 
       const resolver = reader.createResolver(writer);
-      const buffer = writer.toBuffer({ fullName: "Sam" });
+      const buffer = await writer.toBuffer({ fullName: "Sam" });
       const tap = new Tap(buffer);
-      assertEquals(resolver.read(tap), { name: "Sam" });
+      assertEquals(await resolver.read(tap), { name: "Sam" });
     });
 
-    it("maps writer field aliases to reader field names", () => {
+    it("maps writer field aliases to reader field names", async () => {
       const writer = createRecord({
         name: "example.Person",
         fields: [{
@@ -908,12 +919,12 @@ describe("RecordType", () => {
       });
 
       const resolver = reader.createResolver(writer);
-      const buffer = writer.toBuffer({ oldName: "test" });
+      const buffer = await writer.toBuffer({ oldName: "test" });
       const tap = new Tap(buffer);
-      assertEquals(resolver.read(tap), { newName: "test" });
+      assertEquals(await resolver.read(tap), { newName: "test" });
     });
 
-    it("skips extra writer fields via resolver", () => {
+    it("skips extra writer fields via resolver", async () => {
       const writer = createRecord({
         name: "example.Person",
         fields: [
@@ -927,12 +938,12 @@ describe("RecordType", () => {
       });
 
       const resolver = reader.createResolver(writer);
-      const buffer = writer.toBuffer({ name: "Ann", age: 30 });
+      const buffer = await writer.toBuffer({ name: "Ann", age: 30 });
       const tap = new Tap(buffer);
-      assertEquals(resolver.read(tap), { name: "Ann" });
+      assertEquals(await resolver.read(tap), { name: "Ann" });
     });
 
-    it("uses nested resolvers for compatible field promotion", () => {
+    it("uses nested resolvers for compatible field promotion", async () => {
       const writer = createRecord({
         name: "example.Payload",
         fields: [{ name: "data", type: new StringType() }],
@@ -943,9 +954,9 @@ describe("RecordType", () => {
       });
 
       const resolver = reader.createResolver(writer);
-      const buffer = writer.toBuffer({ data: "\x01\x02" });
+      const buffer = await writer.toBuffer({ data: "\x01\x02" });
       const tap = new Tap(buffer);
-      const value = resolver.read(tap) as { data: Uint8Array };
+      const value = await resolver.read(tap) as { data: Uint8Array };
       assertEquals([...value.data], [1, 2]);
     });
 

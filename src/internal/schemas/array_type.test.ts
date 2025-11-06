@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { Tap } from "../serialization/tap.ts";
@@ -35,22 +35,22 @@ describe("ArrayType", () => {
     assertEquals(paths, [["1"]]);
   });
 
-  it("serializes and deserializes using blocks", () => {
+  it("serializes and deserializes using blocks", async () => {
     const buffer = new Uint8Array([1, 2, 2, 0]).buffer;
-    const values = intArray.fromBuffer(buffer);
+    const values = await intArray.fromBuffer(buffer);
     assertEquals(values, [1]);
   });
 
-  it("round-trips via toBuffer/fromBuffer", () => {
+  it("round-trips via toBuffer/fromBuffer", async () => {
     const values = [4, 5, 6];
-    const buffer = intArray.toBuffer(values);
-    assertEquals(intArray.fromBuffer(buffer), values);
+    const buffer = await intArray.toBuffer(values);
+    assertEquals(await intArray.fromBuffer(buffer), values);
   });
 
-  it("skips encoded array blocks", () => {
-    const buffer = intArray.toBuffer([7, 8]);
+  it("skips encoded array blocks", async () => {
+    const buffer = await intArray.toBuffer([7, 8]);
     const tap = new Tap(buffer);
-    intArray.skip(tap);
+    await intArray.skip(tap);
     assertEquals(tap._testOnlyPos, buffer.byteLength);
   });
 
@@ -78,7 +78,7 @@ describe("ArrayType", () => {
     assertEquals(intArray.getItemsType(), intItems);
   });
 
-  it("creates resolver for compatible writer arrays", () => {
+  it("creates resolver for compatible writer arrays", async () => {
     // Writer schema: array of strings
     const stringArray = createArray(new StringType());
     // Reader schema: array of byte arrays (compatible evolution)
@@ -86,10 +86,10 @@ describe("ArrayType", () => {
     // Create resolver to adapt from string array to byte array
     const resolver = bytesArray.createResolver(stringArray);
     // Write an array of 2 strings containing binary data
-    const buffer = stringArray.toBuffer(["\x01\x02", "\x03\x04"]);
+    const buffer = await stringArray.toBuffer(["\x01\x02", "\x03\x04"]);
     const tap = new Tap(buffer);
     // Read using resolver: strings evolve to Uint8Arrays
-    const result = resolver.read(tap) as Uint8Array[];
+    const result = await resolver.read(tap) as Uint8Array[];
     // Result should be an array of 2 Uint8Arrays
     assertEquals(result.length, 2);
     assertEquals([...result[0]], [1, 2]); // First string "\x01\x02" -> bytes [1, 2]
@@ -127,62 +127,62 @@ describe("ArrayType", () => {
     assert(!intArray.check([1, "invalid" as unknown]));
   });
 
-  it("writes empty array correctly", () => {
-    const buffer = intArray.toBuffer([]);
+  it("writes empty array correctly", async () => {
+    const buffer = await intArray.toBuffer([]);
     const tap = new Tap(buffer);
-    assertEquals(tap.readLong(), 0n);
+    assertEquals(await tap.readLong(), 0n);
   });
 
-  it("round-trips empty array via toBuffer/fromBuffer", () => {
+  it("round-trips empty array via toBuffer/fromBuffer", async () => {
     const values: number[] = [];
-    const buffer = intArray.toBuffer(values);
-    assertEquals(intArray.fromBuffer(buffer), values);
+    const buffer = await intArray.toBuffer(values);
+    assertEquals(await intArray.fromBuffer(buffer), values);
   });
 
-  it("throws error in write when value is not array", () => {
+  it("throws error in write when value is not array", async () => {
     const buffer = new ArrayBuffer(10);
     const tap = new Tap(buffer);
-    assertThrows(
+    await assertRejects(
       () => intArray.write(tap, "not an array" as unknown as number[]),
       Error,
       "Invalid value",
     );
   });
 
-  it("writes arrays correctly via write method", () => {
+  it("writes arrays correctly via write method", async () => {
     const buffer = new ArrayBuffer(20);
     const writeTap = new Tap(buffer);
-    intArray.write(writeTap, [10, 20]);
+    await intArray.write(writeTap, [10, 20]);
 
     const readTap = new Tap(buffer);
-    const result = intArray.read(readTap);
+    const result = await intArray.read(readTap);
     assertEquals(result, [10, 20]);
   });
 
-  it("skips size-prefixed array blocks", () => {
+  it("skips size-prefixed array blocks", async () => {
     // Calculate block size
     const tempBuffer = new ArrayBuffer(10);
     const tempTap = new Tap(tempBuffer);
-    tempTap.writeLong(100n);
-    tempTap.writeLong(200n);
+    await tempTap.writeLong(100n);
+    await tempTap.writeLong(200n);
     const blockSize = tempTap._testOnlyPos;
 
     // Create a buffer with negative count (size-prefixed)
     const buffer = new ArrayBuffer(7); // -2n(1) + blockSize(1) + block(4) + 0n(1)
     const writeTap = new Tap(buffer);
-    writeTap.writeLong(-2n); // negative count
-    writeTap.writeLong(BigInt(blockSize)); // block size
-    writeTap.writeLong(100n);
-    writeTap.writeLong(200n);
-    writeTap.writeLong(0n); // terminator
+    await writeTap.writeLong(-2n); // negative count
+    await writeTap.writeLong(BigInt(blockSize)); // block size
+    await writeTap.writeLong(100n);
+    await writeTap.writeLong(200n);
+    await writeTap.writeLong(0n); // terminator
 
     const readTap = new Tap(buffer);
-    intArray.skip(readTap);
+    await intArray.skip(readTap);
     assertEquals(readTap._testOnlyPos, buffer.byteLength);
   });
 
-  it("throws error in toBuffer when value is not array", () => {
-    assertThrows(
+  it("throws error in toBuffer when value is not array", async () => {
+    await assertRejects(
       () => intArray.toBuffer("not an array" as unknown as number[]),
       Error,
       "Invalid value",
@@ -218,7 +218,7 @@ describe("ArrayType", () => {
     );
   });
 
-  it("handles nested arrays of ints", () => {
+  it("handles nested arrays of ints", async () => {
     // Create array of array of ints
     const intArrayOfInts = createArray(intArray);
 
@@ -230,8 +230,8 @@ describe("ArrayType", () => {
     ];
 
     // Round-trip via toBuffer/fromBuffer
-    const buffer = intArrayOfInts.toBuffer(nestedData);
-    const result = intArrayOfInts.fromBuffer(buffer);
+    const buffer = await intArrayOfInts.toBuffer(nestedData);
+    const result = await intArrayOfInts.fromBuffer(buffer);
     assertEquals(result, nestedData);
 
     // Test validation
@@ -246,7 +246,7 @@ describe("ArrayType", () => {
     assertEquals(nestedData[0][0], 1); // deep clone
   });
 
-  it("resolves array of array of ints to array of array of longs", () => {
+  it("resolves array of array of ints to array of array of longs", async () => {
     // Writer schema: array of array of ints
     const intArray = createArray(new IntType());
     const writerSchema = createArray(intArray);
@@ -265,11 +265,11 @@ describe("ArrayType", () => {
     ];
 
     // Write with writer schema
-    const buffer = writerSchema.toBuffer(testData);
+    const buffer = await writerSchema.toBuffer(testData);
     const tap = new Tap(buffer);
 
     // Read with resolver (evolves ints to longs)
-    const result = resolver.read(tap) as bigint[][];
+    const result = await resolver.read(tap) as bigint[][];
 
     // Expected: arrays of bigints
     const expected = [
@@ -279,81 +279,82 @@ describe("ArrayType", () => {
     assertEquals(result, expected);
   });
 
-  it("should match encoded array buffers", () => {
+  it("should match encoded array buffers", async () => {
     const arr1 = [1, 2];
     const arr2 = [1, 3];
     const arr3 = [1, 2, 4];
 
-    const buf1 = intArray.toBuffer(arr1);
-    const buf2 = intArray.toBuffer(arr2);
-    const buf3 = intArray.toBuffer(arr3);
+    const buf1 = await intArray.toBuffer(arr1);
+    const buf2 = await intArray.toBuffer(arr2);
+    const buf3 = await intArray.toBuffer(arr3);
 
-    assertEquals(intArray.match(new Tap(buf1), new Tap(buf2)), -1); // [1,2] < [1,3]
-    assertEquals(intArray.match(new Tap(buf2), new Tap(buf1)), 1); // [1,3] > [1,2]
-    assertEquals(intArray.match(new Tap(buf1), new Tap(buf3)), -1); // [1,2] < [1,2,4] (shorter first)
-    assertEquals(intArray.match(new Tap(buf3), new Tap(buf1)), 1); // [1,2,4] > [1,2]
-    const buf1_copy = intArray.toBuffer(arr1);
-    assertEquals(intArray.match(new Tap(buf1), new Tap(buf1_copy)), 0); // equal
+    assertEquals(await intArray.match(new Tap(buf1), new Tap(buf2)), -1); // [1,2] < [1,3]
+    assertEquals(await intArray.match(new Tap(buf2), new Tap(buf1)), 1); // [1,3] > [1,2]
+    assertEquals(await intArray.match(new Tap(buf1), new Tap(buf3)), -1); // [1,2] < [1,2,4] (shorter first)
+    assertEquals(await intArray.match(new Tap(buf3), new Tap(buf1)), 1); // [1,2,4] > [1,2]
+    const buf1_copy = await intArray.toBuffer(arr1);
+    assertEquals(await intArray.match(new Tap(buf1), new Tap(buf1_copy)), 0); // equal
 
     // Test size-prefixed block (negative count)
     const sizePrefixedBuf = new ArrayBuffer(20);
     const tap = new Tap(sizePrefixedBuf);
-    tap.writeLong(-2n); // negative count for size-prefixed
-    tap.writeLong(3n); // byte size of the block (1 byte for int 1 + 2 bytes for int 32)
-    tap.writeLong(1n);
-    tap.writeLong(32n); // int 32 requires 2 bytes in zigzag varint encoding
-    tap.writeLong(0n); // terminator
+    await tap.writeLong(-2n); // negative count for size-prefixed
+    await tap.writeLong(3n); // byte size of the block (1 byte for int 1 + 2 bytes for int 32)
+    await tap.writeLong(1n);
+    await tap.writeLong(32n); // int 32 requires 2 bytes in zigzag varint encoding
+    await tap.writeLong(0n); // terminator
 
-    const normalBuf = intArray.toBuffer([1, 32]);
+    const normalBuf = await intArray.toBuffer([1, 32]);
     assertEquals(
-      intArray.match(new Tap(sizePrefixedBuf), new Tap(normalBuf)),
+      await intArray.match(new Tap(sizePrefixedBuf), new Tap(normalBuf)),
       0,
     ); // should be equal
   });
 
-  it("handles size-prefixed blocks inside match loop", () => {
+  it("handles size-prefixed blocks inside match loop", async () => {
     const items = [123, 456];
 
     // Calculate size of the second element to build a size-prefixed block
-    const elementSize = intItems.toBuffer(items[1]).byteLength;
+    const elementBuffer = await intItems.toBuffer(items[1]);
+    const elementSize = elementBuffer.byteLength;
 
     const multiBlockBuf = new ArrayBuffer(30);
     const tap = new Tap(multiBlockBuf);
 
     // First block: standard, one element
-    tap.writeLong(1n);
-    intItems.write(tap, items[0]);
+    await tap.writeLong(1n);
+    await intItems.write(tap, items[0]);
 
     // Second block: size-prefixed, one element
-    tap.writeLong(-1n);
-    tap.writeLong(BigInt(elementSize));
-    intItems.write(tap, items[1]);
+    await tap.writeLong(-1n);
+    await tap.writeLong(BigInt(elementSize));
+    await intItems.write(tap, items[1]);
 
     // Terminator
-    tap.writeLong(0n);
+    await tap.writeLong(0n);
 
     const buf1 = multiBlockBuf.slice(0, tap._testOnlyPos);
-    const buf2 = intArray.toBuffer(items);
+    const buf2 = await intArray.toBuffer(items);
 
     // This forces match() to call #readArraySize on a size-prefixed block
     // from inside its loop.
-    assertEquals(intArray.match(new Tap(buf1), new Tap(buf2)), 0);
-    assertEquals(intArray.match(new Tap(buf2), new Tap(buf1)), 0);
+    assertEquals(await intArray.match(new Tap(buf1), new Tap(buf2)), 0);
+    assertEquals(await intArray.match(new Tap(buf2), new Tap(buf1)), 0);
   });
 });
 
 describe("readArrayInto", () => {
-  it("reads positive block count", () => {
+  it("reads positive block count", async () => {
     const buffer = new ArrayBuffer(20);
     const writeTap = new Tap(buffer);
-    writeTap.writeLong(2n); // block count
-    writeTap.writeLong(10n); // element 1
-    writeTap.writeLong(20n); // element 2
-    writeTap.writeLong(0n); // terminator
+    await writeTap.writeLong(2n); // block count
+    await writeTap.writeLong(10n); // element 1
+    await writeTap.writeLong(20n); // element 2
+    await writeTap.writeLong(0n); // terminator
 
     const readTap = new Tap(buffer);
     const results: bigint[] = [];
-    readArrayInto(
+    await readArrayInto(
       readTap,
       (t) => t.readLong(),
       (value) => results.push(value),
@@ -361,18 +362,18 @@ describe("readArrayInto", () => {
     assertEquals(results, [10n, 20n]);
   });
 
-  it("reads negative block count (size-prefixed)", () => {
+  it("reads negative block count (size-prefixed)", async () => {
     const buffer = new ArrayBuffer(30);
     const writeTap = new Tap(buffer);
-    writeTap.writeLong(-2n); // negative block count
-    writeTap.writeLong(100n); // block size, ignored
-    writeTap.writeLong(30n);
-    writeTap.writeLong(40n);
-    writeTap.writeLong(0n);
+    await writeTap.writeLong(-2n); // negative block count
+    await writeTap.writeLong(100n); // block size, ignored
+    await writeTap.writeLong(30n);
+    await writeTap.writeLong(40n);
+    await writeTap.writeLong(0n);
 
     const readTap = new Tap(buffer);
     const results: bigint[] = [];
-    readArrayInto(
+    await readArrayInto(
       readTap,
       (t) => t.readLong(),
       (value) => results.push(value),
@@ -380,18 +381,18 @@ describe("readArrayInto", () => {
     assertEquals(results, [30n, 40n]);
   });
 
-  it("stops at terminator", () => {
+  it("stops at terminator", async () => {
     const buffer = new ArrayBuffer(25);
     const writeTap = new Tap(buffer);
-    writeTap.writeLong(1n);
-    writeTap.writeLong(50n);
-    writeTap.writeLong(0n); // terminator
-    writeTap.writeLong(1n); // more, but should stop
-    writeTap.writeLong(60n);
+    await writeTap.writeLong(1n);
+    await writeTap.writeLong(50n);
+    await writeTap.writeLong(0n); // terminator
+    await writeTap.writeLong(1n); // more, but should stop
+    await writeTap.writeLong(60n);
 
     const readTap = new Tap(buffer);
     const results: bigint[] = [];
-    readArrayInto(
+    await readArrayInto(
       readTap,
       (t) => t.readLong(),
       (value) => results.push(value),
@@ -399,17 +400,17 @@ describe("readArrayInto", () => {
     assertEquals(results, [50n]);
   });
 
-  it("throws on bigint outside safe integer range", () => {
+  it("throws on bigint outside safe integer range", async () => {
     const buffer = new ArrayBuffer(15);
     const writeTap = new Tap(buffer);
     // Write a large bigint > MAX_SAFE_INTEGER
     const largeBigInt = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
-    writeTap.writeLong(largeBigInt);
+    await writeTap.writeLong(largeBigInt);
 
     const readTap = new Tap(buffer);
-    assertThrows(
-      () => {
-        readArrayInto(
+    await assertRejects(
+      async () => {
+        await readArrayInto(
           readTap,
           (t) => t.readLong(),
           () => {},

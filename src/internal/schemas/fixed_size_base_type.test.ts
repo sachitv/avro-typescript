@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
 import { Tap } from "../serialization/tap.ts";
@@ -23,12 +23,12 @@ class TestFixedSizeType extends FixedSizeBaseType<number> {
     return isValid;
   }
 
-  public read(tap: Tap): number {
-    return tap.readInt() || 0;
+  public async read(tap: Tap): Promise<number> {
+    return (await tap.readInt()) || 0;
   }
 
-  public write(tap: Tap, value: number): void {
-    tap.writeInt(value);
+  public async write(tap: Tap, value: number): Promise<void> {
+    await tap.writeInt(value);
   }
 
   public clone(value: number): number {
@@ -47,8 +47,8 @@ class TestFixedSizeType extends FixedSizeBaseType<number> {
     return "test";
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    return tap1.matchInt(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    return await tap1.matchInt(tap2);
   }
 }
 
@@ -56,41 +56,44 @@ describe("FixedSizeBaseType", () => {
   const type = new TestFixedSizeType();
 
   describe("toBuffer", () => {
-    it("should serialize value using fixed size", () => {
+    it("should serialize value using fixed size", async () => {
       const value = 42;
-      const buffer = type.toBuffer(value);
+      const buffer = await type.toBuffer(value);
       assertEquals(buffer.byteLength, 4);
       const tap = new Tap(buffer);
-      assertEquals(type.read(tap), value);
+      assertEquals(await type.read(tap), value);
     });
 
     it("should throw ValidationError for invalid value", () => {
-      assertThrows(() => {
-        type.toBuffer("invalid" as unknown as number);
+      assertRejects(async () => {
+        await type.toBuffer("invalid" as unknown as number);
       }, ValidationError);
     });
   });
 
   describe("skip", () => {
-    it("should skip fixed-size value using base class implementation", () => {
+    it("should skip fixed-size value using base class implementation", async () => {
       const value = 42;
-      const buffer = type.toBuffer(value);
+      const buffer = await type.toBuffer(value);
       const tap = new Tap(buffer);
       const posBefore = tap._testOnlyPos;
-      type.skip(tap);
+      await type.skip(tap);
       const posAfter = tap._testOnlyPos;
       assertEquals(posAfter - posBefore, 4); // sizeBytes() returns 4
     });
   });
 
   describe("match", () => {
-    it("should match encoded buffers", () => {
-      const buf1 = type.toBuffer(1);
-      const buf2 = type.toBuffer(2);
+    it("should match encoded buffers", async () => {
+      const buf1 = await type.toBuffer(1);
+      const buf2 = await type.toBuffer(2);
 
-      assertEquals(type.match(new Tap(buf1), new Tap(buf2)), -1);
-      assertEquals(type.match(new Tap(buf2), new Tap(buf1)), 1);
-      assertEquals(type.match(new Tap(buf1), new Tap(type.toBuffer(1))), 0);
+      assertEquals(await type.match(new Tap(buf1), new Tap(buf2)), -1);
+      assertEquals(await type.match(new Tap(buf2), new Tap(buf1)), 1);
+      assertEquals(
+        await type.match(new Tap(buf1), new Tap(await type.toBuffer(1))),
+        0,
+      );
     });
   });
 });

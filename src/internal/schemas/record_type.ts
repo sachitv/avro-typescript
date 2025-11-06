@@ -173,37 +173,39 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     return true;
   }
 
-  public override write(
+  public override async write(
     tap: Tap,
     value: Record<string, unknown>,
-  ): void {
+  ): Promise<void> {
     this.#ensureFields();
     if (!this.#isRecord(value)) {
       throwInvalidError([], value, this);
     }
 
     for (const field of this.#fields) {
-      this.#writeField(field, value, tap);
+      await this.#writeField(field, value, tap);
     }
   }
 
-  public override read(tap: Tap): Record<string, unknown> {
+  public override async read(tap: Tap): Promise<Record<string, unknown>> {
     this.#ensureFields();
     const result: Record<string, unknown> = {};
     for (const field of this.#fields) {
-      result[field.getName()] = field.getType().read(tap);
+      result[field.getName()] = await field.getType().read(tap);
     }
     return result;
   }
 
-  public override skip(tap: Tap): void {
+  public override async skip(tap: Tap): Promise<void> {
     this.#ensureFields();
     for (const field of this.#fields) {
-      field.getType().skip(tap);
+      await field.getType().skip(tap);
     }
   }
 
-  public override toBuffer(value: Record<string, unknown>): ArrayBuffer {
+  public override async toBuffer(
+    value: Record<string, unknown>,
+  ): Promise<ArrayBuffer> {
     this.#ensureFields();
     if (!this.#isRecord(value)) {
       throwInvalidError([], value, this);
@@ -211,7 +213,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
 
     const buffers: Uint8Array[] = [];
     for (const field of this.#fields) {
-      buffers.push(this.#getFieldBuffer(field, value));
+      buffers.push(await this.#getFieldBuffer(field, value));
     }
 
     const totalSize = buffers.reduce((sum, buf) => sum + buf.byteLength, 0);
@@ -306,19 +308,19 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     };
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
     this.#ensureFields();
     for (const field of this.#fields) {
       const order = this.#getOrderValue(field.getOrder());
       const type = field.getType();
       if (order !== 0) {
-        const result = type.match(tap1, tap2) * order;
+        const result = (await type.match(tap1, tap2)) * order;
         if (result !== 0) {
           return result;
         }
       } else {
-        type.skip(tap1);
-        type.skip(tap2);
+        await type.skip(tap1);
+        await type.skip(tap2);
       }
     }
     return 0;
@@ -486,11 +488,11 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     return valid || (errorHook !== undefined);
   }
 
-  #writeField(
+  async #writeField(
     field: RecordField,
     record: Record<string, unknown>,
     tap: Tap,
-  ): void {
+  ): Promise<void> {
     const { hasValue, fieldValue } = this.#extractFieldValue(record, field);
     let toWrite = fieldValue;
     if (!hasValue) {
@@ -499,13 +501,13 @@ export class RecordType extends NamedType<Record<string, unknown>> {
       }
       toWrite = field.getDefault();
     }
-    field.getType().write(tap, toWrite as unknown);
+    await field.getType().write(tap, toWrite as unknown);
   }
 
-  #getFieldBuffer(
+  async #getFieldBuffer(
     field: RecordField,
     record: Record<string, unknown>,
-  ): Uint8Array {
+  ): Promise<Uint8Array> {
     const { hasValue, fieldValue } = this.#extractFieldValue(record, field);
     let toEncode = fieldValue;
     if (!hasValue) {
@@ -514,7 +516,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
       }
       toEncode = field.getDefault();
     }
-    return new Uint8Array(field.getType().toBuffer(toEncode));
+    return new Uint8Array(await field.getType().toBuffer(toEncode));
   }
 
   #cloneField(
@@ -567,19 +569,19 @@ class RecordResolver extends Resolver<Record<string, unknown>> {
     this.#readerFields = readerFields;
   }
 
-  public override read(tap: Tap): Record<string, unknown> {
+  public override async read(tap: Tap): Promise<Record<string, unknown>> {
     const result: Record<string, unknown> = {};
     const seen = new Array(this.#readerFields.length).fill(false);
 
     for (const mapping of this.#mappings) {
       if (mapping.readerIndex === -1) {
-        mapping.writerField.getType().skip(tap);
+        await mapping.writerField.getType().skip(tap);
         continue;
       }
 
       const value = mapping.resolver
-        ? mapping.resolver.read(tap)
-        : mapping.writerField.getType().read(tap);
+        ? await mapping.resolver.read(tap)
+        : await mapping.writerField.getType().read(tap);
 
       const readerField = this.#readerFields[mapping.readerIndex];
       result[readerField.getName()] = value;

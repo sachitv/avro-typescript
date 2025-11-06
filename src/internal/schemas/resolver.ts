@@ -12,5 +12,5 @@ export abstract class Resolver<T = unknown> {
     this.readerType = readerType;
   }
 
-  public abstract read(tap: Tap): T;
+  public abstract read(tap: Tap): Promise<T>;
 }

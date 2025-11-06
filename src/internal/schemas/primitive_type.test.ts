@@ -28,31 +28,31 @@ class TestPrimitiveType extends PrimitiveType<number> {
     return isValid;
   }
 
-  public override toBuffer(value: number): ArrayBuffer {
+  public override async toBuffer(value: number): Promise<ArrayBuffer> {
     // Allocate 5 bytes (max size for 32-bit int varint)
     const buf = new ArrayBuffer(5);
     const tap = new Tap(buf);
-    this.write(tap, value);
-    const result = tap.getValue();
+    await this.write(tap, value);
+    const result = await tap.getValue();
     return (result.buffer as ArrayBuffer).slice(
       result.byteOffset,
       result.byteOffset + result.byteLength,
     );
   }
 
-  public override read(tap: Tap): number {
-    return tap.readInt();
+  public override async read(tap: Tap): Promise<number> {
+    return await tap.readInt();
   }
 
-  public override write(tap: Tap, value: number): void {
+  public override async write(tap: Tap, value: number): Promise<void> {
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
-    tap.writeInt(value);
+    await tap.writeInt(value);
   }
 
-  public override skip(tap: Tap): void {
-    tap.skipInt();
+  public override async skip(tap: Tap): Promise<void> {
+    await tap.skipInt();
   }
 
   public override toJSON(): JSONType {
@@ -63,8 +63,8 @@ class TestPrimitiveType extends PrimitiveType<number> {
     return Math.floor(Math.random() * 101);
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    return tap1.matchInt(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    return await tap1.matchInt(tap2);
   }
 }
 
@@ -88,31 +88,31 @@ class FakePrimitiveType extends PrimitiveType<string> {
     return isValid;
   }
 
-  public override toBuffer(value: string): ArrayBuffer {
+  public override async toBuffer(value: string): Promise<ArrayBuffer> {
     const strBytes = encode(value);
     const buf = new ArrayBuffer(5 + strBytes.length);
     const tap = new Tap(buf);
-    tap.writeString(value);
-    const result = tap.getValue();
+    await tap.writeString(value);
+    const result = await tap.getValue();
     return (result.buffer as ArrayBuffer).slice(
       result.byteOffset,
       result.byteOffset + result.byteLength,
     );
   }
 
-  public override read(tap: Tap): string {
-    return tap.readString()!;
+  public override async read(tap: Tap): Promise<string> {
+    return (await tap.readString())!;
   }
 
-  public override write(tap: Tap, value: string): void {
+  public override async write(tap: Tap, value: string): Promise<void> {
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
-    tap.writeString(value);
+    await tap.writeString(value);
   }
 
-  public override skip(tap: Tap): void {
-    tap.skipString();
+  public override async skip(tap: Tap): Promise<void> {
+    await tap.skipString();
   }
 
   public override toJSON(): JSONType {
@@ -123,8 +123,8 @@ class FakePrimitiveType extends PrimitiveType<string> {
     return "fake";
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    return tap1.matchString(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    return await tap1.matchString(tap2);
   }
 }
 
@@ -160,21 +160,24 @@ describe("PrimitiveType", () => {
   });
 
   describe("match", () => {
-    it("should match encoded buffers", () => {
-      const buf1 = type.toBuffer(1);
-      const buf2 = type.toBuffer(2);
+    it("should match encoded buffers", async () => {
+      const buf1 = await type.toBuffer(1);
+      const buf2 = await type.toBuffer(2);
 
-      assertEquals(type.match(new Tap(buf1), new Tap(buf2)), -1);
-      assertEquals(type.match(new Tap(buf2), new Tap(buf1)), 1);
-      assertEquals(type.match(new Tap(buf1), new Tap(type.toBuffer(1))), 0);
+      assertEquals(await type.match(new Tap(buf1), new Tap(buf2)), -1);
+      assertEquals(await type.match(new Tap(buf2), new Tap(buf1)), 1);
+      assertEquals(
+        await type.match(new Tap(buf1), new Tap(await type.toBuffer(1))),
+        0,
+      );
     });
   });
 
   describe("inheritance from BaseType", () => {
-    it("should have toBuffer and fromBuffer from BaseType", () => {
+    it("should have toBuffer and fromBuffer from BaseType", async () => {
       const value = 50;
-      const buffer = type.toBuffer(value);
-      const result = type.fromBuffer(buffer);
+      const buffer = await type.toBuffer(value);
+      const result = await type.fromBuffer(buffer);
       assertEquals(result, value);
     });
 
@@ -183,12 +186,12 @@ describe("PrimitiveType", () => {
       assert(!type.isValid(150));
     });
 
-    it("should create resolver for same type", () => {
+    it("should create resolver for same type", async () => {
       const resolver = type.createResolver(type);
       const value = 42;
-      const buffer = type.toBuffer(value);
+      const buffer = await type.toBuffer(value);
       const tap = new Tap(buffer);
-      const result = resolver.read(tap);
+      const result = await resolver.read(tap);
       assertEquals(result, value);
     });
 

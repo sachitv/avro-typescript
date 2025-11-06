@@ -22,33 +22,33 @@ export class StringType extends PrimitiveType<string> {
     return isValid;
   }
 
-  public override toBuffer(value: string): ArrayBuffer {
+  public override async toBuffer(value: string): Promise<ArrayBuffer> {
     this.check(value, throwInvalidError, []);
     const strBytes = encode(value);
     const lengthSize = calculateVarintSize(strBytes.length);
     const buf = new ArrayBuffer(lengthSize + strBytes.length);
     const tap = new Tap(buf);
-    this.write(tap, value);
+    await this.write(tap, value);
     return buf;
   }
 
-  public override read(tap: Tap): string {
-    const val = tap.readString();
+  public override async read(tap: Tap): Promise<string> {
+    const val = await tap.readString();
     if (val === undefined) {
       throw new Error("Insufficient data for string");
     }
     return val;
   }
 
-  public override write(tap: Tap, value: string): void {
+  public override async write(tap: Tap, value: string): Promise<void> {
     if (typeof value !== "string") {
       throwInvalidError([], value, this);
     }
-    tap.writeString(value);
+    await tap.writeString(value);
   }
 
-  public override skip(tap: Tap): void {
-    tap.skipString();
+  public override async skip(tap: Tap): Promise<void> {
+    await tap.skipString();
   }
 
   public override compare(val1: string, val2: string): number {
@@ -64,8 +64,8 @@ export class StringType extends PrimitiveType<string> {
       // String can promote from bytes. We use an anonymous class here to avoid a
       // cyclic dependency between this file and the bytes type file.
       return new class extends Resolver {
-        public override read(tap: Tap): string {
-          const bytes = tap.readBytes();
+        public override async read(tap: Tap): Promise<string> {
+          const bytes = await tap.readBytes();
           if (bytes === undefined) {
             throw new Error("Insufficient data for bytes");
           }
@@ -82,7 +82,7 @@ export class StringType extends PrimitiveType<string> {
     return "string";
   }
 
-  public override match(tap1: Tap, tap2: Tap): number {
-    return tap1.matchString(tap2);
+  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+    return await tap1.matchString(tap2);
   }
 }
