@@ -135,13 +135,18 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
       throwInvalidError([], value, this);
     }
 
-    const elementBuffers = value.map((element) =>
-      new Uint8Array(this.#itemsType.toBuffer(element))
-    );
+    const elementBuffers = value.length === 0
+      ? []
+      : value.map((element) =>
+        new Uint8Array(this.#itemsType.toBuffer(element))
+      );
 
-    let totalSize = calculateVarintSize(value.length) + 1; // final zero block
-    for (const buf of elementBuffers) {
-      totalSize += buf.byteLength;
+    let totalSize = 1; // final zero block terminator
+    if (value.length > 0) {
+      totalSize += calculateVarintSize(value.length);
+      for (const buf of elementBuffers) {
+        totalSize += buf.byteLength;
+      }
     }
 
     const buffer = new ArrayBuffer(totalSize);

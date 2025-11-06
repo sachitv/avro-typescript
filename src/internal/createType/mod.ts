@@ -1,0 +1,421 @@
+import { ArrayType } from "../schemas/array_type.ts";
+import { BooleanType } from "../schemas/boolean_type.ts";
+import { BytesType } from "../schemas/bytes_type.ts";
+import { DoubleType } from "../schemas/double_type.ts";
+import { EnumType, type EnumTypeParams } from "../schemas/enum_type.ts";
+import { FixedType, type FixedTypeParams } from "../schemas/fixed_type.ts";
+import { FloatType } from "../schemas/float_type.ts";
+import { IntType } from "../schemas/int_type.ts";
+import { LongType } from "../schemas/long_type.ts";
+import { MapType } from "../schemas/map_type.ts";
+import {
+  type RecordFieldParams,
+  RecordType,
+  type RecordTypeParams,
+} from "../schemas/record_type.ts";
+import { resolveNames } from "../schemas/resolve_names.ts";
+import { StringType } from "../schemas/string_type.ts";
+import { UnionType } from "../schemas/union_type.ts";
+import { NullType } from "../schemas/null_type.ts";
+import { Type } from "../schemas/type.ts";
+import { safeStringify } from "../schemas/json.ts";
+
+type PrimitiveTypeName =
+  | "null"
+  | "boolean"
+  | "int"
+  | "long"
+  | "float"
+  | "double"
+  | "bytes"
+  | "string";
+
+type SchemaLike =
+  | Type
+  | string
+  | SchemaObject
+  | SchemaLike[];
+
+interface SchemaObject {
+  type: unknown;
+  name?: unknown;
+  namespace?: unknown;
+  aliases?: unknown;
+  fields?: unknown;
+  symbols?: unknown;
+  size?: unknown;
+  items?: unknown;
+  values?: unknown;
+  default?: unknown;
+  logicalType?: unknown;
+  [key: string]: unknown;
+}
+
+interface CreateTypeContext {
+  namespace?: string;
+  registry: Map<string, Type>;
+}
+
+export interface CreateTypeOptions {
+  namespace?: string;
+  registry?: Map<string, Type>;
+}
+
+const PRIMITIVE_FACTORIES: Record<PrimitiveTypeName, () => Type> = {
+  "null": () => new NullType(),
+  "boolean": () => new BooleanType(),
+  "int": () => new IntType(),
+  "long": () => new LongType(),
+  "float": () => new FloatType(),
+  "double": () => new DoubleType(),
+  "bytes": () => new BytesType(),
+  "string": () => new StringType(),
+};
+
+/**
+ * Constructs an Avro {@link Type} from a schema definition.
+ *
+ * TODO: add logical type support similar to the JavaScript implementation.
+ */
+export function createType(
+  schema: SchemaLike,
+  options: CreateTypeOptions = {},
+): Type {
+  const registry = options.registry ?? new Map<string, Type>();
+  const context: CreateTypeContext = {
+    namespace: options.namespace,
+    registry,
+  };
+  return constructType(schema, context);
+}
+
+function constructType(schema: SchemaLike, context: CreateTypeContext): Type {
+  if (schema instanceof Type) {
+    return schema;
+  }
+
+  if (typeof schema === "string") {
+    return createFromTypeName(schema, context);
+  }
+
+  if (Array.isArray(schema)) {
+    return createUnionType(schema, context);
+  }
+
+  if (schema === null || typeof schema !== "object") {
+    throw new Error(
+      `Unsupported Avro schema: ${safeStringify(schema)}`,
+    );
+  }
+
+  const logicalType = schema.logicalType;
+  if (logicalType !== undefined) {
+    throw new Error(
+      `Logical types are not supported yet in the TypeScript port: ${
+        safeStringify(logicalType)
+      }`,
+    );
+  }
+
+  const { type } = schema;
+
+  if (typeof type === "string") {
+    if (isRecordTypeName(type)) {
+      return createRecordType(schema, type, context);
+    }
+    if (type === "enum") {
+      return createEnumType(schema, context);
+    }
+    if (type === "fixed") {
+      return createFixedType(schema, context);
+    }
+    if (type === "array") {
+      return createArrayType(schema, context);
+    }
+    if (type === "map") {
+      return createMapType(schema, context);
+    }
+    if (isPrimitiveTypeName(type)) {
+      return PRIMITIVE_FACTORIES[type]();
+    }
+    return createFromTypeName(type, {
+      namespace: extractNamespace(schema, context.namespace),
+      registry: context.registry,
+    });
+  }
+
+  if (Array.isArray(type)) {
+    return createUnionType(type as SchemaLike[], context);
+  }
+
+  if (type && typeof type === "object") {
+    return constructType(type as SchemaLike, context);
+  }
+
+  throw new Error(
+    `Schema is missing a valid "type" property: ${safeStringify(schema)}`,
+  );
+}
+
+function createFromTypeName(
+  name: string,
+  context: CreateTypeContext,
+): Type {
+  if (isPrimitiveTypeName(name as PrimitiveTypeName)) {
+    return PRIMITIVE_FACTORIES[name as PrimitiveTypeName]();
+  }
+
+  const fullName = qualifyReference(name, context.namespace);
+  const found = context.registry.get(fullName);
+  if (!found) {
+    throw new Error(`Undefined Avro type reference: ${name}`);
+  }
+  return found;
+}
+
+function createRecordType(
+  schema: SchemaObject,
+  typeName: "record" | "error" | "request",
+  context: CreateTypeContext,
+): RecordType {
+  const name = schema.name;
+  if (typeof name !== "string" || name.length === 0) {
+    throw new Error(
+      `Record schema requires a non-empty name: ${safeStringify(schema)}`,
+    );
+  }
+
+  const aliases = toStringArray(schema.aliases);
+  const resolved = resolveNames({
+    name,
+    namespace: extractNamespace(schema, context.namespace),
+    aliases,
+  });
+
+  const childContext: CreateTypeContext = {
+    namespace: resolved.namespace || undefined,
+    registry: context.registry,
+  };
+
+  const fieldsValue = schema.fields;
+  if (!Array.isArray(fieldsValue)) {
+    throw new Error(
+      `Record schema requires a fields array: ${safeStringify(schema)}`,
+    );
+  }
+
+  const buildFields = (): RecordFieldParams[] => {
+    return fieldsValue.map((field) => {
+      if (field === null || typeof field !== "object") {
+        throw new Error(
+          `Invalid record field definition: ${safeStringify(field)}`,
+        );
+      }
+      const fieldName = (field as SchemaObject).name;
+      if (typeof fieldName !== "string" || fieldName.length === 0) {
+        throw new Error(
+          `Record field requires a non-empty name: ${safeStringify(field)}`,
+        );
+      }
+      if (!("type" in (field as SchemaObject))) {
+        throw new Error(
+          `Record field "${fieldName}" is missing a type definition.`,
+        );
+      }
+      const fieldType = constructType(
+        (field as SchemaObject).type as SchemaLike,
+        childContext,
+      );
+
+      const fieldAliases = toStringArray((field as SchemaObject).aliases);
+      const order = (field as SchemaObject).order;
+      const fieldParams: RecordFieldParams = {
+        name: fieldName,
+        type: fieldType,
+      };
+      if (fieldAliases.length > 0) {
+        fieldParams.aliases = fieldAliases;
+      }
+      if (
+        order === "ascending" || order === "descending" || order === "ignore"
+      ) {
+        fieldParams.order = order;
+      }
+      if ((field as SchemaObject).default !== undefined) {
+        fieldParams.default = (field as SchemaObject).default;
+      }
+      return fieldParams;
+    });
+  };
+
+  const shouldRegister = typeName !== "request";
+  if (shouldRegister && context.registry.has(resolved.fullName)) {
+    throw new Error(
+      `Duplicate Avro type name: ${resolved.fullName}`,
+    );
+  }
+
+  const params: RecordTypeParams = {
+    ...resolved,
+    fields: buildFields,
+  };
+  const record = new RecordType(params);
+
+  if (shouldRegister) {
+    context.registry.set(resolved.fullName, record);
+  }
+
+  return record;
+}
+
+function createEnumType(
+  schema: SchemaObject,
+  context: CreateTypeContext,
+): EnumType {
+  const name = schema.name;
+  if (typeof name !== "string" || name.length === 0) {
+    throw new Error(
+      `Enum schema requires a non-empty name: ${safeStringify(schema)}`,
+    );
+  }
+
+  const aliases = toStringArray(schema.aliases);
+  const resolved = resolveNames({
+    name,
+    namespace: extractNamespace(schema, context.namespace),
+    aliases,
+  });
+
+  const symbols = schema.symbols;
+  if (!Array.isArray(symbols) || symbols.some((s) => typeof s !== "string")) {
+    throw new Error(
+      `Enum schema requires an array of string symbols: ${
+        safeStringify(schema)
+      }`,
+    );
+  }
+
+  if (context.registry.has(resolved.fullName)) {
+    throw new Error(
+      `Duplicate Avro type name: ${resolved.fullName}`,
+    );
+  }
+
+  const params: EnumTypeParams = {
+    ...resolved,
+    symbols: symbols.slice() as string[],
+  };
+  if (schema.default !== undefined) {
+    params.default = schema.default as string;
+  }
+
+  const enumType = new EnumType(params);
+  context.registry.set(resolved.fullName, enumType);
+  return enumType;
+}
+
+function createFixedType(
+  schema: SchemaObject,
+  context: CreateTypeContext,
+): FixedType {
+  const name = schema.name;
+  if (typeof name !== "string" || name.length === 0) {
+    throw new Error(
+      `Fixed schema requires a non-empty name: ${safeStringify(schema)}`,
+    );
+  }
+
+  const aliases = toStringArray(schema.aliases);
+  const resolved = resolveNames({
+    name,
+    namespace: extractNamespace(schema, context.namespace),
+    aliases,
+  });
+
+  if (context.registry.has(resolved.fullName)) {
+    throw new Error(
+      `Duplicate Avro type name: ${resolved.fullName}`,
+    );
+  }
+
+  const params: FixedTypeParams = {
+    ...resolved,
+    size: schema.size as number,
+  };
+
+  const fixed = new FixedType(params);
+  context.registry.set(resolved.fullName, fixed);
+  return fixed;
+}
+
+function createArrayType(
+  schema: SchemaObject,
+  context: CreateTypeContext,
+): ArrayType {
+  if (!("items" in schema)) {
+    throw new Error(
+      `Array schema requires an "items" definition: ${safeStringify(schema)}`,
+    );
+  }
+  const itemsType = constructType(schema.items as SchemaLike, context);
+  return new ArrayType({ items: itemsType });
+}
+
+function createMapType(
+  schema: SchemaObject,
+  context: CreateTypeContext,
+): MapType {
+  if (!("values" in schema)) {
+    throw new Error(
+      `Map schema requires a "values" definition: ${safeStringify(schema)}`,
+    );
+  }
+  const valuesType = constructType(schema.values as SchemaLike, context);
+  return new MapType({ values: valuesType });
+}
+
+function createUnionType(
+  schemas: SchemaLike[],
+  context: CreateTypeContext,
+): UnionType {
+  if (schemas.length === 0) {
+    throw new Error("Union schema requires at least one branch type.");
+  }
+  const types = schemas.map((branch) => constructType(branch, context));
+  return new UnionType({ types });
+}
+
+function isPrimitiveTypeName(value: unknown): value is PrimitiveTypeName {
+  return typeof value === "string" && value in PRIMITIVE_FACTORIES;
+}
+
+function isRecordTypeName(
+  value: string,
+): value is "record" | "error" | "request" {
+  return value === "record" || value === "error" || value === "request";
+}
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((entry) => typeof entry === "string") as string[];
+}
+
+function extractNamespace(
+  schema: SchemaObject,
+  fallback?: string,
+): string | undefined {
+  const namespace = schema.namespace;
+  if (typeof namespace === "string") {
+    return namespace.length > 0 ? namespace : undefined;
+  }
+  return fallback;
+}
+
+function qualifyReference(name: string, namespace?: string): string {
+  if (!namespace || name.includes(".")) {
+    return name;
+  }
+  return `${namespace}.${name}`;
+}

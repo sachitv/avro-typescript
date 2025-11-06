@@ -200,6 +200,12 @@ describe("MapType", () => {
       assertEquals(tap.readLong(), 0n);
     });
 
+    it("round-trips empty map via toBuffer/fromBuffer", () => {
+      const map: Map<string, number> = new Map();
+      const buffer = intMap.toBuffer(map);
+      assertEquals(intMap.fromBuffer(buffer), map);
+    });
+
     it("writes maps correctly via write method", () => {
       const buffer = new ArrayBuffer(50);
       const writeTap = new Tap(buffer);

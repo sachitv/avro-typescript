@@ -133,6 +133,12 @@ describe("ArrayType", () => {
     assertEquals(tap.readLong(), 0n);
   });
 
+  it("round-trips empty array via toBuffer/fromBuffer", () => {
+    const values: number[] = [];
+    const buffer = intArray.toBuffer(values);
+    assertEquals(intArray.fromBuffer(buffer), values);
+  });
+
   it("throws error in write when value is not array", () => {
     const buffer = new ArrayBuffer(10);
     const tap = new Tap(buffer);

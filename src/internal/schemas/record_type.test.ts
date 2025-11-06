@@ -9,6 +9,8 @@ import { RecordType } from "./record_type.ts";
 import { resolveNames } from "./resolve_names.ts";
 import { Type } from "./type.ts";
 import { ValidationError } from "./error.ts";
+import { NullType } from "./null_type.ts";
+import { UnionType } from "./union_type.ts";
 
 interface FieldSpec {
   name: string;
@@ -42,6 +44,48 @@ describe("RecordType", () => {
           fields: undefined as unknown as FieldSpec[],
         })
       );
+    });
+
+    it("supports lazy field thunks for recursive schemas", () => {
+      const names = resolveNames({ name: "example.Node" });
+
+      // Build the record in two stages: register the named type first, then
+      // resolve fields when they are actually needed. This mirrors how
+      // createType() handles recursive schemas.
+      // deno-lint-ignore prefer-const
+      let nodeType: RecordType;
+      nodeType = new RecordType({
+        ...names,
+        fields: () => [
+          { name: "value", type: new IntType() },
+          {
+            name: "next",
+            // The union includes the record itself, relying on the thunk above
+            // so the RecordType instance is already assigned when this executes.
+            type: new UnionType({ types: [new NullType(), nodeType] }),
+          },
+        ],
+      });
+
+      // Trigger field materialization and verify we can encode/decode recursive data.
+      const value = {
+        value: 1,
+        next: {
+          "example.Node": {
+            value: 2,
+            next: {
+              "example.Node": {
+                value: 3,
+                next: null,
+              },
+            },
+          },
+        },
+      };
+      const buffer = nodeType.toBuffer(value);
+      const decoded = nodeType.fromBuffer(buffer);
+
+      assertEquals(decoded, value);
     });
 
     it("rejects duplicate field names", () => {

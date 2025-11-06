@@ -16,7 +16,13 @@ export interface RecordFieldParams {
 }
 
 export interface RecordTypeParams extends ResolvedNames {
-  fields: RecordFieldParams[];
+  /**
+   * Fields can be provided eagerly as an array or lazily via a thunk (a
+   * parameterless function returning the array). The lazy form lets schema
+   * factories register the record under its name before constructing field
+   * types, enabling recursive references to the record.
+   */
+  fields: RecordFieldParams[] | (() => RecordFieldParams[]);
 }
 
 class RecordField {
@@ -110,35 +116,32 @@ interface FieldMapping {
 export class RecordType extends NamedType<Record<string, unknown>> {
   #fields: RecordField[];
   #fieldNameToIndex: Map<string, number>;
+  #fieldsThunk?: () => RecordFieldParams[];
 
   constructor(params: RecordTypeParams) {
     const { fields, ...names } = params;
     super(names);
 
-    if (!Array.isArray(fields)) {
-      throw new Error("RecordType requires a fields array.");
-    }
-
     this.#fields = [];
     this.#fieldNameToIndex = new Map();
 
-    fields.forEach((fieldParams, index) => {
-      const field = new RecordField(fieldParams);
-      if (this.#fieldNameToIndex.has(field.getName())) {
-        throw new Error(
-          `Duplicate record field name: ${field.getName()}`,
-        );
-      }
-      this.#fieldNameToIndex.set(field.getName(), index);
-      this.#fields.push(field);
-    });
+    if (typeof fields === "function") {
+      // Defer field materialization until the first time the record is used.
+      // This mirrors the classic Avro parsing strategy where named types are
+      // registered before their fields are resolved, allowing recursive schemas.
+      this.#fieldsThunk = fields;
+    } else {
+      this.#setFields(fields);
+    }
   }
 
   public getFields(): ReadonlyArray<RecordField> {
+    this.#ensureFields();
     return this.#fields.slice();
   }
 
   public getField(name: string): RecordField | undefined {
+    this.#ensureFields();
     const index = this.#fieldNameToIndex.get(name);
     if (index === undefined) {
       return undefined;
@@ -151,6 +154,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     errorHook?: ErrorHook,
     path: string[] = [],
   ): boolean {
+    this.#ensureFields();
     if (!this.#isRecord(value)) {
       if (errorHook) {
         errorHook(path.slice(), value, this);
@@ -173,6 +177,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     tap: Tap,
     value: Record<string, unknown>,
   ): void {
+    this.#ensureFields();
     if (!this.#isRecord(value)) {
       throwInvalidError([], value, this);
     }
@@ -183,6 +188,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   }
 
   public override read(tap: Tap): Record<string, unknown> {
+    this.#ensureFields();
     const result: Record<string, unknown> = {};
     for (const field of this.#fields) {
       result[field.getName()] = field.getType().read(tap);
@@ -191,12 +197,14 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   }
 
   public override skip(tap: Tap): void {
+    this.#ensureFields();
     for (const field of this.#fields) {
       field.getType().skip(tap);
     }
   }
 
   public override toBuffer(value: Record<string, unknown>): ArrayBuffer {
+    this.#ensureFields();
     if (!this.#isRecord(value)) {
       throwInvalidError([], value, this);
     }
@@ -221,6 +229,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     value: Record<string, unknown>,
     opts?: Record<string, unknown>,
   ): Record<string, unknown> {
+    this.#ensureFields();
     if (!this.#isRecord(value)) {
       throw new Error("Cannot clone non-record value.");
     }
@@ -236,6 +245,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     val1: Record<string, unknown>,
     val2: Record<string, unknown>,
   ): number {
+    this.#ensureFields();
     if (!this.#isRecord(val1) || !this.#isRecord(val2)) {
       throw new Error("Record comparison requires object values.");
     }
@@ -261,6 +271,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   }
 
   public override random(): Record<string, unknown> {
+    this.#ensureFields();
     const result: Record<string, unknown> = {};
     for (const field of this.#fields) {
       result[field.getName()] = field.getType().random();
@@ -269,6 +280,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   }
 
   public override toJSON(): JSONType {
+    this.#ensureFields();
     const fieldsJson = this.#fields.map((field) => {
       const fieldJson: JSONType = {
         name: field.getName(),
@@ -295,6 +307,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   }
 
   public override match(tap1: Tap, tap2: Tap): number {
+    this.#ensureFields();
     for (const field of this.#fields) {
       const order = this.#getOrderValue(field.getOrder());
       const type = field.getType();
@@ -311,6 +324,35 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     return 0;
   }
 
+  #ensureFields(): void {
+    if (this.#fieldsThunk) {
+      const builder = this.#fieldsThunk;
+      this.#fieldsThunk = undefined;
+      const resolved = builder();
+      this.#setFields(resolved);
+    }
+  }
+
+  #setFields(candidate: unknown): void {
+    if (!Array.isArray(candidate)) {
+      throw new Error("RecordType requires a fields array.");
+    }
+
+    this.#fields = [];
+    this.#fieldNameToIndex.clear();
+
+    candidate.forEach((fieldParams) => {
+      const field = new RecordField(fieldParams);
+      if (this.#fieldNameToIndex.has(field.getName())) {
+        throw new Error(
+          `Duplicate record field name: ${field.getName()}`,
+        );
+      }
+      this.#fieldNameToIndex.set(field.getName(), this.#fields.length);
+      this.#fields.push(field);
+    });
+  }
+
   #getOrderValue(order: RecordFieldOrder): number {
     switch (order) {
       case "ascending":
@@ -323,6 +365,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   }
 
   public override createResolver(writerType: Type): Resolver {
+    this.#ensureFields();
     if (!(writerType instanceof RecordType)) {
       return super.createResolver(writerType);
     }
