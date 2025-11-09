@@ -1,4 +1,4 @@
-import { Tap } from "../serialization/tap.ts";
+import { type ReadableTapLike, WritableTap } from "../serialization/tap.ts";
 import { BaseType } from "./base_type.ts";
 import { throwInvalidError } from "./error.ts";
 
@@ -22,7 +22,7 @@ export abstract class FixedSizeBaseType<T = unknown> extends BaseType<T> {
     this.check(value, throwInvalidError, []);
     const size = this.sizeBytes();
     const buf = new ArrayBuffer(size);
-    const tap = new Tap(buf);
+    const tap = new WritableTap(buf);
     await this.write(tap, value);
     return buf;
   }
@@ -31,7 +31,7 @@ export abstract class FixedSizeBaseType<T = unknown> extends BaseType<T> {
    * Skips a fixed-size value by advancing the tap by the fixed size.
    * @param tap The tap to skip from.
    */
-  public async skip(tap: Tap): Promise<void> {
+  public async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipFixed(this.sizeBytes());
   }
 }

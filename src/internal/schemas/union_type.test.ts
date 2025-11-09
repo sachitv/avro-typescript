@@ -16,7 +16,7 @@ import { MapType } from "./map_type.ts";
 import { FixedType } from "./fixed_type.ts";
 import { Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
-import { Tap } from "../serialization/tap.ts";
+import { TestTap as Tap } from "../serialization/test_tap.ts";
 
 describe("UnionType", () => {
   describe("union with null", () => {

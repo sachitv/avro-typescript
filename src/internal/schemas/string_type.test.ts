@@ -2,7 +2,7 @@ import { assertEquals, assertRejects } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { StringType } from "./string_type.ts";
 import { BytesType } from "./bytes_type.ts";
-import { Tap } from "../serialization/tap.ts";
+import { TestTap as Tap } from "../serialization/test_tap.ts";
 
 describe("StringType", () => {
   const type = new StringType();

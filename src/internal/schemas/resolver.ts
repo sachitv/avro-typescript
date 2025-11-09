@@ -1,4 +1,4 @@
-import { Tap } from "../serialization/tap.ts";
+import { type ReadableTapLike } from "../serialization/tap.ts";
 import { Type } from "./type.ts";
 
 /**
@@ -12,5 +12,5 @@ export abstract class Resolver<T = unknown> {
     this.readerType = readerType;
   }
 
-  public abstract read(tap: Tap): Promise<T>;
+  public abstract read(tap: ReadableTapLike): Promise<T>;
 }

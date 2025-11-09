@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { Tap } from "../serialization/tap.ts";
+import { TestTap as Tap } from "../serialization/test_tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import { JSONType, Type } from "./type.ts";
 import { throwInvalidError, ValidationError } from "./error.ts";

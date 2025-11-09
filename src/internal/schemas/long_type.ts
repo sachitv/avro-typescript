@@ -1,4 +1,8 @@
-import { Tap } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  WritableTap,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import { type JSONType, Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
@@ -26,18 +30,21 @@ export class LongType extends PrimitiveType<bigint> {
     return isValid;
   }
 
-  public override async read(tap: Tap): Promise<bigint> {
+  public override async read(tap: ReadableTapLike): Promise<bigint> {
     return await tap.readLong();
   }
 
-  public override async write(tap: Tap, value: bigint): Promise<void> {
+  public override async write(
+    tap: WritableTapLike,
+    value: bigint,
+  ): Promise<void> {
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
     await tap.writeLong(value);
   }
 
-  public override async skip(tap: Tap): Promise<void> {
+  public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipLong();
   }
 
@@ -46,7 +53,7 @@ export class LongType extends PrimitiveType<bigint> {
     // For long, allocate exact size based on value
     const size = calculateVarintSize(value);
     const buf = new ArrayBuffer(size);
-    const tap = new Tap(buf);
+    const tap = new WritableTap(buf);
     await this.write(tap, value);
     return buf;
   }
@@ -63,7 +70,7 @@ export class LongType extends PrimitiveType<bigint> {
     if (writerType instanceof IntType) {
       // Long can promote from int (32-bit to 64-bit)
       return new class extends Resolver {
-        public override async read(tap: Tap): Promise<bigint> {
+        public override async read(tap: ReadableTapLike): Promise<bigint> {
           const intValue = await tap.readInt();
           return BigInt(intValue);
         }
@@ -77,7 +84,10 @@ export class LongType extends PrimitiveType<bigint> {
     return "long";
   }
 
-  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+  public override async match(
+    tap1: ReadableTapLike,
+    tap2: ReadableTapLike,
+  ): Promise<number> {
     return await tap1.matchLong(tap2);
   }
 }

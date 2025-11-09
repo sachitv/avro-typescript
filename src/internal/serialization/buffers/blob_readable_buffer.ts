@@ -1,4 +1,4 @@
-import { IBuffer } from "./buffer.ts";
+import { type IReadableBuffer } from "./buffer.ts";
 
 /**
  * A read-only buffer implementation that provides random access read operations
@@ -16,17 +16,17 @@ import { IBuffer } from "./buffer.ts";
  * @example
  * ```typescript
  * const blob = new Blob([new Uint8Array([1, 2, 3, 4])]);
- * const buffer = new BlobBuffer(blob);
+ * const buffer = new BlobReadableBuffer(blob);
  *
  * // Read some data asynchronously
  * const data = await buffer.read(0, 4); // Returns Uint8Array([1, 2, 3, 4])
  * ```
  */
-export class BlobBuffer implements IBuffer {
+export class BlobReadableBuffer implements IReadableBuffer {
   #blob: Blob;
 
   /**
-   * Creates a new BlobBuffer from the provided Blob.
+   * Creates a new BlobReadableBuffer from the provided Blob.
    *
    * @param blob The Blob to read data from.
    */
@@ -62,18 +62,5 @@ export class BlobBuffer implements IBuffer {
     const sliced = this.#blob.slice(offset, offset + size);
     const arrayBuffer = await sliced.arrayBuffer();
     return new Uint8Array(arrayBuffer);
-  }
-
-  /**
-   * Writes a sequence of bytes to the buffer starting at the specified offset.
-   * This buffer is read-only, so this method always throws an error.
-   *
-   * @param offset The byte offset to start writing to (0-based).
-   * @param data The bytes to write. The length of this array determines how many bytes are written.
-   * @throws Error Always throws an error since this buffer is read-only.
-   */
-  // deno-lint-ignore require-await
-  public async write(_offset: number, _data: Uint8Array): Promise<void> {
-    throw new Error("BlobBuffer is read-only");
   }
 }

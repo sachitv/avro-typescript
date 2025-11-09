@@ -1,4 +1,8 @@
-import { Tap } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  WritableTap,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
 import { Resolver } from "./resolver.ts";
 import { type JSONType, Type } from "./type.ts";
 import { NamedType } from "./named_type.ts";
@@ -68,7 +72,10 @@ export class EnumType extends NamedType<string> {
     return isValid;
   }
 
-  public override async write(tap: Tap, value: string): Promise<void> {
+  public override async write(
+    tap: WritableTapLike,
+    value: string,
+  ): Promise<void> {
     const index = this.#indices.get(value);
     if (index === undefined) {
       throwInvalidError([], value, this);
@@ -76,11 +83,11 @@ export class EnumType extends NamedType<string> {
     await tap.writeLong(BigInt(index));
   }
 
-  public override async skip(tap: Tap): Promise<void> {
+  public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipLong();
   }
 
-  public override async read(tap: Tap): Promise<string> {
+  public override async read(tap: ReadableTapLike): Promise<string> {
     const rawIndex = await tap.readLong();
     const index = Number(rawIndex);
     if (
@@ -98,7 +105,7 @@ export class EnumType extends NamedType<string> {
     const index = this.#indices.get(value)!;
     const size = calculateVarintSize(index);
     const buffer = new ArrayBuffer(size);
-    const tap = new Tap(buffer);
+    const tap = new WritableTap(buffer);
     await this.write(tap, value);
     return buffer;
   }
@@ -128,7 +135,10 @@ export class EnumType extends NamedType<string> {
     return "enum";
   }
 
-  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+  public override async match(
+    tap1: ReadableTapLike,
+    tap2: ReadableTapLike,
+  ): Promise<number> {
     return await tap1.matchLong(tap2);
   }
 
@@ -162,7 +172,7 @@ export class EnumType extends NamedType<string> {
           this.#writer = writer;
         }
 
-        public override async read(tap: Tap): Promise<string> {
+        public override async read(tap: ReadableTapLike): Promise<string> {
           return await this.#writer.read(tap);
         }
       }(this, writerType);
@@ -177,7 +187,7 @@ export class EnumType extends NamedType<string> {
           this.#writer = writer;
         }
 
-        public override async read(tap: Tap): Promise<string> {
+        public override async read(tap: ReadableTapLike): Promise<string> {
           const writerSymbol = await this.#writer.read(tap);
           if (this.#reader.#indices.has(writerSymbol)) {
             return writerSymbol;

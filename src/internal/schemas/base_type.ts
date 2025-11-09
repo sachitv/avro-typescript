@@ -1,4 +1,4 @@
-import { Tap } from "../serialization/tap.ts";
+import { ReadableTap, type ReadableTapLike } from "../serialization/tap.ts";
 import { Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
 import { safeStringify } from "./json.ts";
@@ -21,7 +21,7 @@ export abstract class BaseType<T = unknown> extends Type<T> {
    * @returns The deserialized value.
    */
   public async fromBuffer(buffer: ArrayBuffer): Promise<T> {
-    const tap = new Tap(buffer);
+    const tap = new ReadableTap(buffer);
     const value = await this.read(tap);
     if (!await tap.isValid()) {
       throw new Error("Insufficient data for type");
@@ -47,7 +47,7 @@ export abstract class BaseType<T = unknown> extends Type<T> {
   public createResolver(writerType: Type): Resolver {
     if (this.constructor === writerType.constructor) {
       return new class extends Resolver {
-        async read(tap: Tap) {
+        async read(tap: ReadableTapLike) {
           return await this.readerType.read(tap);
         }
       }(this);

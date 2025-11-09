@@ -1,4 +1,7 @@
-import { Tap } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
 import { type JSONType } from "./type.ts";
 import { ErrorHook, throwInvalidError } from "./error.ts";
@@ -19,18 +22,21 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     return isValid;
   }
 
-  public async read(tap: Tap): Promise<boolean> {
+  public async read(tap: ReadableTapLike): Promise<boolean> {
     return await tap.readBoolean();
   }
 
-  public async write(tap: Tap, value: boolean): Promise<void> {
+  public async write(
+    tap: WritableTapLike,
+    value: boolean,
+  ): Promise<void> {
     if (typeof value !== "boolean") {
       throwInvalidError([], value, this);
     }
     await tap.writeBoolean(value);
   }
 
-  public override async skip(tap: Tap): Promise<void> {
+  public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipBoolean();
   }
 
@@ -55,7 +61,10 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     return "boolean";
   }
 
-  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+  public override async match(
+    tap1: ReadableTapLike,
+    tap2: ReadableTapLike,
+  ): Promise<number> {
     return await tap1.matchBoolean(tap2);
   }
 }

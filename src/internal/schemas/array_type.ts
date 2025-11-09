@@ -1,4 +1,8 @@
-import { Tap } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  WritableTap,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
 import { bigIntToSafeNumber } from "../serialization/conversion.ts";
 import { BaseType } from "./base_type.ts";
 import { Resolver } from "./resolver.ts";
@@ -7,8 +11,8 @@ import { type ErrorHook, throwInvalidError } from "./error.ts";
 import { calculateVarintSize } from "./varint.ts";
 
 export async function readArrayInto<T>(
-  tap: Tap,
-  readElement: (tap: Tap) => Promise<T>,
+  tap: ReadableTapLike,
+  readElement: (tap: ReadableTapLike) => Promise<T>,
   collect: (value: T) => void,
 ): Promise<void> {
   while (true) {
@@ -79,7 +83,10 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     return isValid;
   }
 
-  public override async write(tap: Tap, value: T[]): Promise<void> {
+  public override async write(
+    tap: WritableTapLike,
+    value: T[],
+  ): Promise<void> {
     if (!Array.isArray(value)) {
       throwInvalidError([], value, this);
     }
@@ -93,7 +100,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     await tap.writeLong(0n);
   }
 
-  public override async skip(tap: Tap): Promise<void> {
+  public override async skip(tap: ReadableTapLike): Promise<void> {
     // Skip blocks until terminator.
     while (true) {
       const rawCount = await tap.readLong();
@@ -118,7 +125,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     }
   }
 
-  public override async read(tap: Tap): Promise<T[]> {
+  public override async read(tap: ReadableTapLike): Promise<T[]> {
     const result: T[] = [];
     await readArrayInto(
       tap,
@@ -150,7 +157,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     }
 
     const buffer = new ArrayBuffer(totalSize);
-    const tap = new Tap(buffer);
+    const tap = new WritableTap(buffer);
 
     if (value.length > 0) {
       await tap.writeLong(BigInt(value.length));
@@ -201,7 +208,10 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     };
   }
 
-  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+  public override async match(
+    tap1: ReadableTapLike,
+    tap2: ReadableTapLike,
+  ): Promise<number> {
     let n1 = await this.#readArraySize(tap1);
     let n2 = await this.#readArraySize(tap2);
     let f: number;
@@ -226,7 +236,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     return n1 === n2 ? 0 : n1 < n2 ? -1 : 1;
   }
 
-  async #readArraySize(tap: Tap): Promise<bigint> {
+  async #readArraySize(tap: ReadableTapLike): Promise<bigint> {
     let n = await tap.readLong();
     if (n < 0n) {
       n = -n;
@@ -259,7 +269,7 @@ class ArrayResolver<T> extends Resolver<T[]> {
     this.#itemResolver = itemResolver;
   }
 
-  public override async read(tap: Tap): Promise<T[]> {
+  public override async read(tap: ReadableTapLike): Promise<T[]> {
     const result: T[] = [];
     // Reuse the generic array-block reader so we respect negative block counts
     // (size-prefixed blocks) just like the base implementation.

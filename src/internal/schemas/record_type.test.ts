@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
-import { Tap } from "../serialization/tap.ts";
+import { TestTap as Tap } from "../serialization/test_tap.ts";
 import { IntType } from "./int_type.ts";
 import { StringType } from "./string_type.ts";
 import { BytesType } from "./bytes_type.ts";

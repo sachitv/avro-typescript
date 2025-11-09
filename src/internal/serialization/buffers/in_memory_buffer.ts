@@ -1,9 +1,40 @@
-import { IBuffer } from "./buffer.ts";
+import { type IReadableBuffer, type IWritableBuffer } from "./buffer.ts";
 
 /**
- * An in-memory buffer implementation that provides random access read and write operations
- * on a fixed-size ArrayBuffer. This class wraps an ArrayBuffer and provides the IBuffer
- * interface for use with serialization utilities like Tap.
+ * Shared in-memory buffer base that exposes the core ArrayBuffer mechanics.
+ */
+abstract class InMemoryBufferBase {
+  protected readonly view: Uint8Array;
+
+  constructor(buf: ArrayBuffer) {
+    this.view = new Uint8Array(buf);
+  }
+
+  // deno-lint-ignore require-await
+  public async length(): Promise<number> {
+    return this.view.length;
+  }
+
+  protected withinBounds(offset: number, size: number): boolean {
+    return offset >= 0 && size >= 0 && offset + size <= this.view.length;
+  }
+
+  protected clampOffset(offset: number): number {
+    if (Number.isNaN(offset) || !Number.isFinite(offset)) {
+      return 0;
+    }
+    if (offset < 0) {
+      return 0;
+    }
+    if (offset > this.view.length) {
+      return this.view.length;
+    }
+    return offset;
+  }
+}
+
+/**
+ * Read-only in-memory buffer for serialization reads.
  *
  * Key features:
  * - Fixed size: The buffer size is determined at construction and cannot be resized.
@@ -14,68 +45,55 @@ import { IBuffer } from "./buffer.ts";
  * @example
  * ```typescript
  * const arrayBuffer = new ArrayBuffer(1024);
- * const buffer = new InMemoryBuffer(arrayBuffer);
+ * const buffer = new InMemoryReadableBuffer(arrayBuffer);
  *
  * // Write some data
- * await buffer.write(0, new Uint8Array([1, 2, 3, 4]));
- *
- * // Read it back
  * const data = await buffer.read(0, 4); // Returns Uint8Array([1, 2, 3, 4])
  * ```
  */
-export class InMemoryBuffer implements IBuffer {
-  #buf: Uint8Array;
-
-  /**
-   * Creates a new InMemoryBuffer backed by the provided ArrayBuffer.
-   *
-   * @param buf The ArrayBuffer to wrap. The buffer's size determines the capacity.
-   */
-  constructor(buf: ArrayBuffer) {
-    this.#buf = new Uint8Array(buf);
-  }
-
-  /**
-   * Gets the total length of the buffer in bytes.
-   *
-   * @returns The buffer length in bytes.
-   */
-  // deno-lint-ignore require-await
-  public async length(): Promise<number> {
-    return this.#buf.length;
-  }
-
-  /**
-   * Reads a sequence of bytes from the buffer starting at the specified offset.
-   *
-   * @param offset The byte offset to start reading from (0-based).
-   * @param size The number of bytes to read.
-   * @returns A Promise that resolves to a new Uint8Array containing the read bytes, or undefined if the read would exceed buffer bounds.
-   */
+export class InMemoryReadableBuffer extends InMemoryBufferBase
+  implements IReadableBuffer {
   // deno-lint-ignore require-await
   public async read(
     offset: number,
     size: number,
   ): Promise<Uint8Array | undefined> {
-    if (offset + size > this.#buf.length) {
+    if (!this.withinBounds(offset, size)) {
       return undefined;
     }
-    return this.#buf.slice(offset, offset + size);
+    return this.view.slice(offset, offset + size);
+  }
+}
+
+/**
+ * Write-only in-memory buffer for serialization writes.
+ */
+export class InMemoryWritableBuffer extends InMemoryBufferBase
+  implements IWritableBuffer {
+  #offset: number;
+  #overflowed = false;
+
+  constructor(buf: ArrayBuffer, offset = 0) {
+    super(buf);
+    this.#offset = this.clampOffset(offset);
   }
 
-  /**
-   * Writes a sequence of bytes to the buffer starting at the specified offset.
-   *
-   * @param offset The byte offset to start writing to (0-based).
-   * @param data The bytes to write. The length of this array determines how many bytes are written.
-   * @returns A Promise that resolves when the write is complete. If the write would exceed buffer bounds, no data is written.
-   */
   // deno-lint-ignore require-await
-  public async write(offset: number, data: Uint8Array): Promise<void> {
-    if (offset + data.length > this.#buf.length) {
-      return Promise.resolve();
+  public async appendBytes(data: Uint8Array): Promise<void> {
+    if (data.length === 0 || this.#overflowed) {
+      return;
     }
-    this.#buf.set(data, offset);
-    return Promise.resolve();
+    const remaining = this.view.length - this.#offset;
+    if (data.length > remaining) {
+      this.#overflowed = true;
+      return;
+    }
+    this.view.set(data, this.#offset);
+    this.#offset += data.length;
+  }
+
+  // deno-lint-ignore require-await
+  public async isValid(): Promise<boolean> {
+    return !this.#overflowed;
   }
 }

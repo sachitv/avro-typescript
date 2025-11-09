@@ -1,63 +1,136 @@
 import { describe, it } from "@std/testing/bdd";
 import { assert, assertEquals } from "@std/assert";
-import { InMemoryBuffer } from "./in_memory_buffer.ts";
+import {
+  InMemoryReadableBuffer,
+  InMemoryWritableBuffer,
+} from "./in_memory_buffer.ts";
 
-describe("InMemoryBuffer", () => {
-  it("constructor", async () => {
-    const buf = new ArrayBuffer(10);
-    const buffer = new InMemoryBuffer(buf);
-    assertEquals(await buffer.length(), 10);
+describe("InMemoryReadableBuffer", () => {
+  describe("constructor", () => {
+    it("reports length", async () => {
+      const buf = new ArrayBuffer(10);
+      const buffer = new InMemoryReadableBuffer(buf);
+      assertEquals(await buffer.length(), 10);
+    });
   });
 
-  it("read within bounds", async () => {
-    const buf = new ArrayBuffer(10);
-    const uint8 = new Uint8Array(buf);
-    uint8[0] = 1;
-    uint8[1] = 2;
-    uint8[2] = 3;
-    const buffer = new InMemoryBuffer(buf);
-    const result = await buffer.read(0, 3);
-    assert(result !== undefined);
-    assertEquals(result, new Uint8Array([1, 2, 3]));
+  describe("read", () => {
+    it("within bounds", async () => {
+      const buf = new ArrayBuffer(10);
+      const uint8 = new Uint8Array(buf);
+      uint8.set([1, 2, 3], 0);
+      const buffer = new InMemoryReadableBuffer(buf);
+      const result = await buffer.read(0, 3);
+      assert(result !== undefined);
+      assertEquals(result, new Uint8Array([1, 2, 3]));
+    });
+
+    it("out of bounds returns undefined", async () => {
+      const buf = new ArrayBuffer(10);
+      const buffer = new InMemoryReadableBuffer(buf);
+      const result = await buffer.read(8, 5);
+      assertEquals(result, undefined);
+    });
+  });
+});
+
+describe("InMemoryWritableBuffer", () => {
+  describe("constructor", () => {
+    it("reports length", async () => {
+      const buf = new ArrayBuffer(10);
+      const buffer = new InMemoryWritableBuffer(buf);
+      assertEquals(await buffer.length(), 10);
+    });
+
+    it("clamps negative offset to 0", async () => {
+      const buf = new ArrayBuffer(10);
+      const buffer = new InMemoryWritableBuffer(buf, -5);
+      // Since offset is clamped to 0, we can append
+      const data = new Uint8Array([1, 2]);
+      await buffer.appendBytes(data);
+      const uint8 = new Uint8Array(buf);
+      assertEquals(uint8[0], 1);
+      assertEquals(uint8[1], 2);
+    });
+
+    it("clamps offset beyond length to length", async () => {
+      const buf = new ArrayBuffer(10);
+      const buffer = new InMemoryWritableBuffer(buf, 15);
+      // Offset clamped to 10, so append should do nothing
+      const data = new Uint8Array([1, 2]);
+      await buffer.appendBytes(data);
+      const uint8 = new Uint8Array(buf);
+      assertEquals(uint8[9], 0); // No change
+    });
+
+    it("clamps NaN offset to 0", async () => {
+      const buf = new ArrayBuffer(10);
+      const buffer = new InMemoryWritableBuffer(buf, NaN);
+      // Offset clamped to 0
+      const data = new Uint8Array([1, 2]);
+      await buffer.appendBytes(data);
+      const uint8 = new Uint8Array(buf);
+      assertEquals(uint8[0], 1);
+      assertEquals(uint8[1], 2);
+    });
+
+    it("clamps infinite offset to length", async () => {
+      const buf = new ArrayBuffer(10);
+      const buffer = new InMemoryWritableBuffer(buf, Infinity);
+      // Offset clamped to 10, so append should do nothing
+      const data = new Uint8Array([1, 2]);
+      await buffer.appendBytes(data);
+      const uint8 = new Uint8Array(buf);
+      assertEquals(uint8[9], 0); // No change
+    });
   });
 
-  it("read out of bounds", async () => {
-    const buf = new ArrayBuffer(10);
-    const buffer = new InMemoryBuffer(buf);
-    const result = await buffer.read(8, 5);
-    assertEquals(result, undefined);
+  describe("appendBytes", () => {
+    it("within bounds", async () => {
+      const buf = new ArrayBuffer(10);
+      const buffer = new InMemoryWritableBuffer(buf);
+      const data = new Uint8Array([4, 5, 6]);
+      await buffer.appendBytes(data);
+      const uint8 = new Uint8Array(buf);
+      assertEquals(uint8[0], 4);
+      assertEquals(uint8[1], 5);
+      assertEquals(uint8[2], 6);
+      assertEquals(uint8[3], 0);
+    });
+
+    it("empty data does nothing", async () => {
+      const buf = new ArrayBuffer(10);
+      const buffer = new InMemoryWritableBuffer(buf);
+      const data = new Uint8Array(0);
+      await buffer.appendBytes(data);
+      const uint8 = new Uint8Array(buf);
+      assertEquals(uint8[0], 0); // No change
+    });
+
+    it("beyond capacity is ignored", async () => {
+      const buf = new ArrayBuffer(10);
+      const buffer = new InMemoryWritableBuffer(buf, 9);
+      const data = new Uint8Array([1, 2]);
+      await buffer.appendBytes(data); // should not write since only 1 byte remains
+      const uint8 = new Uint8Array(buf);
+      assertEquals(uint8[8], 0);
+      assertEquals(uint8[9], 0);
+    });
   });
 
-  it("write within bounds", async () => {
-    const buf = new ArrayBuffer(10);
-    const buffer = new InMemoryBuffer(buf);
-    const data = new Uint8Array([4, 5, 6]);
-    await buffer.write(1, data);
-    const uint8 = new Uint8Array(buf);
-    assertEquals(uint8[0], 0);
-    assertEquals(uint8[1], 4);
-    assertEquals(uint8[2], 5);
-    assertEquals(uint8[3], 6);
-  });
+  describe("canAppendMore", () => {
+    it("stays true when writes succeed", async () => {
+      const buf = new ArrayBuffer(4);
+      const buffer = new InMemoryWritableBuffer(buf);
+      await buffer.appendBytes(new Uint8Array([1, 2]));
+      assertEquals(await buffer.isValid(), true);
+    });
 
-  it("write out of bounds", async () => {
-    const buf = new ArrayBuffer(10);
-    const buffer = new InMemoryBuffer(buf);
-    const data = new Uint8Array([1, 2, 3, 4, 5]);
-    await buffer.write(8, data); // should not write since 8+5 > 10
-    const uint8 = new Uint8Array(buf);
-    // buffer should remain unchanged
-    assertEquals(uint8[8], 0);
-    assertEquals(uint8[9], 0);
-  });
-
-  it("read after write", async () => {
-    const buf = new ArrayBuffer(10);
-    const buffer = new InMemoryBuffer(buf);
-    const data = new Uint8Array([7, 8]);
-    await buffer.write(2, data);
-    const result = await buffer.read(2, 2);
-    assert(result !== undefined);
-    assertEquals(result, new Uint8Array([7, 8]));
+    it("flips to false after overflow attempt", async () => {
+      const buf = new ArrayBuffer(4);
+      const buffer = new InMemoryWritableBuffer(buf);
+      await buffer.appendBytes(new Uint8Array([1, 2, 3, 4, 5]));
+      assertEquals(await buffer.isValid(), false);
+    });
   });
 });

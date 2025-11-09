@@ -1,4 +1,7 @@
-import { Tap } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
 import { type JSONType, Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
@@ -23,7 +26,7 @@ export class DoubleType extends FixedSizeBaseType<number> {
     return isValid;
   }
 
-  public override async read(tap: Tap): Promise<number> {
+  public override async read(tap: ReadableTapLike): Promise<number> {
     const val = await tap.readDouble();
     if (val === undefined) {
       throw new Error("Insufficient data for double");
@@ -31,14 +34,17 @@ export class DoubleType extends FixedSizeBaseType<number> {
     return val;
   }
 
-  public override async write(tap: Tap, value: number): Promise<void> {
+  public override async write(
+    tap: WritableTapLike,
+    value: number,
+  ): Promise<void> {
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
     await tap.writeDouble(value);
   }
 
-  public override async skip(tap: Tap): Promise<void> {
+  public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipDouble();
   }
 
@@ -63,7 +69,7 @@ export class DoubleType extends FixedSizeBaseType<number> {
     if (writerType instanceof IntType) {
       // Double can promote from int (32-bit to 64-bit double)
       return new class extends Resolver {
-        public override async read(tap: Tap): Promise<number> {
+        public override async read(tap: ReadableTapLike): Promise<number> {
           const intValue = await tap.readInt();
           return intValue;
         }
@@ -71,7 +77,7 @@ export class DoubleType extends FixedSizeBaseType<number> {
     } else if (writerType instanceof LongType) {
       // Double can promote from long (64-bit to 64-bit double, lossy for large values)
       return new class extends Resolver {
-        public override async read(tap: Tap): Promise<number> {
+        public override async read(tap: ReadableTapLike): Promise<number> {
           const longValue = await tap.readLong();
           return Number(longValue);
         }
@@ -79,7 +85,7 @@ export class DoubleType extends FixedSizeBaseType<number> {
     } else if (writerType instanceof FloatType) {
       // Double can promote from float (32-bit to 64-bit double)
       return new class extends Resolver {
-        public override async read(tap: Tap): Promise<number> {
+        public override async read(tap: ReadableTapLike): Promise<number> {
           const floatValue = await tap.readFloat();
           if (floatValue === undefined) {
             throw new Error("Insufficient data for float");
@@ -96,7 +102,10 @@ export class DoubleType extends FixedSizeBaseType<number> {
     return "double";
   }
 
-  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+  public override async match(
+    tap1: ReadableTapLike,
+    tap2: ReadableTapLike,
+  ): Promise<number> {
     return await tap1.matchDouble(tap2);
   }
 }

@@ -1,4 +1,7 @@
-import { Tap } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
 import { type JSONType } from "./type.ts";
 import { ErrorHook, throwInvalidError } from "./error.ts";
@@ -20,18 +23,21 @@ export class NullType extends FixedSizeBaseType<null> {
   }
 
   // deno-lint-ignore require-await
-  public override async read(_tap: Tap): Promise<null> {
+  public override async read(_tap: ReadableTapLike): Promise<null> {
     return null;
   }
 
   // deno-lint-ignore require-await
-  public override async write(_tap: Tap, value: null): Promise<void> {
+  public override async write(
+    _tap: WritableTapLike,
+    value: null,
+  ): Promise<void> {
     if (value !== null) {
       throwInvalidError([], value, this);
     }
   }
 
-  public override async skip(_tap: Tap): Promise<void> {
+  public override async skip(_tap: ReadableTapLike): Promise<void> {
     // Null takes no space
   }
 
@@ -57,7 +63,10 @@ export class NullType extends FixedSizeBaseType<null> {
   }
 
   // deno-lint-ignore require-await
-  public override async match(_tap1: Tap, _tap2: Tap): Promise<number> {
+  public override async match(
+    _tap1: ReadableTapLike,
+    _tap2: ReadableTapLike,
+  ): Promise<number> {
     return 0;
   }
 }

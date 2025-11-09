@@ -1,4 +1,7 @@
-import { Tap } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
 import { NamedType } from "./named_type.ts";
 import { Resolver } from "./resolver.ts";
 import { JSONType, Type } from "./type.ts";
@@ -174,7 +177,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   }
 
   public override async write(
-    tap: Tap,
+    tap: WritableTapLike,
     value: Record<string, unknown>,
   ): Promise<void> {
     this.#ensureFields();
@@ -187,7 +190,9 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     }
   }
 
-  public override async read(tap: Tap): Promise<Record<string, unknown>> {
+  public override async read(
+    tap: ReadableTapLike,
+  ): Promise<Record<string, unknown>> {
     this.#ensureFields();
     const result: Record<string, unknown> = {};
     for (const field of this.#fields) {
@@ -196,7 +201,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     return result;
   }
 
-  public override async skip(tap: Tap): Promise<void> {
+  public override async skip(tap: ReadableTapLike): Promise<void> {
     this.#ensureFields();
     for (const field of this.#fields) {
       await field.getType().skip(tap);
@@ -308,7 +313,10 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     };
   }
 
-  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+  public override async match(
+    tap1: ReadableTapLike,
+    tap2: ReadableTapLike,
+  ): Promise<number> {
     this.#ensureFields();
     for (const field of this.#fields) {
       const order = this.#getOrderValue(field.getOrder());
@@ -491,7 +499,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   async #writeField(
     field: RecordField,
     record: Record<string, unknown>,
-    tap: Tap,
+    tap: WritableTapLike,
   ): Promise<void> {
     const { hasValue, fieldValue } = this.#extractFieldValue(record, field);
     let toWrite = fieldValue;
@@ -569,7 +577,9 @@ class RecordResolver extends Resolver<Record<string, unknown>> {
     this.#readerFields = readerFields;
   }
 
-  public override async read(tap: Tap): Promise<Record<string, unknown>> {
+  public override async read(
+    tap: ReadableTapLike,
+  ): Promise<Record<string, unknown>> {
     const result: Record<string, unknown> = {};
     const seen = new Array(this.#readerFields.length).fill(false);
 

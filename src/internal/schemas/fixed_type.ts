@@ -1,4 +1,8 @@
-import { Tap } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  WritableTap,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
 import { NamedType } from "./named_type.ts";
 import { Resolver } from "./resolver.ts";
 import { JSONType, Type } from "./type.ts";
@@ -39,7 +43,7 @@ export class FixedType extends NamedType<Uint8Array> {
     this.check(value, throwInvalidError, []);
     const size = this.sizeBytes();
     const buf = new ArrayBuffer(size);
-    const tap = new Tap(buf);
+    const tap = new WritableTap(buf);
     await this.write(tap, value);
     return buf;
   }
@@ -48,7 +52,7 @@ export class FixedType extends NamedType<Uint8Array> {
    * Skips a fixed-size value by advancing the tap by the fixed size.
    * @param tap The tap to skip from.
    */
-  public override async skip(tap: Tap): Promise<void> {
+  public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipFixed(this.sizeBytes());
   }
 
@@ -70,7 +74,7 @@ export class FixedType extends NamedType<Uint8Array> {
     return isValid;
   }
 
-  public override async read(tap: Tap): Promise<Uint8Array> {
+  public override async read(tap: ReadableTapLike): Promise<Uint8Array> {
     const result = await tap.readFixed(this.#size);
     if (result === undefined) {
       throw new Error("Insufficient data for fixed type");
@@ -78,14 +82,20 @@ export class FixedType extends NamedType<Uint8Array> {
     return result;
   }
 
-  public override async write(tap: Tap, value: Uint8Array): Promise<void> {
+  public override async write(
+    tap: WritableTapLike,
+    value: Uint8Array,
+  ): Promise<void> {
     if (!(value instanceof Uint8Array) || value.length !== this.#size) {
       throwInvalidError([], value, this);
     }
     await tap.writeFixed(value, this.#size);
   }
 
-  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+  public override async match(
+    tap1: ReadableTapLike,
+    tap2: ReadableTapLike,
+  ): Promise<number> {
     return await tap1.matchFixed(tap2, this.#size);
   }
 
@@ -163,7 +173,7 @@ class FixedResolver extends Resolver<Uint8Array> {
     super(reader);
   }
 
-  public override async read(tap: Tap): Promise<Uint8Array> {
+  public override async read(tap: ReadableTapLike): Promise<Uint8Array> {
     const reader = this.readerType as FixedType;
     return await reader.read(tap);
   }

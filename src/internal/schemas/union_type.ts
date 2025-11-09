@@ -3,7 +3,11 @@ import { NamedType } from "./named_type.ts";
 import { Resolver } from "./resolver.ts";
 import { JSONType, Type } from "./type.ts";
 import { ErrorHook, throwInvalidError } from "./error.ts";
-import { Tap } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  WritableTap,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
 import { bigIntToSafeNumber } from "../serialization/conversion.ts";
 import { calculateVarintSize } from "./varint.ts";
 
@@ -153,7 +157,10 @@ export class UnionType extends BaseType<UnionValue> {
     return isValid;
   }
 
-  public override async write(tap: Tap, value: UnionValue): Promise<void> {
+  public override async write(
+    tap: WritableTapLike,
+    value: UnionValue,
+  ): Promise<void> {
     const { index, branchValue } = this.#resolveBranch(value);
     await tap.writeLong(BigInt(index));
     if (branchValue !== undefined) {
@@ -161,7 +168,7 @@ export class UnionType extends BaseType<UnionValue> {
     }
   }
 
-  public override async read(tap: Tap): Promise<UnionValue> {
+  public override async read(tap: ReadableTapLike): Promise<UnionValue> {
     const index = await this.#readBranchIndex(tap);
     const branch = this.#branches[index];
     if (branch.isNull) {
@@ -171,7 +178,7 @@ export class UnionType extends BaseType<UnionValue> {
     return { [branch.name]: branchValue };
   }
 
-  public override async skip(tap: Tap): Promise<void> {
+  public override async skip(tap: ReadableTapLike): Promise<void> {
     const index = await this.#readBranchIndex(tap);
     const branch = this.#branches[index];
     if (!branch.isNull) {
@@ -192,7 +199,7 @@ export class UnionType extends BaseType<UnionValue> {
     }
 
     const buffer = new ArrayBuffer(totalSize);
-    const tap = new Tap(buffer);
+    const tap = new WritableTap(buffer);
     await tap.writeLong(BigInt(index));
     if (branchBytes) {
       await tap.writeFixed(branchBytes);
@@ -251,7 +258,10 @@ export class UnionType extends BaseType<UnionValue> {
     return this.#types.map((type) => type.toJSON());
   }
 
-  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+  public override async match(
+    tap1: ReadableTapLike,
+    tap2: ReadableTapLike,
+  ): Promise<number> {
     const idx1 = await this.#readBranchIndex(tap1);
     const idx2 = await this.#readBranchIndex(tap2);
     if (idx1 === idx2) {
@@ -325,7 +335,7 @@ export class UnionType extends BaseType<UnionValue> {
     return { index: branchIndex, branchValue };
   }
 
-  async #readBranchIndex(tap: Tap): Promise<number> {
+  async #readBranchIndex(tap: ReadableTapLike): Promise<number> {
     const indexBigInt = await tap.readLong();
     const index = bigIntToSafeNumber(indexBigInt, "Union branch index");
     if (index < 0 || index >= this.#branches.length) {
@@ -349,7 +359,9 @@ class UnionBranchResolver extends Resolver<UnionValue> {
     this.#branchResolver = branchResolver;
   }
 
-  public override async read(tap: Tap): Promise<UnionValue> {
+  public override async read(
+    tap: ReadableTapLike,
+  ): Promise<UnionValue> {
     const resolvedValue = await this.#branchResolver.read(tap);
     if (this.#branch.isNull) {
       return null;
@@ -366,7 +378,9 @@ class UnionFromUnionResolver extends Resolver<UnionValue> {
     this.#resolvers = resolvers;
   }
 
-  public override async read(tap: Tap): Promise<UnionValue> {
+  public override async read(
+    tap: ReadableTapLike,
+  ): Promise<UnionValue> {
     const indexBigInt = await tap.readLong();
     const index = bigIntToSafeNumber(indexBigInt, "Union branch index");
     const resolver = this.#resolvers[index];

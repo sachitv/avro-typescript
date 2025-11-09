@@ -1,4 +1,7 @@
-import { Tap } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
 import { type JSONType, Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
@@ -22,7 +25,7 @@ export class FloatType extends FixedSizeBaseType<number> {
     return isValid;
   }
 
-  public async read(tap: Tap): Promise<number> {
+  public async read(tap: ReadableTapLike): Promise<number> {
     const val = await tap.readFloat();
     if (val === undefined) {
       throw new Error("Insufficient data for float");
@@ -30,14 +33,14 @@ export class FloatType extends FixedSizeBaseType<number> {
     return val;
   }
 
-  public async write(tap: Tap, value: number): Promise<void> {
+  public async write(tap: WritableTapLike, value: number): Promise<void> {
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
     await tap.writeFloat(value);
   }
 
-  public override async skip(tap: Tap): Promise<void> {
+  public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipFloat();
   }
 
@@ -62,7 +65,7 @@ export class FloatType extends FixedSizeBaseType<number> {
     if (writerType instanceof IntType) {
       // Float can promote from int (32-bit to 32-bit float)
       return new class extends Resolver {
-        public override async read(tap: Tap): Promise<number> {
+        public override async read(tap: ReadableTapLike): Promise<number> {
           const intValue = await tap.readInt();
           return intValue;
         }
@@ -70,7 +73,7 @@ export class FloatType extends FixedSizeBaseType<number> {
     } else if (writerType instanceof LongType) {
       // Float can promote from long (64-bit to 32-bit float, lossy)
       return new class extends Resolver {
-        public override async read(tap: Tap): Promise<number> {
+        public override async read(tap: ReadableTapLike): Promise<number> {
           const longValue = await tap.readLong();
           return Number(longValue);
         }
@@ -84,7 +87,10 @@ export class FloatType extends FixedSizeBaseType<number> {
     return "float";
   }
 
-  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+  public override async match(
+    tap1: ReadableTapLike,
+    tap2: ReadableTapLike,
+  ): Promise<number> {
     return await tap1.matchFloat(tap2);
   }
 }

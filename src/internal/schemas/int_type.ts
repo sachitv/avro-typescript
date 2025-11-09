@@ -1,4 +1,8 @@
-import { Tap } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  WritableTap,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import { type JSONType } from "./type.ts";
 import { calculateVarintSize } from "./varint.ts";
@@ -21,18 +25,21 @@ export class IntType extends PrimitiveType<number> {
     return isValid;
   }
 
-  public override async read(tap: Tap): Promise<number> {
+  public override async read(tap: ReadableTapLike): Promise<number> {
     return await tap.readInt();
   }
 
-  public override async write(tap: Tap, value: number): Promise<void> {
+  public override async write(
+    tap: WritableTapLike,
+    value: number,
+  ): Promise<void> {
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
     await tap.writeInt(value);
   }
 
-  public override async skip(tap: Tap): Promise<void> {
+  public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipInt();
   }
 
@@ -41,7 +48,7 @@ export class IntType extends PrimitiveType<number> {
     // For int, allocate exact size based on value
     const size = calculateVarintSize(value);
     const buf = new ArrayBuffer(size);
-    const tap = new Tap(buf);
+    const tap = new WritableTap(buf);
     await this.write(tap, value);
     return buf;
   }
@@ -58,7 +65,10 @@ export class IntType extends PrimitiveType<number> {
     return "int";
   }
 
-  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+  public override async match(
+    tap1: ReadableTapLike,
+    tap2: ReadableTapLike,
+  ): Promise<number> {
     return await tap1.matchInt(tap2);
   }
 }

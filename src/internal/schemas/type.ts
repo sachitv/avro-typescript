@@ -1,4 +1,7 @@
-import { Tap } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
 import { Resolver } from "./resolver.ts";
 
 type CloneOptions = Record<string, unknown>;
@@ -65,20 +68,20 @@ export abstract class Type<T = unknown> {
    * @param tap The tap to write to.
    * @param value The value to write.
    */
-  public abstract write(tap: Tap, value: T): Promise<void>;
+  public abstract write(tap: WritableTapLike, value: T): Promise<void>;
 
   /**
    * Reads a value from the tap. Must be implemented by subclasses.
    * @param tap The tap to read from.
    * @returns The read value.
    */
-  public abstract read(tap: Tap): Promise<T>;
+  public abstract read(tap: ReadableTapLike): Promise<T>;
 
   /**
    * Skips a value in the tap. Must be implemented by subclasses.
    * @param tap The tap to skip from.
    */
-  public abstract skip(tap: Tap): Promise<void>;
+  public abstract skip(tap: ReadableTapLike): Promise<void>;
 
   /**
    * Checks if a value is valid according to the schema. Must be implemented by subclasses.
@@ -119,5 +122,8 @@ export abstract class Type<T = unknown> {
    * @param tap2 The second tap.
    * @returns -1 if tap1 < tap2, 0 if equal, 1 if tap1 > tap2.
    */
-  public abstract match(tap1: Tap, tap2: Tap): Promise<number>;
+  public abstract match(
+    tap1: ReadableTapLike,
+    tap2: ReadableTapLike,
+  ): Promise<number>;
 }

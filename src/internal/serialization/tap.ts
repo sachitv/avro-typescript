@@ -4,86 +4,144 @@ import { compareUint8Arrays } from "./compare_bytes.ts";
 import { readUIntLE } from "./read_uint_le.ts";
 import { invert } from "./manipulate_bytes.ts";
 import { decode, encode } from "./text_encoding.ts";
-import { IBuffer } from "./buffers/buffer.ts";
-import { InMemoryBuffer } from "./buffers/in_memory_buffer.ts";
+import {
+  type IReadableBuffer,
+  type IWritableBuffer,
+} from "./buffers/buffer.ts";
+import {
+  InMemoryReadableBuffer,
+  InMemoryWritableBuffer,
+} from "./buffers/in_memory_buffer.ts";
 
-/**
- * Binary tap that provides Avro-compatible read/write operations on a backing buffer.
- * The tap tracks an internal cursor and exposes convenience helpers for primitive types.
- */
-export class Tap {
-  #buffer: IBuffer;
-  #pos: number;
+export interface ReadableTapLike {
+  _testOnlyBuf(): Promise<Uint8Array>;
+  readonly _testOnlyPos: number;
+  resetPos(): void;
+  isValid(): Promise<boolean>;
+  getValue(): Promise<Uint8Array>;
+  readBoolean(): Promise<boolean>;
+  skipBoolean(): void;
+  readInt(): Promise<number>;
+  readLong(): Promise<bigint>;
+  skipInt(): Promise<void>;
+  skipLong(): Promise<void>;
+  readFloat(): Promise<number | undefined>;
+  skipFloat(): void;
+  readDouble(): Promise<number | undefined>;
+  skipDouble(): void;
+  readFixed(len: number): Promise<Uint8Array | undefined>;
+  skipFixed(len: number): void;
+  readBytes(): Promise<Uint8Array | undefined>;
+  skipBytes(): Promise<void>;
+  readString(): Promise<string | undefined>;
+  skipString(): Promise<void>;
+  matchBoolean(tap: ReadableTapLike): Promise<number>;
+  matchInt(tap: ReadableTapLike): Promise<number>;
+  matchLong(tap: ReadableTapLike): Promise<number>;
+  matchFloat(tap: ReadableTapLike): Promise<number>;
+  matchDouble(tap: ReadableTapLike): Promise<number>;
+  matchFixed(tap: ReadableTapLike, len: number): Promise<number>;
+  matchBytes(tap: ReadableTapLike): Promise<number>;
+  matchString(tap: ReadableTapLike): Promise<number>;
+  unpackLongBytes(): Promise<Uint8Array>;
+}
 
-  /**
-   * Creates a new tap for the given buffer and optional start position.
-   * @param buf Buffer the tap will operate on (ArrayBuffer or IBuffer).
-   * @param pos Byte offset where the tap cursor should start.
-   */
-  constructor(buf: ArrayBuffer | IBuffer, pos = 0) {
-    if (
-      !Number.isFinite(pos) || !Number.isInteger(pos) || pos < 0 ||
-      Math.abs(pos) > Number.MAX_SAFE_INTEGER
-    ) {
-      throw new RangeError(
-        "Tap position must be an integer within the safe number range.",
-      );
-    }
+export interface WritableTapLike {
+  readonly _testOnlyPos: number;
+  resetPos(): void;
+  isValid(): Promise<boolean>;
+  writeBoolean(value: boolean): Promise<void>;
+  writeInt(value: number): Promise<void>;
+  writeLong(value: bigint): Promise<void>;
+  writeFloat(value: number): Promise<void>;
+  writeDouble(value: number): Promise<void>;
+  writeFixed(buf: Uint8Array, len?: number): Promise<void>;
+  writeBytes(buf: Uint8Array): Promise<void>;
+  writeString(str: string): Promise<void>;
+  writeBinary(str: string, len: number): Promise<void>;
+  packLongBytes(arr: Uint8Array): Promise<void>;
+}
 
-    if (buf instanceof ArrayBuffer) {
-      this.#buffer = new InMemoryBuffer(buf);
-    } else if (
-      typeof buf === "object" &&
-      buf !== null &&
-      typeof buf.length === "function" &&
-      typeof buf.read === "function" &&
-      typeof buf.write === "function"
-    ) {
-      this.#buffer = buf;
-    } else {
-      throw new TypeError("Tap requires an ArrayBuffer or IBuffer.");
-    }
-    this.#pos = pos;
+function assertValidPosition(pos: number): void {
+  if (
+    !Number.isFinite(pos) || !Number.isInteger(pos) || pos < 0 ||
+    Math.abs(pos) > Number.MAX_SAFE_INTEGER
+  ) {
+    throw new RangeError(
+      "Tap position must be an integer within the safe number range.",
+    );
   }
+}
 
-  /**
-   * Returns a defensive copy of the current buffer for testing purposes.
-   */
-  async _testOnlyBuf(): Promise<Uint8Array> {
-    const bytes = await this.#buffer.read(0, await this.#buffer.length());
-    return bytes?.slice() || new Uint8Array();
+function isIReadableBuffer(value: unknown): value is IReadableBuffer {
+  return typeof value === "object" && value !== null &&
+    typeof (value as IReadableBuffer).length === "function" &&
+    typeof (value as IReadableBuffer).read === "function";
+}
+
+function isIWritable(value: unknown): value is IWritableBuffer {
+  return typeof value === "object" && value !== null &&
+    typeof (value as IWritableBuffer).appendBytes === "function" &&
+    typeof (value as IWritableBuffer).isValid === "function";
+}
+
+abstract class TapBase {
+  protected pos: number;
+
+  protected constructor(pos: number) {
+    this.pos = pos;
   }
 
   /**
    * Returns the current cursor position within the buffer for testing.
    */
   get _testOnlyPos(): number {
-    return this.#pos;
+    return this.pos;
   }
 
   /**
    * Resets the cursor to the beginning of the buffer.
    */
   resetPos(): void {
-    this.#pos = 0;
+    this.pos = 0;
   }
+}
 
-  private async getByteAt(position: number): Promise<number> {
-    const bytes = await this.#buffer.read(position, 1);
-    return bytes ? bytes[0] : 0;
-  }
+/**
+ * Binary tap that exposes Avro-compatible read helpers on top of a readable buffer.
+ */
+export class ReadableTap extends TapBase implements ReadableTapLike {
+  protected readonly buffer: IReadableBuffer;
 
-  private async setByteAt(position: number, value: number): Promise<void> {
-    if (position < await this.#buffer.length()) {
-      await this.#buffer.write(position, new Uint8Array([value & 0xff]));
+  constructor(buf: ArrayBuffer | IReadableBuffer, pos = 0) {
+    assertValidPosition(pos);
+    let buffer: IReadableBuffer;
+    if (buf instanceof ArrayBuffer) {
+      buffer = new InMemoryReadableBuffer(buf);
+    } else if (isIReadableBuffer(buf)) {
+      buffer = buf;
+    } else {
+      throw new TypeError(
+        "ReadableTap requires an ArrayBuffer or IReadableBuffer.",
+      );
     }
+    super(pos);
+    this.buffer = buffer;
   }
 
   /**
    * Returns whether the cursor is positioned within the buffer bounds.
    */
   async isValid(): Promise<boolean> {
-    return this.#pos <= await this.#buffer.length();
+    return this.pos <= await this.buffer.length();
+  }
+
+  /**
+   * Returns a defensive copy of the current buffer for testing purposes.
+   */
+  async _testOnlyBuf(): Promise<Uint8Array> {
+    const bytes = await this.buffer.read(0, await this.buffer.length());
+    return bytes?.slice() || new Uint8Array();
   }
 
   /**
@@ -91,19 +149,24 @@ export class Tap {
    * @throws RangeError if the cursor has advanced past the buffer length.
    */
   async getValue(): Promise<Uint8Array> {
-    const bytes = await this.#buffer.read(0, this.#pos);
+    const bytes = await this.buffer.read(0, this.pos);
     if (!bytes) {
       throw new RangeError("Tap position exceeds buffer length.");
     }
     return bytes;
   }
 
+  private async getByteAt(position: number): Promise<number> {
+    const bytes = await this.buffer.read(position, 1);
+    return bytes ? bytes[0] : 0;
+  }
+
   /**
    * Reads the next byte as a boolean value and advances the cursor by one byte.
    */
   async readBoolean(): Promise<boolean> {
-    const value = await this.getByteAt(this.#pos);
-    this.#pos += 1;
+    const value = await this.getByteAt(this.pos);
+    this.pos += 1;
     return !!value;
   }
 
@@ -111,16 +174,7 @@ export class Tap {
    * Skips a boolean value by advancing the cursor by one byte.
    */
   skipBoolean(): void {
-    this.#pos++;
-  }
-
-  /**
-   * Writes a boolean value as a single byte and advances the cursor.
-   * @param value Boolean value to write.
-   */
-  async writeBoolean(value: boolean): Promise<void> {
-    await this.setByteAt(this.#pos, value ? 1 : 0);
-    this.#pos += 1;
+    this.pos++;
   }
 
   /**
@@ -134,7 +188,7 @@ export class Tap {
    * Reads a variable-length zig-zag encoded 64-bit signed integer as bigint.
    */
   async readLong(): Promise<bigint> {
-    let pos = this.#pos;
+    let pos = this.pos;
     let shift = 0n;
     let result = 0n;
     let byte: number;
@@ -151,7 +205,7 @@ export class Tap {
       shift += 7n;
     }
 
-    this.#pos = pos;
+    this.pos = pos;
     return (result >> 1n) ^ -(result & 1n);
   }
 
@@ -166,43 +220,11 @@ export class Tap {
    * Skips a zig-zag encoded 64-bit integer, advancing past continuation bytes.
    */
   async skipLong(): Promise<void> {
-    let pos = this.#pos;
+    let pos = this.pos;
     while ((await this.getByteAt(pos++)) & 0x80) {
       /* no-op */
     }
-    this.#pos = pos;
-  }
-
-  /**
-   * Writes a zig-zag encoded 32-bit signed integer.
-   * @param n Integer value to write.
-   */
-  async writeInt(n: number): Promise<void> {
-    await this.writeLong(BigInt(n));
-  }
-
-  /**
-   * Writes a zig-zag encoded 64-bit signed integer.
-   * @param value BigInt value to write.
-   */
-  async writeLong(value: bigint): Promise<void> {
-    let n = value;
-    if (n < 0n) {
-      n = ((-n) << 1n) - 1n;
-    } else {
-      n <<= 1n;
-    }
-
-    do {
-      const byte = Number(n & 0x7fn);
-      n >>= 7n;
-      if (n !== 0n) {
-        await this.setByteAt(this.#pos, byte | 0x80);
-      } else {
-        await this.setByteAt(this.#pos, byte);
-      }
-      this.#pos += 1;
-    } while (n !== 0n);
+    this.pos = pos;
   }
 
   /**
@@ -210,12 +232,12 @@ export class Tap {
    * @returns The float value or `undefined` if the read would exceed the buffer.
    */
   async readFloat(): Promise<number | undefined> {
-    const pos = this.#pos;
-    this.#pos += 4;
-    if (this.#pos > await this.#buffer.length()) {
+    const pos = this.pos;
+    this.pos += 4;
+    if (this.pos > await this.buffer.length()) {
       return undefined;
     }
-    const bytes = await this.#buffer.read(pos, 4);
+    const bytes = await this.buffer.read(pos, 4);
     if (!bytes) return undefined;
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return view.getFloat32(0, true);
@@ -225,24 +247,7 @@ export class Tap {
    * Skips a 32-bit floating point value by advancing four bytes.
    */
   skipFloat(): void {
-    this.#pos += 4;
-  }
-
-  /**
-   * Writes a 32-bit little-endian floating point number.
-   * @param value Float to write.
-   */
-  async writeFloat(value: number): Promise<void> {
-    const pos = this.#pos;
-    this.#pos += 4;
-    if (this.#pos > await this.#buffer.length()) {
-      return;
-    }
-    const buffer = new ArrayBuffer(4);
-    const view = new DataView(buffer);
-    view.setFloat32(0, value, true);
-    const bytes = new Uint8Array(buffer);
-    await this.#buffer.write(pos, bytes);
+    this.pos += 4;
   }
 
   /**
@@ -250,12 +255,12 @@ export class Tap {
    * @returns The double value or `undefined` if the read would exceed the buffer.
    */
   async readDouble(): Promise<number | undefined> {
-    const pos = this.#pos;
-    this.#pos += 8;
-    if (this.#pos > await this.#buffer.length()) {
+    const pos = this.pos;
+    this.pos += 8;
+    if (this.pos > await this.buffer.length()) {
       return undefined;
     }
-    const bytes = await this.#buffer.read(pos, 8);
+    const bytes = await this.buffer.read(pos, 8);
     if (!bytes) return undefined;
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return view.getFloat64(0, true);
@@ -265,24 +270,7 @@ export class Tap {
    * Skips a 64-bit floating point value by advancing eight bytes.
    */
   skipDouble(): void {
-    this.#pos += 8;
-  }
-
-  /**
-   * Writes a 64-bit little-endian floating point number.
-   * @param value Double precision value to write.
-   */
-  async writeDouble(value: number): Promise<void> {
-    const pos = this.#pos;
-    this.#pos += 8;
-    if (this.#pos > await this.#buffer.length()) {
-      return;
-    }
-    const buffer = new ArrayBuffer(8);
-    const view = new DataView(buffer);
-    view.setFloat64(0, value, true);
-    const bytes = new Uint8Array(buffer);
-    await this.#buffer.write(pos, bytes);
+    this.pos += 8;
   }
 
   /**
@@ -291,12 +279,12 @@ export class Tap {
    * @returns The bytes read or `undefined` if the read exceeds the buffer.
    */
   async readFixed(len: number): Promise<Uint8Array | undefined> {
-    const pos = this.#pos;
-    this.#pos += len;
-    if (this.#pos > await this.#buffer.length()) {
+    const pos = this.pos;
+    this.pos += len;
+    if (this.pos > await this.buffer.length()) {
       return undefined;
     }
-    return await this.#buffer.read(pos, len);
+    return await this.buffer.read(pos, len);
   }
 
   /**
@@ -304,22 +292,7 @@ export class Tap {
    * @param len Number of bytes to skip.
    */
   skipFixed(len: number): void {
-    this.#pos += len;
-  }
-
-  /**
-   * Writes a fixed-length byte sequence from the provided buffer.
-   * @param buf Source buffer to copy from.
-   * @param len Optional number of bytes to write; defaults to the buffer length.
-   */
-  async writeFixed(buf: Uint8Array, len?: number): Promise<void> {
-    const length = len ?? buf.length;
-    const pos = this.#pos;
-    this.#pos += length;
-    if (this.#pos > await this.#buffer.length()) {
-      return;
-    }
-    await this.#buffer.write(pos, buf.subarray(0, length));
+    this.pos += len;
   }
 
   /**
@@ -339,7 +312,7 @@ export class Tap {
    */
   async skipBytes(): Promise<void> {
     const len = bigIntToSafeNumber(await this.readLong(), "skipBytes length");
-    this.#pos += len;
+    this.pos += len;
   }
 
   /**
@@ -347,17 +320,7 @@ export class Tap {
    */
   async skipString(): Promise<void> {
     const len = bigIntToSafeNumber(await this.readLong(), "skipString length");
-    this.#pos += len;
-  }
-
-  /**
-   * Writes a length-prefixed byte sequence backed by the provided buffer.
-   * @param buf Bytes to write.
-   */
-  async writeBytes(buf: Uint8Array): Promise<void> {
-    const len = buf.length;
-    await this.writeLong(BigInt(len));
-    await this.writeFixed(buf, len);
+    this.pos += len;
   }
 
   /**
@@ -374,44 +337,15 @@ export class Tap {
   }
 
   /**
-   * Writes a length-prefixed UTF-8 string.
-   * @param str String to encode and write.
-   */
-  async writeString(str: string): Promise<void> {
-    const encoded = encode(str);
-    const len = encoded.length;
-    await this.writeLong(BigInt(len));
-    await this.writeFixed(encoded, len);
-  }
-
-  /**
-   * Writes a binary string as raw bytes without a length prefix.
-   * @param str Source string containing binary data.
-   * @param len Number of bytes from the string to write.
-   */
-  async writeBinary(str: string, len: number): Promise<void> {
-    const pos = this.#pos;
-    this.#pos += len;
-    if (this.#pos > await this.#buffer.length()) {
-      return;
-    }
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = str.charCodeAt(i) & 0xff;
-    }
-    await this.#buffer.write(pos, bytes);
-  }
-
-  /**
    * Compares the next boolean value with the one from another tap.
    * @param tap Tap to compare against; both cursors advance.
    * @returns 0 when equal, negative when this tap's value is false and the other true, positive otherwise.
    */
-  async matchBoolean(tap: Tap): Promise<number> {
-    const diff = (await this.getByteAt(this.#pos)) -
-      (await tap.getByteAt(tap.#pos));
-    this.#pos += 1;
-    tap.#pos += 1;
+  async matchBoolean(tap: ReadableTap): Promise<number> {
+    const diff = (await this.getByteAt(this.pos)) -
+      (await tap.getByteAt(tap.pos));
+    this.pos += 1;
+    tap.pos += 1;
     return diff;
   }
 
@@ -419,7 +353,7 @@ export class Tap {
    * Compares the next zig-zag encoded 32-bit integer with another tap.
    * @returns Comparison result using -1/0/1 semantics.
    */
-  async matchInt(tap: Tap): Promise<number> {
+  async matchInt(tap: ReadableTap): Promise<number> {
     return await this.matchLong(tap);
   }
 
@@ -427,7 +361,7 @@ export class Tap {
    * Compares the next zig-zag encoded 64-bit integer with another tap.
    * @returns Comparison result using -1/0/1 semantics.
    */
-  async matchLong(tap: Tap): Promise<number> {
+  async matchLong(tap: ReadableTap): Promise<number> {
     const n1 = await this.readLong();
     const n2 = await tap.readLong();
     return n1 === n2 ? 0 : (n1 < n2 ? -1 : 1);
@@ -437,7 +371,7 @@ export class Tap {
    * Compares the next 32-bit float value with another tap.
    * @returns Comparison result using -1/0/1 semantics, or 0 when either side runs out of data.
    */
-  async matchFloat(tap: Tap): Promise<number> {
+  async matchFloat(tap: ReadableTap): Promise<number> {
     const n1 = await this.readFloat();
     const n2 = await tap.readFloat();
     if (n1 === undefined || n2 === undefined) {
@@ -450,7 +384,7 @@ export class Tap {
    * Compares the next 64-bit float value with another tap.
    * @returns Comparison result using -1/0/1 semantics, or 0 when either side runs out of data.
    */
-  async matchDouble(tap: Tap): Promise<number> {
+  async matchDouble(tap: ReadableTap): Promise<number> {
     const n1 = await this.readDouble();
     const n2 = await tap.readDouble();
     if (n1 === undefined || n2 === undefined) {
@@ -465,7 +399,7 @@ export class Tap {
    * @param len Number of bytes to compare.
    * @returns Comparison result using -1/0/1 semantics, or 0 if either sequence is unavailable.
    */
-  async matchFixed(tap: Tap, len: number): Promise<number> {
+  async matchFixed(tap: ReadableTap, len: number): Promise<number> {
     const fixed1 = await this.readFixed(len);
     const fixed2 = await tap.readFixed(len);
     if (!fixed1 || !fixed2) {
@@ -478,7 +412,7 @@ export class Tap {
    * Compares length-prefixed byte sequences from this tap and another tap.
    * @returns Comparison result using -1/0/1 semantics.
    */
-  async matchBytes(tap: Tap): Promise<number> {
+  async matchBytes(tap: ReadableTap): Promise<number> {
     return await this.matchString(tap);
   }
 
@@ -486,23 +420,23 @@ export class Tap {
    * Compares length-prefixed UTF-8 strings read from this tap and another tap.
    * @returns Comparison result using -1/0/1 semantics.
    */
-  async matchString(tap: Tap): Promise<number> {
+  async matchString(tap: ReadableTap): Promise<number> {
     const l1 = bigIntToSafeNumber(
       await this.readLong(),
       "matchString length this",
     );
-    const p1 = this.#pos;
-    this.#pos += l1;
+    const p1 = this.pos;
+    this.pos += l1;
     const l2 = bigIntToSafeNumber(
       await tap.readLong(),
       "matchString length tap",
     );
-    const p2 = tap.#pos;
-    tap.#pos += l2;
-    const len1 = getClampedLength(await this.#buffer.length(), p1, l1);
-    const len2 = getClampedLength(await tap.#buffer.length(), p2, l2);
-    const bytes1 = await this.#buffer.read(p1, len1);
-    const bytes2 = await tap.#buffer.read(p2, len2);
+    const p2 = tap.pos;
+    tap.pos += l2;
+    const len1 = getClampedLength(await this.buffer.length(), p1, l1);
+    const len2 = getClampedLength(await tap.buffer.length(), p2, l2);
+    const bytes1 = await this.buffer.read(p1, len1);
+    const bytes2 = await tap.buffer.read(p2, len2);
     if (!bytes1 || !bytes2) return 0;
     return compareUint8Arrays(bytes1, bytes2);
   }
@@ -515,7 +449,7 @@ export class Tap {
     let n = 0;
     let i = 0; // Byte index in target buffer.
     let j = 6; // Bit offset in current target buffer byte.
-    let pos = this.#pos;
+    let pos = this.pos;
 
     let b = await this.getByteAt(pos++);
     const neg = b & 1;
@@ -540,8 +474,152 @@ export class Tap {
       invert(res, 8);
     }
 
-    this.#pos = pos;
+    this.pos = pos;
     return res;
+  }
+}
+
+/**
+ * Binary tap that exposes Avro-compatible write helpers on top of a writable buffer.
+ */
+export class WritableTap extends TapBase implements WritableTapLike {
+  private readonly buffer: IWritableBuffer;
+
+  constructor(buf: ArrayBuffer | IWritableBuffer, pos = 0) {
+    assertValidPosition(pos);
+    let buffer: IWritableBuffer;
+    if (buf instanceof ArrayBuffer) {
+      buffer = new InMemoryWritableBuffer(buf, pos);
+    } else if (isIWritable(buf)) {
+      buffer = buf;
+    } else {
+      throw new TypeError(
+        "WritableTap requires an ArrayBuffer or IWritableBuffer.",
+      );
+    }
+    super(pos);
+    this.buffer = buffer;
+  }
+
+  private async appendRawBytes(bytes: Uint8Array): Promise<void> {
+    if (bytes.length === 0) {
+      return;
+    }
+    this.pos += bytes.length;
+    await this.buffer.appendBytes(bytes);
+  }
+
+  async isValid(): Promise<boolean> {
+    return await this.buffer.isValid();
+  }
+
+  /**
+   * Writes a boolean value as a single byte and advances the cursor.
+   * @param value Boolean value to write.
+   */
+  async writeBoolean(value: boolean): Promise<void> {
+    await this.appendRawBytes(Uint8Array.of(value ? 1 : 0));
+  }
+
+  /**
+   * Writes a zig-zag encoded 32-bit signed integer.
+   * @param n Integer value to write.
+   */
+  async writeInt(n: number): Promise<void> {
+    await this.writeLong(BigInt(n));
+  }
+
+  /**
+   * Writes a zig-zag encoded 64-bit signed integer.
+   * @param value BigInt value to write.
+   */
+  async writeLong(value: bigint): Promise<void> {
+    let n = value;
+    if (n < 0n) {
+      n = ((-n) << 1n) - 1n;
+    } else {
+      n <<= 1n;
+    }
+
+    const bytes: number[] = [];
+    while (n >= 0x80n) {
+      bytes.push(Number(n & 0x7fn) | 0x80);
+      n >>= 7n;
+    }
+    bytes.push(Number(n));
+    await this.appendRawBytes(Uint8Array.from(bytes));
+  }
+
+  /**
+   * Writes a 32-bit little-endian floating point number.
+   * @param value Float to write.
+   */
+  async writeFloat(value: number): Promise<void> {
+    const buffer = new ArrayBuffer(4);
+    const view = new DataView(buffer);
+    view.setFloat32(0, value, true);
+    await this.appendRawBytes(new Uint8Array(buffer));
+  }
+
+  /**
+   * Writes a 64-bit little-endian floating point number.
+   * @param value Double precision value to write.
+   */
+  async writeDouble(value: number): Promise<void> {
+    const buffer = new ArrayBuffer(8);
+    const view = new DataView(buffer);
+    view.setFloat64(0, value, true);
+    await this.appendRawBytes(new Uint8Array(buffer));
+  }
+
+  /**
+   * Writes a fixed-length byte sequence from the provided buffer.
+   * @param buf Source buffer to copy from.
+   * @param len Optional number of bytes to write; defaults to the buffer length.
+   */
+  async writeFixed(buf: Uint8Array, len?: number): Promise<void> {
+    const length = len ?? buf.length;
+    if (length === 0) {
+      return;
+    }
+    await this.appendRawBytes(buf.slice(0, length));
+  }
+
+  /**
+   * Writes a length-prefixed byte sequence backed by the provided buffer.
+   * @param buf Bytes to write.
+   */
+  async writeBytes(buf: Uint8Array): Promise<void> {
+    const len = buf.length;
+    await this.writeLong(BigInt(len));
+    await this.writeFixed(buf, len);
+  }
+
+  /**
+   * Writes a length-prefixed UTF-8 string.
+   * @param str String to encode and write.
+   */
+  async writeString(str: string): Promise<void> {
+    const encoded = encode(str);
+    const len = encoded.length;
+    await this.writeLong(BigInt(len));
+    await this.writeFixed(encoded, len);
+  }
+
+  /**
+   * Writes a binary string as raw bytes without a length prefix.
+   * @param str Source string containing binary data.
+   * @param len Number of bytes from the string to write.
+   */
+  async writeBinary(str: string, len: number): Promise<void> {
+    if (len <= 0) {
+      return;
+    }
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = str.charCodeAt(i) & 0xff;
+    }
+    await this.appendRawBytes(bytes);
   }
 
   /**
@@ -574,13 +652,14 @@ export class Tap {
       /* skip trailing zeros */
     }
 
+    const emitted: number[] = [];
+
     // Pack 24-bit chunks into the zig-zag bucket, flushing continuation bytes as needed.
     while (k < m) {
       n |= parts[k++] << j;
       j += 24;
       while (j > 7) {
-        await this.setByteAt(this.#pos, (n & 0x7f) | 0x80);
-        this.#pos += 1;
+        emitted.push((n & 0x7f) | 0x80);
         n >>= 7;
         j -= 7;
       }
@@ -591,11 +670,9 @@ export class Tap {
       const byte = n & 0x7f;
       n >>= 7;
       if (n) {
-        await this.setByteAt(this.#pos, byte | 0x80);
-        this.#pos += 1;
+        emitted.push(byte | 0x80);
       } else {
-        await this.setByteAt(this.#pos, byte);
-        this.#pos += 1;
+        emitted.push(byte);
       }
     } while (n);
 
@@ -603,7 +680,7 @@ export class Tap {
       // Restore the original negative representation in the supplied buffer.
       invert(arr, 8);
     }
+
+    await this.appendRawBytes(Uint8Array.from(emitted));
   }
 }
-
-export default Tap;

@@ -1,4 +1,8 @@
-import { Tap } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  WritableTap,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import { type JSONType, Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
@@ -27,12 +31,12 @@ export class StringType extends PrimitiveType<string> {
     const strBytes = encode(value);
     const lengthSize = calculateVarintSize(strBytes.length);
     const buf = new ArrayBuffer(lengthSize + strBytes.length);
-    const tap = new Tap(buf);
+    const tap = new WritableTap(buf);
     await this.write(tap, value);
     return buf;
   }
 
-  public override async read(tap: Tap): Promise<string> {
+  public override async read(tap: ReadableTapLike): Promise<string> {
     const val = await tap.readString();
     if (val === undefined) {
       throw new Error("Insufficient data for string");
@@ -40,14 +44,17 @@ export class StringType extends PrimitiveType<string> {
     return val;
   }
 
-  public override async write(tap: Tap, value: string): Promise<void> {
+  public override async write(
+    tap: WritableTapLike,
+    value: string,
+  ): Promise<void> {
     if (typeof value !== "string") {
       throwInvalidError([], value, this);
     }
     await tap.writeString(value);
   }
 
-  public override async skip(tap: Tap): Promise<void> {
+  public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipString();
   }
 
@@ -64,7 +71,7 @@ export class StringType extends PrimitiveType<string> {
       // String can promote from bytes. We use an anonymous class here to avoid a
       // cyclic dependency between this file and the bytes type file.
       return new class extends Resolver {
-        public override async read(tap: Tap): Promise<string> {
+        public override async read(tap: ReadableTapLike): Promise<string> {
           const bytes = await tap.readBytes();
           if (bytes === undefined) {
             throw new Error("Insufficient data for bytes");
@@ -82,7 +89,10 @@ export class StringType extends PrimitiveType<string> {
     return "string";
   }
 
-  public override async match(tap1: Tap, tap2: Tap): Promise<number> {
+  public override async match(
+    tap1: ReadableTapLike,
+    tap2: ReadableTapLike,
+  ): Promise<number> {
     return await tap1.matchString(tap2);
   }
 }

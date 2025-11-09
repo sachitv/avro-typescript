@@ -1,4 +1,8 @@
-import { Tap } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  WritableTap,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
 import { encode } from "../serialization/text_encoding.ts";
 import { bigIntToSafeNumber } from "../serialization/conversion.ts";
 import { BaseType } from "./base_type.ts";
@@ -12,8 +16,8 @@ export interface MapTypeParams<T> {
 }
 
 export async function readMapInto<T>(
-  tap: Tap,
-  readValue: (tap: Tap) => Promise<T>,
+  tap: ReadableTapLike,
+  readValue: (tap: ReadableTapLike) => Promise<T>,
   collect: (key: string, value: T) => void,
 ): Promise<void> {
   while (true) {
@@ -88,7 +92,10 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     return isValid;
   }
 
-  public override async write(tap: Tap, value: Map<string, T>): Promise<void> {
+  public override async write(
+    tap: WritableTapLike,
+    value: Map<string, T>,
+  ): Promise<void> {
     if (!(value instanceof Map)) {
       throwInvalidError([], value, this);
     }
@@ -106,7 +113,9 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     await tap.writeLong(0n);
   }
 
-  public override async read(tap: Tap): Promise<Map<string, T>> {
+  public override async read(
+    tap: ReadableTapLike,
+  ): Promise<Map<string, T>> {
     const result = new Map<string, T>();
     await readMapInto(
       tap,
@@ -118,7 +127,7 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     return result;
   }
 
-  public override async skip(tap: Tap): Promise<void> {
+  public override async skip(tap: ReadableTapLike): Promise<void> {
     while (true) {
       const rawCount = await tap.readLong();
       if (rawCount === 0n) {
@@ -168,7 +177,7 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     }
 
     const buffer = new ArrayBuffer(totalSize);
-    const tap = new Tap(buffer);
+    const tap = new WritableTap(buffer);
 
     if (serializedEntries.length > 0) {
       await tap.writeLong(BigInt(serializedEntries.length));
@@ -226,7 +235,10 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
   }
 
   // deno-lint-ignore require-await
-  public override async match(_tap1: Tap, _tap2: Tap): Promise<number> {
+  public override async match(
+    _tap1: ReadableTapLike,
+    _tap2: ReadableTapLike,
+  ): Promise<number> {
     throw new Error("maps cannot be compared");
   }
 
@@ -251,7 +263,9 @@ class MapResolver<T> extends Resolver<Map<string, T>> {
     this.#valueResolver = valueResolver;
   }
 
-  public override async read(tap: Tap): Promise<Map<string, T>> {
+  public override async read(
+    tap: ReadableTapLike,
+  ): Promise<Map<string, T>> {
     const result = new Map<string, T>();
     await readMapInto(
       tap,
