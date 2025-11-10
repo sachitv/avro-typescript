@@ -40,7 +40,7 @@ export class TestTap implements ReadableTapLike, WritableTapLike {
     return this.#pos;
   }
 
-  resetPos(): void {
+  _testOnlyResetPos(): void {
     this.#pos = 0;
   }
 

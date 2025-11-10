@@ -76,7 +76,7 @@ describe("IntType", () => {
       await type.write(tap, value);
       const posAfterWrite = tap._testOnlyPos;
       assertEquals(posAfterWrite, size);
-      tap.resetPos();
+      tap._testOnlyResetPos();
       await type.skip(tap);
       const posAfterSkip = tap._testOnlyPos;
       assertEquals(posAfterSkip, size);

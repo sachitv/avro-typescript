@@ -82,7 +82,7 @@ function registerWriterReaderTests<T>(
         const tap = newTap(size);
         await opts.writer(tap, elem);
         const writtenPos = tap._testOnlyPos;
-        tap.resetPos();
+        tap._testOnlyResetPos();
         const actual = await opts.reader(tap);
         equals(actual, elem);
         expect(tap._testOnlyPos).toBe(writtenPos);
@@ -106,7 +106,7 @@ function registerWriterReaderTests<T>(
         const tap = newTap(size);
         await opts.writer(tap, elem);
         const expectedPos = tap._testOnlyPos;
-        tap.resetPos();
+        tap._testOnlyResetPos();
         await opts.skipper(tap, elem);
         expect(tap._testOnlyPos).toBe(expectedPos);
       }
@@ -219,8 +219,8 @@ describe("Tap comparator helpers", () => {
     const tap2 = newTap(1);
     await tap1.writeBoolean(true);
     await tap2.writeBoolean(false);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchBoolean(tap2)).toBeGreaterThan(0);
   });
 
@@ -229,22 +229,22 @@ describe("Tap comparator helpers", () => {
     const tap2 = newTap(16);
     await tap1.writeLong(5n);
     await tap2.writeLong(2n);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchLong(tap2)).toBeGreaterThan(0);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     await tap1.writeLong(-3n);
     await tap2.writeLong(6n);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchLong(tap2)).toBeLessThan(0);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     await tap1.writeInt(-10);
     await tap2.writeInt(-10);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchInt(tap2)).toBe(0);
   });
 
@@ -253,8 +253,8 @@ describe("Tap comparator helpers", () => {
     const tap2 = newTap(8);
     await tap1.writeLong(-1n);
     await tap2.writeLong(4n);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchLong(tap2)).toBe(-1);
   });
 
@@ -263,15 +263,15 @@ describe("Tap comparator helpers", () => {
     const tap2 = newTap(16);
     await tap1.writeFloat(1.5);
     await tap2.writeFloat(3.2);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchFloat(tap2)).toBeLessThan(0);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     await tap1.writeDouble(-10.5);
     await tap2.writeDouble(4.0);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchDouble(tap2)).toBeLessThan(0);
   });
 
@@ -280,8 +280,8 @@ describe("Tap comparator helpers", () => {
     const tap2 = newTap(8);
     await tap1.writeFloat(4.25);
     await tap2.writeFloat(4.25);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchFloat(tap2)).toBe(0);
   });
 
@@ -290,8 +290,8 @@ describe("Tap comparator helpers", () => {
     const tap2 = newTap(8);
     await tap1.writeFloat(9.5);
     await tap2.writeFloat(3.2);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchFloat(tap2)).toBeGreaterThan(0);
   });
 
@@ -300,8 +300,8 @@ describe("Tap comparator helpers", () => {
     const tap2 = newTap(16);
     await tap1.writeDouble(-2.5);
     await tap2.writeDouble(4.0);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchDouble(tap2)).toBe(-1);
   });
 
@@ -310,8 +310,8 @@ describe("Tap comparator helpers", () => {
     const tap2 = newTap(16);
     await tap1.writeDouble(4.25);
     await tap2.writeDouble(4.25);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchDouble(tap2)).toBe(0);
   });
 
@@ -327,8 +327,8 @@ describe("Tap comparator helpers", () => {
     const tap2 = newTap(16);
     await tap1.writeDouble(123.456);
     await tap2.writeDouble(-10.5);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchDouble(tap2)).toBeGreaterThan(0);
   });
 
@@ -337,8 +337,8 @@ describe("Tap comparator helpers", () => {
     const tap2 = newTap(4);
     await tap1.writeFixed(toUint8Array([1, 2, 3, 4]));
     await tap2.writeFixed(toUint8Array([1, 2, 3, 5]));
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchFixed(tap2, 4)).toBeLessThan(0);
   });
 
@@ -347,15 +347,15 @@ describe("Tap comparator helpers", () => {
     const tap2 = newTap(32);
     await tap1.writeString("abc");
     await tap2.writeString("abd");
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchString(tap2)).toBeLessThan(0);
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     await tap1.writeBytes(toUint8Array([1, 2, 3]));
     await tap2.writeBytes(toUint8Array([1, 2, 4]));
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchBytes(tap2)).toBeLessThan(0);
   });
 
@@ -370,8 +370,8 @@ describe("Tap comparator helpers", () => {
     const tap2 = newTap(4);
     await tap1.writeFixed(toUint8Array([2, 0, 0, 0]));
     await tap2.writeFixed(toUint8Array([1, 255, 255, 255]));
-    tap1.resetPos();
-    tap2.resetPos();
+    tap1._testOnlyResetPos();
+    tap2._testOnlyResetPos();
     expect(await tap1.matchFixed(tap2, 4)).toBeGreaterThan(0);
   });
 
@@ -443,31 +443,31 @@ describe("Long pack & unpack", () => {
   it("unpack single byte", async () => {
     const tap = newTap(10);
     await tap.writeLong(5n);
-    tap.resetPos();
+    tap._testOnlyResetPos();
     expectUint8ArrayEqual(
       await tap.unpackLongBytes(),
       toUint8Array([5, 0, 0, 0, 0, 0, 0, 0]),
     );
-    tap.resetPos();
+    tap._testOnlyResetPos();
     await tap.writeLong(-5n);
-    tap.resetPos();
+    tap._testOnlyResetPos();
     expectUint8ArrayEqual(
       await tap.unpackLongBytes(),
       toUint8Array([-5, -1, -1, -1, -1, -1, -1, -1]),
     );
-    tap.resetPos();
+    tap._testOnlyResetPos();
   });
 
   it("unpack multiple bytes", async () => {
     const tap = newTap(10);
     let value = 18932;
     await tap.writeLong(BigInt(value));
-    tap.resetPos();
+    tap._testOnlyResetPos();
     expect(readInt32LE(await tap.unpackLongBytes())).toBe(value);
-    tap.resetPos();
+    tap._testOnlyResetPos();
     value = -3210984;
     await tap.writeLong(BigInt(value));
-    tap.resetPos();
+    tap._testOnlyResetPos();
     expect(readInt32LE(await tap.unpackLongBytes())).toBe(value);
   });
 
@@ -478,16 +478,16 @@ describe("Long pack & unpack", () => {
     writeInt32LE(buffer, 0, 12);
     await tap.packLongBytes(buffer);
     expect(tap._testOnlyPos).toBe(1);
-    tap.resetPos();
+    tap._testOnlyResetPos();
     expect(await tap.readLong()).toBe(12n);
-    tap.resetPos();
+    tap._testOnlyResetPos();
     writeInt32LE(buffer, 0, -37);
     writeInt32LE(buffer, 4, -1);
     await tap.packLongBytes(buffer);
     expect(tap._testOnlyPos).toBe(1);
-    tap.resetPos();
+    tap._testOnlyResetPos();
     expect(await tap.readLong()).toBe(-37n);
-    tap.resetPos();
+    tap._testOnlyResetPos();
     writeInt32LE(buffer, 0, -1);
     writeInt32LE(buffer, 4, -1);
     await tap.packLongBytes(buffer);
@@ -496,7 +496,7 @@ describe("Long pack & unpack", () => {
       buf.subarray(0, tap._testOnlyPos),
       toUint8Array([1]),
     );
-    tap.resetPos();
+    tap._testOnlyResetPos();
     expect(await tap.readLong()).toBe(-1n);
   });
 
@@ -516,7 +516,7 @@ describe("Long pack & unpack", () => {
       const tap1 = newTap(10);
       const tap2 = newTap(10);
       await tap1.writeLong(value);
-      tap1.resetPos();
+      tap1._testOnlyResetPos();
       await tap2.packLongBytes(await tap1.unpackLongBytes());
       await expectTapEqual(tap2, tap1);
     }
@@ -528,7 +528,7 @@ describe("Numeric guard rails", () => {
     const tap = newTap(16);
     const big = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
     await tap.writeLong(big);
-    tap.resetPos();
+    tap._testOnlyResetPos();
     await expect(tap.readInt()).rejects.toThrow(RangeError);
   });
 
@@ -536,7 +536,7 @@ describe("Numeric guard rails", () => {
     const tap = newTap(16);
     const big = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
     await tap.writeLong(big);
-    tap.resetPos();
+    tap._testOnlyResetPos();
     await expect(tap.readBytes()).rejects.toThrow(RangeError);
   });
 
@@ -545,7 +545,7 @@ describe("Numeric guard rails", () => {
     await tap.writeInt(42);
     await tap.writeInt(-7);
     const afterWrites = tap._testOnlyPos;
-    tap.resetPos();
+    tap._testOnlyResetPos();
     expect(await tap.readInt()).toBe(42);
     await tap.skipInt();
     expect(tap._testOnlyPos).toBe(afterWrites);
@@ -563,10 +563,10 @@ describe("Construction & buffer compatibility", () => {
   });
 
   it("ReadableTap accepts ReadableBuffer", async () => {
+    const total = 10;
     const mockBuffer: IReadableBuffer = {
-      length: () => Promise.resolve(10),
       read: (offset: number, size: number) => {
-        if (offset + size > 10) return Promise.resolve(undefined);
+        if (offset + size > total) return Promise.resolve(undefined);
         return Promise.resolve(new Uint8Array(size).fill(42));
       },
     };
@@ -672,10 +672,21 @@ describe("ReadableTap buffer exposure", () => {
 
   it("_testOnlyBuf returns empty array when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
-      length: () => Promise.resolve(10),
       read: () => Promise.resolve(undefined),
     };
     const tap = new ReadableTap(mockBuffer);
+    const buf = await tap._testOnlyBuf();
+    expect(buf).toEqual(new Uint8Array());
+  });
+
+  it("_testOnlyBuf returns empty array when bytes is undefined", async () => {
+    const mockBuffer: IReadableBuffer = {
+      read: () => Promise.resolve(undefined),
+    };
+    const tap = new ReadableTap(mockBuffer);
+    // Manually set position to ensure readLength > 0 so we don't hit early return
+    // deno-lint-ignore no-explicit-any
+    (tap as any).pos = 5;
     const buf = await tap._testOnlyBuf();
     expect(buf).toEqual(new Uint8Array());
   });
@@ -684,7 +695,6 @@ describe("ReadableTap buffer exposure", () => {
 describe("ReadableTap fallbacks", () => {
   it("readFloat returns undefined when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
-      length: () => Promise.resolve(10),
       read: () => Promise.resolve(undefined),
     };
     const tap = new ReadableTap(mockBuffer);
@@ -694,7 +704,6 @@ describe("ReadableTap fallbacks", () => {
 
   it("readDouble returns undefined when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
-      length: () => Promise.resolve(10),
       read: () => Promise.resolve(undefined),
     };
     const tap = new ReadableTap(mockBuffer);
@@ -704,7 +713,6 @@ describe("ReadableTap fallbacks", () => {
 
   it("matchString returns 0 when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
-      length: () => Promise.resolve(10),
       read: () => Promise.resolve(undefined),
     };
     const tap1 = new ReadableTap(mockBuffer);
@@ -719,7 +727,7 @@ describe("Long decoding edge cases", () => {
     const large = (1n << 70n) + 123n;
     const tap = newTap(16);
     await tap.writeLong(large);
-    tap.resetPos();
+    tap._testOnlyResetPos();
     expect(await tap.readLong()).toBe(large);
   });
 
@@ -727,7 +735,7 @@ describe("Long decoding edge cases", () => {
     const near = (1n << 56n) + 1n;
     const tap = newTap(16);
     await tap.writeLong(near);
-    tap.resetPos();
+    tap._testOnlyResetPos();
     expect(await tap.readLong()).toBe(near);
   });
 
@@ -752,12 +760,12 @@ describe("Long decoding edge cases", () => {
 });
 
 describe("Cursor management", () => {
-  it("resetPos resets position to 0", async () => {
+  it("_testOnlyResetPos resets position to 0", async () => {
     const buffer = new ArrayBuffer(10);
     const tap = new WritableTap(buffer);
     await tap.writeBoolean(true);
     expect(tap._testOnlyPos).toBe(1);
-    tap.resetPos();
+    tap._testOnlyResetPos();
     expect(tap._testOnlyPos).toBe(0);
   });
 });

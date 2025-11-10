@@ -2,7 +2,6 @@
  * Interface describing a random-access readable buffer.
  */
 export interface IReadableBuffer {
-  length(): Promise<number>;
   read(offset: number, size: number): Promise<Uint8Array | undefined>;
 }
 

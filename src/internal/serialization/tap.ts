@@ -1,5 +1,4 @@
 import { bigIntToSafeNumber } from "./conversion.ts";
-import { getClampedLength } from "./clamp.ts";
 import { compareUint8Arrays } from "./compare_bytes.ts";
 import { readUIntLE } from "./read_uint_le.ts";
 import { invert } from "./manipulate_bytes.ts";
@@ -14,9 +13,6 @@ import {
 } from "./buffers/in_memory_buffer.ts";
 
 export interface ReadableTapLike {
-  _testOnlyBuf(): Promise<Uint8Array>;
-  readonly _testOnlyPos: number;
-  resetPos(): void;
   isValid(): Promise<boolean>;
   getValue(): Promise<Uint8Array>;
   readBoolean(): Promise<boolean>;
@@ -47,8 +43,6 @@ export interface ReadableTapLike {
 }
 
 export interface WritableTapLike {
-  readonly _testOnlyPos: number;
-  resetPos(): void;
   isValid(): Promise<boolean>;
   writeBoolean(value: boolean): Promise<void>;
   writeInt(value: number): Promise<void>;
@@ -75,7 +69,6 @@ function assertValidPosition(pos: number): void {
 
 function isIReadableBuffer(value: unknown): value is IReadableBuffer {
   return typeof value === "object" && value !== null &&
-    typeof (value as IReadableBuffer).length === "function" &&
     typeof (value as IReadableBuffer).read === "function";
 }
 
@@ -102,7 +95,7 @@ abstract class TapBase {
   /**
    * Resets the cursor to the beginning of the buffer.
    */
-  resetPos(): void {
+  _testOnlyResetPos(): void {
     this.pos = 0;
   }
 }
@@ -112,12 +105,15 @@ abstract class TapBase {
  */
 export class ReadableTap extends TapBase implements ReadableTapLike {
   protected readonly buffer: IReadableBuffer;
+  #lengthHint?: number;
 
   constructor(buf: ArrayBuffer | IReadableBuffer, pos = 0) {
     assertValidPosition(pos);
     let buffer: IReadableBuffer;
+    let lengthHint: number | undefined;
     if (buf instanceof ArrayBuffer) {
       buffer = new InMemoryReadableBuffer(buf);
+      lengthHint = buf.byteLength;
     } else if (isIReadableBuffer(buf)) {
       buffer = buf;
     } else {
@@ -127,21 +123,31 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
     }
     super(pos);
     this.buffer = buffer;
+    this.#lengthHint = lengthHint;
   }
 
   /**
    * Returns whether the cursor is positioned within the buffer bounds.
    */
   async isValid(): Promise<boolean> {
-    return this.pos <= await this.buffer.length();
+    const probe = await this.buffer.read(this.pos, 0);
+    return probe !== undefined;
   }
 
   /**
    * Returns a defensive copy of the current buffer for testing purposes.
    */
   async _testOnlyBuf(): Promise<Uint8Array> {
-    const bytes = await this.buffer.read(0, await this.buffer.length());
-    return bytes?.slice() || new Uint8Array();
+    const readLength = this.#lengthHint ?? this.pos;
+    if (readLength <= 0) {
+      return new Uint8Array();
+    }
+    const bytes = await this.buffer.read(0, readLength);
+    if (bytes) {
+      return bytes.slice();
+    } else {
+      return new Uint8Array();
+    }
   }
 
   /**
@@ -234,9 +240,6 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
   async readFloat(): Promise<number | undefined> {
     const pos = this.pos;
     this.pos += 4;
-    if (this.pos > await this.buffer.length()) {
-      return undefined;
-    }
     const bytes = await this.buffer.read(pos, 4);
     if (!bytes) return undefined;
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -257,9 +260,6 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
   async readDouble(): Promise<number | undefined> {
     const pos = this.pos;
     this.pos += 8;
-    if (this.pos > await this.buffer.length()) {
-      return undefined;
-    }
     const bytes = await this.buffer.read(pos, 8);
     if (!bytes) return undefined;
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -281,9 +281,6 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
   async readFixed(len: number): Promise<Uint8Array | undefined> {
     const pos = this.pos;
     this.pos += len;
-    if (this.pos > await this.buffer.length()) {
-      return undefined;
-    }
     return await this.buffer.read(pos, len);
   }
 
@@ -433,10 +430,8 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
     );
     const p2 = tap.pos;
     tap.pos += l2;
-    const len1 = getClampedLength(await this.buffer.length(), p1, l1);
-    const len2 = getClampedLength(await tap.buffer.length(), p2, l2);
-    const bytes1 = await this.buffer.read(p1, len1);
-    const bytes2 = await tap.buffer.read(p2, len2);
+    const bytes1 = await this.buffer.read(p1, l1);
+    const bytes2 = await tap.buffer.read(p2, l2);
     if (!bytes1 || !bytes2) return 0;
     return compareUint8Arrays(bytes1, bytes2);
   }

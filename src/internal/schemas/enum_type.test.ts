@@ -112,7 +112,7 @@ describe("EnumType", () => {
     });
     const tap = new Tap(new ArrayBuffer(1));
     await tap.writeLong(2n);
-    tap.resetPos();
+    tap._testOnlyResetPos();
     await assertRejects(async () => await type.read(tap));
   });
 
