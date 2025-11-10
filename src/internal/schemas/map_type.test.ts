@@ -2,6 +2,7 @@ import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { TestTap as Tap } from "../serialization/test_tap.ts";
+import { ReadableTap } from "../serialization/tap.ts";
 import { MapType, readMapInto } from "./map_type.ts";
 import { IntType } from "./int_type.ts";
 import { LongType } from "./long_type.ts";
@@ -605,6 +606,34 @@ describe("readMapInto", () => {
     );
   });
 
+  it("throws when tap.readString returns undefined for map key", async () => {
+    let callCount = 0;
+    const mockBuffer = {
+      read: (_offset: number, _size: number) => {
+        callCount++;
+        if (callCount === 1) {
+          // For readLong varint, return some bytes for 1n
+          return Promise.resolve(new Uint8Array([2])); // varint for 1
+        } else {
+          // For readString, return undefined
+          return Promise.resolve(undefined);
+        }
+      },
+    };
+    const tap = new ReadableTap(mockBuffer);
+    await assertRejects(
+      async () => {
+        await readMapInto(
+          tap,
+          async (t) => await t.readLong(),
+          () => {},
+        );
+      },
+      Error,
+      "Insufficient data for map key",
+    );
+  });
+
   it("skips size-prefixed map blocks", async () => {
     // Create a buffer with negative count manually
     const buffer = new ArrayBuffer(20);
@@ -638,8 +667,8 @@ describe("readMapInto", () => {
           () => {},
         );
       },
-      Error,
-      "Insufficient data for map key",
+      RangeError,
+      "Operation exceeds buffer bounds",
     );
   });
 });

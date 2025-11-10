@@ -19,7 +19,7 @@ class TestType extends BaseType<string> {
     const buf = new ArrayBuffer(value.length + 10); // extra space for length encoding
     const tap = new Tap(buf);
     await this.write(tap, value);
-    return buf;
+    return buf.slice(0, tap._testOnlyPos);
   }
 
   public override async write(tap: Tap, value: string): Promise<void> {
@@ -152,6 +152,21 @@ describe("Type", () => {
       const buffer = new ArrayBuffer(0);
       await assertRejects(
         () => type.fromBuffer(buffer),
+        RangeError,
+        "Operation exceeds buffer bounds",
+      );
+    });
+
+    it("should throw for extra data in buffer", async () => {
+      const value = "hello";
+      const buffer = await type.toBuffer(value);
+      // Append extra data
+      const extraBuffer = new ArrayBuffer(buffer.byteLength + 1);
+      new Uint8Array(extraBuffer).set(new Uint8Array(buffer), 0);
+      // Add a byte at the end
+      new Uint8Array(extraBuffer)[buffer.byteLength] = 0;
+      await assertRejects(
+        () => type.fromBuffer(extraBuffer),
         Error,
         "Insufficient data for type",
       );

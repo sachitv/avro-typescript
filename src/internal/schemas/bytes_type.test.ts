@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../serialization/test_tap.ts";
+import { type ReadableTapLike } from "../serialization/tap.ts";
 import { BytesType } from "./bytes_type.ts";
 import { StringType } from "./string_type.ts";
 import { ValidationError } from "./error.ts";
@@ -50,6 +51,18 @@ describe("BytesType", () => {
         async () => {
           await type.read(tap);
         },
+        RangeError,
+        "Operation exceeds buffer bounds",
+      );
+    });
+
+    it("should throw 'Insufficient data for bytes' when tap.readBytes returns undefined", async () => {
+      // Mock tap that returns undefined for readBytes
+      const mockTap = {
+        readBytes: () => Promise.resolve(undefined),
+      } as unknown as ReadableTapLike;
+      await assertRejects(
+        async () => await type.read(mockTap),
         Error,
         "Insufficient data for bytes",
       );
@@ -122,7 +135,7 @@ describe("BytesType", () => {
     it("should return a Uint8Array", () => {
       const randomValue = type.random();
       assert(randomValue instanceof Uint8Array);
-      assert(randomValue.length >= 0 && randomValue.length < 32);
+      assert(randomValue.length >= 1 && randomValue.length <= 32);
     });
 
     it("should generate random bytes with values 0-255", () => {
@@ -172,6 +185,20 @@ describe("BytesType", () => {
       const readTap = new Tap(buf);
       await assertRejects(
         async () => await resolver.read(readTap),
+        RangeError,
+        "Operation exceeds buffer bounds",
+      );
+    });
+
+    it("should throw 'Insufficient data for string' when tap.readString returns undefined", async () => {
+      const stringType = new StringType();
+      const resolver = type.createResolver(stringType);
+      // Mock tap that returns undefined for readString
+      const mockTap = {
+        readString: () => Promise.resolve(undefined),
+      } as unknown as ReadableTapLike;
+      await assertRejects(
+        async () => await resolver.read(mockTap),
         Error,
         "Insufficient data for string",
       );

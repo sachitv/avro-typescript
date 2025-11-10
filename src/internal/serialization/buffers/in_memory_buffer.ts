@@ -1,7 +1,7 @@
 import { type IReadableBuffer, type IWritableBuffer } from "./buffer.ts";
 
 /**
- * Shared in-memory buffer base that exposes the core ArrayBuffer mechanics.
+ * Shared strict in-memory buffer base with common functionality.
  */
 abstract class InMemoryBufferBase {
   protected readonly view: Uint8Array;
@@ -14,78 +14,106 @@ abstract class InMemoryBufferBase {
   public async length(): Promise<number> {
     return this.view.length;
   }
-
-  protected withinBounds(offset: number, size: number): boolean {
-    return offset >= 0 && size >= 0 && offset + size <= this.view.length;
-  }
-
-  protected clampOffset(offset: number): number {
-    if (Number.isNaN(offset) || !Number.isFinite(offset)) {
-      return 0;
-    }
-    if (offset < 0) {
-      return 0;
-    }
-    if (offset > this.view.length) {
-      return this.view.length;
-    }
-    return offset;
-  }
 }
 
 /**
- * Read-only in-memory buffer for serialization reads.
+ * Strict read-only in-memory buffer for serialization reads.
+ * Throws errors on all out-of-bounds operations.
  *
  * Key features:
  * - Fixed size: The buffer size is determined at construction and cannot be resized.
- * - Random access: Supports reading and writing at arbitrary byte offsets.
- * - Bounds checking: Operations that would exceed buffer bounds are safely ignored or return undefined.
+ * - Random access: Supports reading at arbitrary byte offsets.
+ * - Strict bounds checking: Operations that exceed buffer bounds throw RangeError.
  * - Efficient: Uses Uint8Array for fast byte-level operations.
  *
  * @example
  * ```typescript
  * const arrayBuffer = new ArrayBuffer(1024);
- * const buffer = new InMemoryReadableBuffer(arrayBuffer);
+ * const buffer = new StrictInMemoryReadableBuffer(arrayBuffer);
  *
- * // Write some data
- * const data = await buffer.read(0, 4); // Returns Uint8Array([1, 2, 3, 4])
+ * // Read some data
+ * const data = await buffer.read(0, 4); // Returns Uint8Array of 4 bytes
+ *
+ * // This will throw:
+ * await buffer.read(1020, 10); // RangeError: Operation exceeds buffer bounds
  * ```
  */
 export class InMemoryReadableBuffer extends InMemoryBufferBase
   implements IReadableBuffer {
+  private checkBounds(offset: number, size: number): void {
+    if (offset < 0 || size < 0) {
+      throw new RangeError(
+        `Offset and size must be non-negative. Got offset=${offset}, size=${size}`,
+      );
+    }
+    if (offset + size > this.view.length) {
+      throw new RangeError(
+        `Operation exceeds buffer bounds. offset=${offset}, size=${size}, bufferLength=${this.view.length}`,
+      );
+    }
+  }
+
   // deno-lint-ignore require-await
   public async read(
     offset: number,
     size: number,
-  ): Promise<Uint8Array | undefined> {
-    if (!this.withinBounds(offset, size)) {
-      return undefined;
-    }
+  ): Promise<Uint8Array> {
+    this.checkBounds(offset, size);
     return this.view.slice(offset, offset + size);
   }
 }
 
 /**
- * Write-only in-memory buffer for serialization writes.
+ * Strict write-only in-memory buffer for serialization writes.
+ * Throws errors when attempting to write beyond buffer bounds.
+ *
+ * Key features:
+ * - Fixed size: The buffer size is determined at construction and cannot be resized.
+ * - Sequential writes: Maintains an internal offset that advances with each write.
+ * - Strict bounds checking: Throws RangeError when write would exceed buffer capacity.
+ * - Efficient: Uses Uint8Array for fast byte-level operations.
+ *
+ * @example
+ * ```typescript
+ * const arrayBuffer = new ArrayBuffer(1024);
+ * const buffer = new StrictInMemoryWritableBuffer(arrayBuffer);
+ *
+ * // Write some data
+ * await buffer.appendBytes(new Uint8Array([1, 2, 3, 4]));
+ *
+ * // This will throw if buffer is full:
+ * await buffer.appendBytes(new Uint8Array(2000)); // RangeError: Write operation exceeds buffer bounds
+ * ```
  */
 export class InMemoryWritableBuffer extends InMemoryBufferBase
   implements IWritableBuffer {
   #offset: number;
-  #overflowed = false;
 
   constructor(buf: ArrayBuffer, offset = 0) {
     super(buf);
-    this.#offset = this.clampOffset(offset);
+    if (offset < 0 || offset > this.view.length) {
+      throw new RangeError(
+        `Initial offset must be within buffer bounds. Got offset=${offset}, bufferLength=${this.view.length}`,
+      );
+    }
+    this.#offset = offset;
+  }
+
+  protected checkWriteBounds(offset: number, data: Uint8Array): void {
+    if (offset < 0) {
+      throw new RangeError(`Offset must be non-negative. Got offset=${offset}`);
+    }
+    if (offset + data.length > this.view.length) {
+      throw new RangeError(
+        `Write operation exceeds buffer bounds. offset=${offset}, dataSize=${data.length}, bufferLength=${this.view.length}`,
+      );
+    }
   }
 
   // deno-lint-ignore require-await
   public async appendBytes(data: Uint8Array): Promise<void> {
-    if (data.length === 0 || this.#overflowed) {
-      return;
-    }
-    const remaining = this.view.length - this.#offset;
-    if (data.length > remaining) {
-      this.#overflowed = true;
+    this.checkWriteBounds(this.#offset, data);
+    if (data.length === 0) {
       return;
     }
     this.view.set(data, this.#offset);
@@ -94,6 +122,20 @@ export class InMemoryWritableBuffer extends InMemoryBufferBase
 
   // deno-lint-ignore require-await
   public async isValid(): Promise<boolean> {
-    return !this.#overflowed;
+    return true; // Always valid since we throw on overflow instead of marking as invalid
+  }
+
+  /**
+   * @internal Test-only function to get the current write offset position.
+   */
+  public _testOnlyOffset(): number {
+    return this.#offset;
+  }
+
+  /**
+   * @internal Test-only function to get the remaining space in the buffer.
+   */
+  public _testOnlyRemaining(): number {
+    return this.view.length - this.#offset;
   }
 }

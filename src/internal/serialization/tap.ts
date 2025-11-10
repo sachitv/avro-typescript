@@ -79,7 +79,7 @@ function isIWritable(value: unknown): value is IWritableBuffer {
 }
 
 abstract class TapBase {
-  protected pos: number;
+  public pos: number;
 
   protected constructor(pos: number) {
     this.pos = pos;
@@ -130,8 +130,15 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
    * Returns whether the cursor is positioned within the buffer bounds.
    */
   async isValid(): Promise<boolean> {
-    const probe = await this.buffer.read(this.pos, 0);
-    return probe !== undefined;
+    try {
+      const probe = await this.buffer.read(this.pos, 0);
+      return probe !== undefined;
+    } catch (err) {
+      if (err instanceof RangeError) {
+        return false;
+      }
+      throw err;
+    }
   }
 
   /**

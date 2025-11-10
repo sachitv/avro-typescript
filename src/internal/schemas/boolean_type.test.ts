@@ -142,8 +142,8 @@ describe("BooleanType", () => {
       const buffer = new ArrayBuffer(0);
       await assertRejects(
         () => type.fromBuffer(buffer),
-        Error,
-        "Insufficient data for type",
+        RangeError,
+        "Operation exceeds buffer bounds",
       );
     });
 

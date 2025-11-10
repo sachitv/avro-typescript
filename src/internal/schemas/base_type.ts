@@ -23,7 +23,7 @@ export abstract class BaseType<T = unknown> extends Type<T> {
   public async fromBuffer(buffer: ArrayBuffer): Promise<T> {
     const tap = new ReadableTap(buffer);
     const value = await this.read(tap);
-    if (!await tap.isValid()) {
+    if (!await tap.isValid() || tap.pos !== buffer.byteLength) {
       throw new Error("Insufficient data for type");
     }
     return value;

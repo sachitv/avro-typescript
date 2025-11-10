@@ -3,6 +3,7 @@ import { describe, it } from "@std/testing/bdd";
 import { StringType } from "./string_type.ts";
 import { BytesType } from "./bytes_type.ts";
 import { TestTap as Tap } from "../serialization/test_tap.ts";
+import { ReadableTap } from "../serialization/tap.ts";
 
 describe("StringType", () => {
   const type = new StringType();
@@ -77,6 +78,20 @@ describe("StringType", () => {
     const readTap = new Tap(buf);
     await assertRejects(
       () => type.read(readTap),
+      RangeError,
+      "Operation exceeds buffer bounds",
+    );
+  });
+
+  it("should throw when tap.readString returns undefined", async () => {
+    const mockBuffer = {
+      read: (_offset: number, _size: number) => Promise.resolve(undefined),
+    };
+    const tap = new ReadableTap(mockBuffer);
+    await assertRejects(
+      async () => {
+        await type.read(tap);
+      },
       Error,
       "Insufficient data for string",
     );
@@ -145,6 +160,22 @@ describe("StringType", () => {
       const readTap = new Tap(buf);
       await assertRejects(
         () => resolver.read(readTap),
+        RangeError,
+        "Operation exceeds buffer bounds",
+      );
+    });
+
+    it("should throw when tap.readBytes returns undefined in resolver", async () => {
+      const bytesType = new BytesType();
+      const resolver = type.createResolver(bytesType);
+      const mockBuffer = {
+        read: (_offset: number, _size: number) => Promise.resolve(undefined),
+      };
+      const tap = new ReadableTap(mockBuffer);
+      await assertRejects(
+        async () => {
+          await resolver.read(tap);
+        },
         Error,
         "Insufficient data for bytes",
       );

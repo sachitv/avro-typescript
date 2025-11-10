@@ -2,6 +2,7 @@ import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { FixedType } from "./fixed_type.ts";
 import { TestTap as Tap } from "../serialization/test_tap.ts";
+import { ReadableTap } from "../serialization/tap.ts";
 import { Type } from "./type.ts";
 import { resolveNames } from "./resolve_names.ts";
 
@@ -146,6 +147,21 @@ describe("FixedType", () => {
 
     await assertRejects(
       async () => await fixedType.read(tap),
+      RangeError,
+      "Operation exceeds buffer bounds",
+    );
+  });
+
+  it("should throw when tap.readFixed returns undefined", async () => {
+    const fixedType = createFixedType("Test", 4);
+    const mockBuffer = {
+      read: (_offset: number, _size: number) => Promise.resolve(undefined),
+    };
+    const tap = new ReadableTap(mockBuffer);
+    await assertRejects(
+      async () => {
+        await fixedType.read(tap);
+      },
       Error,
       "Insufficient data for fixed type",
     );
@@ -299,12 +315,13 @@ describe("FixedType", () => {
     new Uint8Array(buf2).set(bytes2);
     new Uint8Array(buf3).set(bytes3);
 
-    const tap1 = new Tap(buf1);
-    const tap2 = new Tap(buf2);
-    const tap3 = new Tap(buf3);
+    const tapMatch1 = new Tap(buf1);
+    const tapMatch2 = new Tap(buf2);
+    assertEquals(await fixedType.match(tapMatch1, tapMatch2), 0); // Match
 
-    assertEquals(await fixedType.match(tap1, tap2), 0); // Match
-    assertEquals(await fixedType.match(tap1, tap3), 0); // No match
+    const tapDiff1 = new Tap(buf1);
+    const tapDiff2 = new Tap(buf3);
+    assertEquals(await fixedType.match(tapDiff1, tapDiff2), -1); // bytes1 < bytes3
   });
 
   it("creates resolver for identical FixedType", () => {

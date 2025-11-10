@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../serialization/test_tap.ts";
+import { ReadableTap } from "../serialization/tap.ts";
 import { FloatType } from "./float_type.ts";
 import { IntType } from "./int_type.ts";
 import { LongType } from "./long_type.ts";
@@ -62,6 +63,20 @@ describe("FloatType", () => {
     it("should throw when insufficient data", async () => {
       const buffer = new ArrayBuffer(2); // Less than 4 bytes needed for float
       const tap = new Tap(buffer);
+      await assertRejects(
+        async () => {
+          await type.read(tap);
+        },
+        RangeError,
+        "Operation exceeds buffer bounds",
+      );
+    });
+
+    it("should throw when tap.readFloat returns undefined", async () => {
+      const mockBuffer = {
+        read: (_offset: number, _size: number) => Promise.resolve(undefined),
+      };
+      const tap = new ReadableTap(mockBuffer);
       await assertRejects(
         async () => {
           await type.read(tap);
