@@ -19,6 +19,21 @@ import { UnionType } from "../schemas/union_type.ts";
 import { NullType } from "../schemas/null_type.ts";
 import { Type } from "../schemas/type.ts";
 import { safeStringify } from "../schemas/json.ts";
+import { DecimalLogicalType } from "../schemas/logical/decimal_logical_type.ts";
+import { UuidLogicalType } from "../schemas/logical/uuid_logical_type.ts";
+import {
+  DateLogicalType,
+  LocalTimestampMicrosLogicalType,
+  LocalTimestampMillisLogicalType,
+  LocalTimestampNanosLogicalType,
+  TimeMicrosLogicalType,
+  TimeMillisLogicalType,
+  TimestampMicrosLogicalType,
+  TimestampMillisLogicalType,
+  TimestampNanosLogicalType,
+} from "../schemas/logical/temporal_logical_types.ts";
+import { DurationLogicalType } from "../schemas/logical/duration_logical_type.ts";
+import { NamedType } from "../schemas/named_type.ts";
 
 type PrimitiveTypeName =
   | "null"
@@ -110,11 +125,7 @@ function constructType(schema: SchemaLike, context: CreateTypeContext): Type {
 
   const logicalType = schema.logicalType;
   if (logicalType !== undefined) {
-    throw new Error(
-      `Logical types are not supported yet in the TypeScript port: ${
-        safeStringify(logicalType)
-      }`,
-    );
+    return createLogicalType(schema, logicalType, context);
   }
 
   const { type } = schema;
@@ -155,6 +166,130 @@ function constructType(schema: SchemaLike, context: CreateTypeContext): Type {
   throw new Error(
     `Schema is missing a valid "type" property: ${safeStringify(schema)}`,
   );
+}
+
+function createLogicalType(
+  schema: SchemaObject,
+  logicalType: unknown,
+  context: CreateTypeContext,
+): Type {
+  const buildUnderlying = (): Type => {
+    const underlyingSchema = { ...schema };
+    delete underlyingSchema.logicalType;
+    return constructType(underlyingSchema as SchemaLike, context);
+  };
+
+  if (typeof logicalType !== "string") {
+    return buildUnderlying();
+  }
+
+  const underlying = buildUnderlying();
+
+  const replaceIfNamed = (logical: Type): Type => {
+    if (underlying instanceof NamedType) {
+      context.registry.set(underlying.getFullName(), logical);
+    }
+    return logical;
+  };
+
+  try {
+    switch (logicalType) {
+      case "decimal": {
+        if (
+          underlying instanceof BytesType || underlying instanceof FixedType
+        ) {
+          const precision = schema.precision;
+          const scaleValue = schema.scale;
+          if (typeof precision !== "number") {
+            return underlying;
+          }
+          if (scaleValue !== undefined && typeof scaleValue !== "number") {
+            return underlying;
+          }
+          const logical = new DecimalLogicalType(underlying, {
+            precision,
+            scale: scaleValue as number | undefined,
+          });
+          return replaceIfNamed(logical);
+        }
+        return underlying;
+      }
+      case "uuid": {
+        if (
+          underlying instanceof StringType || underlying instanceof FixedType
+        ) {
+          const logical = new UuidLogicalType(underlying);
+          return replaceIfNamed(logical);
+        }
+        return underlying;
+      }
+      case "date": {
+        if (underlying instanceof IntType) {
+          return new DateLogicalType(underlying);
+        }
+        return underlying;
+      }
+      case "time-millis": {
+        if (underlying instanceof IntType) {
+          return new TimeMillisLogicalType(underlying);
+        }
+        return underlying;
+      }
+      case "time-micros": {
+        if (underlying instanceof LongType) {
+          return new TimeMicrosLogicalType(underlying);
+        }
+        return underlying;
+      }
+      case "timestamp-millis": {
+        if (underlying instanceof LongType) {
+          return new TimestampMillisLogicalType(underlying);
+        }
+        return underlying;
+      }
+      case "timestamp-micros": {
+        if (underlying instanceof LongType) {
+          return new TimestampMicrosLogicalType(underlying);
+        }
+        return underlying;
+      }
+      case "timestamp-nanos": {
+        if (underlying instanceof LongType) {
+          return new TimestampNanosLogicalType(underlying);
+        }
+        return underlying;
+      }
+      case "local-timestamp-millis": {
+        if (underlying instanceof LongType) {
+          return new LocalTimestampMillisLogicalType(underlying);
+        }
+        return underlying;
+      }
+      case "local-timestamp-micros": {
+        if (underlying instanceof LongType) {
+          return new LocalTimestampMicrosLogicalType(underlying);
+        }
+        return underlying;
+      }
+      case "local-timestamp-nanos": {
+        if (underlying instanceof LongType) {
+          return new LocalTimestampNanosLogicalType(underlying);
+        }
+        return underlying;
+      }
+      case "duration": {
+        if (underlying instanceof FixedType) {
+          const logical = new DurationLogicalType(underlying);
+          return replaceIfNamed(logical);
+        }
+        return underlying;
+      }
+      default:
+        return underlying;
+    }
+  } catch {
+    return underlying;
+  }
 }
 
 function createFromTypeName(
