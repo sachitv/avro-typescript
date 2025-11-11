@@ -4,11 +4,38 @@ import { AvroReader } from "./avro_reader.ts";
 import type { Decoder } from "./internal/serialization/decoders/decoder.ts";
 import { InMemoryReadableBuffer } from "./internal/serialization/buffers/in_memory_buffer.ts";
 
+/**
+ * Expected weather records from the weather.avro test file.
+ * Note: Avro long type is decoded as BigInt in TypeScript.
+ */
+const EXPECTED_WEATHER_RECORDS = [
+  { station: "011990-99999", time: -619524000000n, temp: 0 },
+  { station: "011990-99999", time: -619506000000n, temp: 22 },
+  { station: "011990-99999", time: -619484400000n, temp: -11 },
+  { station: "012650-99999", time: -655531200000n, temp: 111 },
+  { station: "012650-99999", time: -655509600000n, temp: 78 },
+];
+
+/**
+ * Verify that records match expected weather data.
+ */
+function assertWeatherRecords(records: unknown[]): void {
+  assertEquals(records.length, 5);
+
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i] as Record<string, unknown>;
+    const expected = EXPECTED_WEATHER_RECORDS[i];
+    assertEquals(record.station, expected.station);
+    assertEquals(record.time, expected.time);
+    assertEquals(record.temp, expected.temp);
+  }
+}
+
 describe("AvroReader deflate codec support", () => {
   it("supports deflate codec", async () => {
     // Read the deflate-compressed test file
     const deflateFile = await Deno.readFile(
-      "/workspaces/avro/share/test/data/weather-deflate.avro",
+      "../../share/test/data/weather-deflate.avro",
     );
     const buffer = new InMemoryReadableBuffer(deflateFile.buffer);
 
@@ -20,14 +47,8 @@ describe("AvroReader deflate codec support", () => {
       records.push(record);
     }
 
-    // Should have read some records
-    assertEquals(records.length > 0, true);
-
-    // Check that records have expected structure (weather data)
-    const firstRecord = records[0] as Record<string, unknown>;
-    assertEquals(typeof firstRecord.station, "string");
-    assertEquals(typeof firstRecord.time, "bigint");
-    assertEquals(typeof firstRecord.temp, "number");
+    // Should have read all records
+    assertWeatherRecords(records);
   });
 
   it("supports custom decoders", async () => {
@@ -40,7 +61,7 @@ describe("AvroReader deflate codec support", () => {
 
     // Read the regular (non-compressed) test file
     const regularFile = await Deno.readFile(
-      "/workspaces/avro/share/test/data/weather.avro",
+      "../../share/test/data/weather.avro",
     );
     const buffer = new InMemoryReadableBuffer(regularFile.buffer);
 
@@ -68,7 +89,7 @@ describe("AvroReader deflate codec support", () => {
     // Create a mock file with unsupported codec in metadata
     // For this test, we'll try to read a file with a codec we don't support
     const zstdFile = await Deno.readFile(
-      "/workspaces/avro/share/test/data/weather-zstd.avro",
+      "../../share/test/data/weather-zstd.avro",
     );
     const buffer = new InMemoryReadableBuffer(zstdFile.buffer);
 
@@ -94,7 +115,7 @@ describe("AvroReader deflate codec support", () => {
   it("maintains backward compatibility", async () => {
     // Test that existing code without decoders still works
     const regularFile = await Deno.readFile(
-      "/workspaces/avro/share/test/data/weather.avro",
+      "../../share/test/data/weather.avro",
     );
     const buffer = new InMemoryReadableBuffer(regularFile.buffer);
 
@@ -105,11 +126,6 @@ describe("AvroReader deflate codec support", () => {
       records.push(record);
     }
 
-    assertEquals(records.length > 0, true);
-
-    const firstRecord = records[0] as Record<string, unknown>;
-    assertEquals(typeof firstRecord.station, "string");
-    assertEquals(typeof firstRecord.time, "bigint");
-    assertEquals(typeof firstRecord.temp, "number");
+    assertWeatherRecords(records);
   });
 });
