@@ -1,9 +1,12 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { AvroReader } from "./avro_reader.ts";
 import { InMemoryReadableBuffer } from "./internal/serialization/buffers/in_memory_buffer.ts";
-import type { AvroReaderInstance, ParsedAvroHeader } from "./avro_reader.ts";
-import type { Type } from "./internal/schemas/type.ts";
+import type {
+  AvroReaderInstance,
+  FromStreamOptions,
+  ParsedAvroHeader,
+} from "./avro_reader.ts";
 
 /**
  * Expected weather records from the weather.avro test file.
@@ -16,6 +19,19 @@ const EXPECTED_WEATHER_RECORDS = [
   { station: "012650-99999", time: -655531200000n, temp: 111 },
   { station: "012650-99999", time: -655509600000n, temp: 78 },
 ];
+
+const WEATHER_READER_SCHEMA = {
+  type: "record",
+  name: "test.Weather",
+  fields: [
+    { name: "station", type: "string" },
+    { name: "temp", type: "int" },
+  ],
+} as const;
+
+const EXPECTED_WEATHER_STATION_TEMP_RECORDS = EXPECTED_WEATHER_RECORDS.map(
+  ({ station, temp }) => ({ station, temp }),
+);
 
 /**
  * Load the weather.avro test file data.
@@ -79,8 +95,12 @@ function assertWeatherHeader(header: ParsedAvroHeader): void {
   assertEquals(typeof header, "object");
   assertEquals(header.magic.length, 4);
   assertEquals(header.sync.length, 16);
-  assertEquals(typeof header.schema, "object");
-  assertEquals(header.codec, "null"); // Weather file uses null codec
+  const schemaJson = header.meta.get("avro.schema");
+  assert(schemaJson);
+  const schema = JSON.parse(new TextDecoder().decode(schemaJson));
+  assertEquals(typeof schema, "object");
+  const codec = header.meta.get("avro.codec");
+  assertEquals(codec ? new TextDecoder().decode(codec) : undefined, "null");
 }
 
 /**
@@ -94,6 +114,18 @@ function assertWeatherRecords(records: unknown[]): void {
     const expected = EXPECTED_WEATHER_RECORDS[i];
     assertEquals(record.station, expected.station);
     assertEquals(record.time, expected.time);
+    assertEquals(record.temp, expected.temp);
+  }
+}
+
+function assertWeatherStationTempRecords(records: unknown[]): void {
+  assertEquals(records.length, 5);
+
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i] as Record<string, unknown>;
+    const expected = EXPECTED_WEATHER_STATION_TEMP_RECORDS[i];
+    assertEquals(Object.keys(record).sort(), ["station", "temp"]);
+    assertEquals(record.station, expected.station);
     assertEquals(record.temp, expected.temp);
   }
 }
@@ -117,6 +149,16 @@ describe("AvroReader", () => {
     assertWeatherRecords(records);
   });
 
+  it("should read weather.avro records with a reader schema from buffer", async () => {
+    const buffer = await createWeatherAvroBuffer();
+    const reader = AvroReader.fromBuffer(buffer, {
+      readerSchema: WEATHER_READER_SCHEMA,
+    });
+
+    const records = await readAllRecords(reader);
+    assertWeatherStationTempRecords(records);
+  });
+
   it("should create from blob", async () => {
     const blob = await createWeatherAvroBlob();
     const reader = AvroReader.fromBlob(blob);
@@ -131,6 +173,16 @@ describe("AvroReader", () => {
     assertWeatherRecords(records);
   });
 
+  it("should create from blob with reader schema", async () => {
+    const blob = await createWeatherAvroBlob();
+    const reader = AvroReader.fromBlob(blob, {
+      readerSchema: WEATHER_READER_SCHEMA,
+    });
+
+    const records = await readAllRecords(reader);
+    assertWeatherStationTempRecords(records);
+  });
+
   it("should create from stream with default options", async () => {
     const stream = await createWeatherAvroStream();
     const reader = AvroReader.fromStream(stream);
@@ -143,6 +195,17 @@ describe("AvroReader", () => {
 
     const records = await readAllRecords(reader);
     assertWeatherRecords(records);
+  });
+
+  it("should create from stream with reader schema and cache size", async () => {
+    const stream = await createWeatherAvroStream();
+    const reader = AvroReader.fromStream(stream, {
+      cacheSize: 1024,
+      readerSchema: WEATHER_READER_SCHEMA,
+    });
+
+    const records = await readAllRecords(reader);
+    assertWeatherStationTempRecords(records);
   });
 
   it("should create from stream with cache size", async () => {
@@ -213,23 +276,20 @@ describe("AvroReader", () => {
   it("should pass cacheSize option to fromStream", async () => {
     // Mock fetch to return a successful response with body
     const originalFetch = globalThis.fetch;
-    let capturedCacheSize: number | undefined;
+    let capturedOptions: FromStreamOptions | undefined;
 
     // Mock the fromStream method to capture the cacheSize parameter
     const originalFromStream = AvroReader.fromStream;
     AvroReader.fromStream = (
       _stream: ReadableStream,
-      options?: { cacheSize?: number },
+      options?: FromStreamOptions,
     ) => {
-      capturedCacheSize = options?.cacheSize;
+      capturedOptions = options;
       // Return a mock reader with proper ParsedAvroHeader
       const mockHeader: ParsedAvroHeader = {
         magic: new Uint8Array(4),
         meta: new Map(),
         sync: new Uint8Array(16),
-        schemaType: {} as Type, // Mock schema type
-        schema: {},
-        codec: "null",
       };
       return {
         getHeader: () => Promise.resolve(mockHeader),
@@ -258,7 +318,8 @@ describe("AvroReader", () => {
       await AvroReader.fromUrl("https://example.com/test.avro", {
         cacheSize: 2048,
       });
-      assertEquals(capturedCacheSize, 2048);
+      assertEquals(capturedOptions?.cacheSize, 2048);
+      assertEquals(capturedOptions?.readerSchema, undefined);
     } finally {
       globalThis.fetch = originalFetch;
       AvroReader.fromStream = originalFromStream;
@@ -279,6 +340,22 @@ describe("AvroReader", () => {
 
       const records = await readAllRecords(reader);
       assertWeatherRecords(records);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  });
+
+  it("should create from URL with reader schema", async () => {
+    const blob = await createWeatherAvroBlob();
+    const url = URL.createObjectURL(blob);
+
+    try {
+      const reader = await AvroReader.fromUrl(url, {
+        readerSchema: WEATHER_READER_SCHEMA,
+      });
+
+      const records = await readAllRecords(reader);
+      assertWeatherStationTempRecords(records);
     } finally {
       URL.revokeObjectURL(url);
     }

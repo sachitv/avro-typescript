@@ -1,4 +1,5 @@
-import { createType } from "../createType/mod.ts";
+import { createType, type SchemaLike } from "../createType/mod.ts";
+import { Resolver } from "../schemas/resolver.ts";
 import { Type } from "../schemas/type.ts";
 import { ReadableTap } from "./tap.ts";
 import { type IReadableBuffer } from "./buffers/buffer.ts";
@@ -45,27 +46,33 @@ export interface ParsedAvroHeader {
   magic: Uint8Array;
   meta: Map<string, Uint8Array>;
   sync: Uint8Array;
-  schemaType: Type;
-  schema: unknown; // Parsed JSON schema
-  codec?: string; // Codec name if present
 }
 
 /**
  * Internal parser for Avro object container files.
  * Handles header parsing and record iteration.
  */
+export interface AvroFileParserOptions {
+  /** Optional reader schema used to resolve records written with a different schema. */
+  readerSchema?: unknown;
+}
+
 export class AvroFileParser {
   #buffer: IReadableBuffer;
   #header: AvroHeader | undefined;
   #headerTap: ReadableTap | undefined;
+  #readerSchema: unknown;
+  #readerType: Type | undefined;
+  #resolver: Resolver | undefined;
 
   /**
    * Creates a new AvroFileParser.
    *
    * @param buffer The readable buffer containing Avro data.
    */
-  public constructor(buffer: IReadableBuffer) {
+  public constructor(buffer: IReadableBuffer, options?: AvroFileParserOptions) {
     this.#buffer = buffer;
+    this.#readerSchema = options?.readerSchema;
   }
 
   /**
@@ -77,28 +84,10 @@ export class AvroFileParser {
   public async getHeader(): Promise<ParsedAvroHeader> {
     const header = await this.#parseHeader();
 
-    // Extract codec information
-    const codec = header.meta.get("avro.codec");
-    let codecStr: string | undefined;
-    if (codec) {
-      codecStr = new TextDecoder().decode(codec);
-    }
-
-    // Parse schema JSON for public access
-    const schemaJson = header.meta.get("avro.schema");
-    let schema: unknown;
-    if (schemaJson) {
-      const schemaStr = new TextDecoder().decode(schemaJson);
-      schema = JSON.parse(schemaStr);
-    }
-
     return {
       magic: header.magic,
       meta: header.meta,
       sync: header.sync,
-      schemaType: header.schemaType,
-      schema,
-      codec: codecStr,
     };
   }
 
@@ -110,6 +99,7 @@ export class AvroFileParser {
   public async *iterRecords(): AsyncIterableIterator<unknown> {
     const header = await this.#parseHeader();
     const { schemaType } = header;
+    const resolver = this.#getResolver(schemaType);
 
     // Use the tap that's positioned after the header
     const tap = this.#headerTap!;
@@ -128,7 +118,9 @@ export class AvroFileParser {
 
         // Yield each record in the block
         for (let i = 0n; i < block.count; i += 1n) {
-          const record = await schemaType.read(recordTap);
+          const record = resolver
+            ? await resolver.read(recordTap)
+            : await schemaType.read(recordTap);
           yield record;
         }
       } catch (_error) {
@@ -196,5 +188,40 @@ export class AvroFileParser {
     this.#headerTap = tap;
 
     return this.#header;
+  }
+
+  #getResolver(writerType: Type): Resolver | undefined {
+    if (this.#readerSchema === undefined || this.#readerSchema === null) {
+      return undefined;
+    }
+
+    if (!this.#readerType) {
+      this.#readerType = this.#createReaderType(
+        this.#readerSchema as unknown as SchemaLike,
+      );
+    }
+
+    if (!this.#resolver) {
+      this.#resolver = this.#readerType.createResolver(writerType);
+    }
+
+    return this.#resolver;
+  }
+
+  #createReaderType(schema: SchemaLike): Type {
+    if (schema instanceof Type) {
+      return schema;
+    }
+
+    if (typeof schema === "string") {
+      const trimmed = schema.trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        const parsed = JSON.parse(trimmed);
+        return createType(parsed);
+      }
+      return createType(schema);
+    }
+
+    return createType(schema);
   }
 }

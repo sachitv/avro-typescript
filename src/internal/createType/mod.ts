@@ -45,7 +45,7 @@ type PrimitiveTypeName =
   | "bytes"
   | "string";
 
-type SchemaLike =
+export type SchemaLike =
   | Type
   | string
   | SchemaObject

@@ -1,7 +1,8 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { AvroFileParser } from "./avro_file_parser.ts";
 import { InMemoryReadableBuffer } from "./buffers/in_memory_buffer.ts";
+import { createType } from "../createType/mod.ts";
 import type { ParsedAvroHeader } from "./avro_file_parser.ts";
 
 /**
@@ -15,6 +16,19 @@ const EXPECTED_WEATHER_RECORDS = [
   { station: "012650-99999", time: -655531200000n, temp: 111 },
   { station: "012650-99999", time: -655509600000n, temp: 78 },
 ];
+
+const WEATHER_READER_SCHEMA = {
+  type: "record",
+  name: "test.Weather",
+  fields: [
+    { name: "station", type: "string" },
+    { name: "temp", type: "int" },
+  ],
+} as const;
+
+const EXPECTED_WEATHER_STATION_TEMP_RECORDS = EXPECTED_WEATHER_RECORDS.map(
+  ({ station, temp }) => ({ station, temp }),
+);
 
 /**
  * Load the weather.avro test file data.
@@ -38,8 +52,12 @@ function assertWeatherHeader(header: ParsedAvroHeader): void {
   assertEquals(typeof header, "object");
   assertEquals(header.magic.length, 4);
   assertEquals(header.sync.length, 16);
-  assertEquals(typeof header.schema, "object");
-  assertEquals(header.codec, "null"); // Weather file uses null codec
+  const schemaJson = header.meta.get("avro.schema");
+  assert(schemaJson);
+  const schema = JSON.parse(new TextDecoder().decode(schemaJson));
+  assertEquals(typeof schema, "object");
+  const codec = header.meta.get("avro.codec");
+  assertEquals(codec ? new TextDecoder().decode(codec) : undefined, "null");
 }
 
 /**
@@ -53,6 +71,18 @@ function assertWeatherRecords(records: unknown[]): void {
     const expected = EXPECTED_WEATHER_RECORDS[i];
     assertEquals(record.station, expected.station);
     assertEquals(record.time, expected.time);
+    assertEquals(record.temp, expected.temp);
+  }
+}
+
+function assertWeatherStationTempRecords(records: unknown[]): void {
+  assertEquals(records.length, 5);
+
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i] as Record<string, unknown>;
+    const expected = EXPECTED_WEATHER_STATION_TEMP_RECORDS[i];
+    assertEquals(Object.keys(record).sort(), ["station", "temp"]);
+    assertEquals(record.station, expected.station);
     assertEquals(record.temp, expected.temp);
   }
 }
@@ -75,6 +105,130 @@ describe("AvroFileParser", () => {
       records.push(record);
     }
     assertWeatherRecords(records);
+  });
+
+  it("should iterate records with a reader schema", async () => {
+    const buffer = await createWeatherAvroBuffer();
+    const parser = new AvroFileParser(buffer, {
+      readerSchema: WEATHER_READER_SCHEMA,
+    });
+
+    const records = [];
+    for await (const record of parser.iterRecords()) {
+      records.push(record);
+    }
+    assertWeatherStationTempRecords(records);
+  });
+
+  it("should iterate records with a reader schema as JSON string", async () => {
+    const buffer = await createWeatherAvroBuffer();
+    const parser = new AvroFileParser(buffer, {
+      readerSchema: JSON.stringify(WEATHER_READER_SCHEMA),
+    });
+
+    const records = [];
+    for await (const record of parser.iterRecords()) {
+      records.push(record);
+    }
+    assertWeatherStationTempRecords(records);
+  });
+
+  it("should iterate records with null reader schema", async () => {
+    const buffer = await createWeatherAvroBuffer();
+    const parser = new AvroFileParser(buffer, {
+      readerSchema: null,
+    });
+
+    const records = [];
+    for await (const record of parser.iterRecords()) {
+      records.push(record);
+    }
+    assertWeatherRecords(records);
+  });
+
+  it("should iterate records with reader schema as Type instance", async () => {
+    const buffer = await createWeatherAvroBuffer();
+    const readerType = createType(WEATHER_READER_SCHEMA);
+    const parser = new AvroFileParser(buffer, {
+      readerSchema: readerType,
+    });
+
+    const records = [];
+    for await (const record of parser.iterRecords()) {
+      records.push(record);
+    }
+    assertWeatherStationTempRecords(records);
+  });
+
+  it("should use cached reader type and resolver on subsequent iterRecords calls", async () => {
+    const buffer = await createWeatherAvroBuffer();
+    const parser = new AvroFileParser(buffer, {
+      readerSchema: WEATHER_READER_SCHEMA,
+    });
+
+    // First iterRecords call creates and caches readerType and resolver
+    const _iter1 = parser.iterRecords();
+
+    // Second iterRecords call should use cached readerType and resolver
+    const iter2 = parser.iterRecords();
+    const records = [];
+    for await (const record of iter2) {
+      records.push(record);
+    }
+    assertWeatherStationTempRecords(records);
+  });
+
+  it("should use cached reader type when reader schema is a Type instance", async () => {
+    const buffer = await createWeatherAvroBuffer();
+    const readerType = createType(WEATHER_READER_SCHEMA);
+    const parser = new AvroFileParser(buffer, {
+      readerSchema: readerType,
+    });
+
+    // First iterRecords call with Type instance
+    const _iter1 = parser.iterRecords();
+
+    // Second iterRecords call should use cached readerType
+    const iter2 = parser.iterRecords();
+    const records = [];
+    for await (const record of iter2) {
+      records.push(record);
+    }
+    assertWeatherStationTempRecords(records);
+  });
+
+  it("should throw error for incompatible reader schema", async () => {
+    const buffer = await createWeatherAvroBuffer();
+    const parser = new AvroFileParser(buffer, {
+      readerSchema: "string",
+    });
+
+    await assertRejects(
+      async () => {
+        for await (const _record of parser.iterRecords()) {
+          // Should not reach here
+        }
+      },
+      Error,
+      "Schema evolution not supported",
+    );
+  });
+
+  it("should throw error for bytes reader schema on record data", async () => {
+    const buffer = await createWeatherAvroBuffer();
+    const parser = new AvroFileParser(buffer, {
+      readerSchema: "bytes",
+    });
+
+    await assertRejects(
+      async () => {
+        for await (const _record of parser.iterRecords()) {
+          // Should not reach here
+        }
+      },
+      Error,
+      "Schema evolution not supported",
+    );
   });
 });
 

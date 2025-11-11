@@ -11,10 +11,15 @@ import {
 // Re-export for test utilities
 export type { ParsedAvroHeader };
 
+interface ReaderSchemaOptions {
+  /** Optional reader schema used to resolve records written with a different schema. */
+  readerSchema?: unknown;
+}
+
 /**
  * Options for URL-based reading.
  */
-export interface FromUrlOptions {
+export interface FromUrlOptions extends ReaderSchemaOptions {
   /** Cache size for stream buffering in bytes (default: 0 = unlimited) */
   cacheSize?: number;
   /** Custom fetch init options (optional) */
@@ -24,10 +29,15 @@ export interface FromUrlOptions {
 /**
  * Options for stream-based reading.
  */
-export interface FromStreamOptions {
+export interface FromStreamOptions extends ReaderSchemaOptions {
   /** Cache size for stream buffering in bytes (default: 0 = unlimited) */
   cacheSize?: number;
 }
+
+/**
+ * Options for buffer- or blob-based reading.
+ */
+export type FromBufferOptions = ReaderSchemaOptions;
 
 /**
  * Interface for Avro reader instances that provide access to header and records.
@@ -79,18 +89,48 @@ class AvroReaderInstanceImpl implements AvroReaderInstance {
  *
  * @example
  * ```typescript
+ * const readerSchema = {
+ *   type: "record",
+ *   name: "test.Weather",
+ *   fields: [
+ *     { name: "station", type: "string" },
+ *     { name: "temp", type: "int" },
+ *   ],
+ * };
+ *
+ * // Read from a buffer (for example when the Avro file is already in memory)
+ * const bufferReader = AvroReader.fromBuffer(buffer, { readerSchema });
+ * for await (const record of bufferReader) {
+ *   console.log(record);
+ * }
+ *
  * // Read from a blob (e.g., file input)
- * for await (const record of AvroReader.fromBlob(blob)) {
+ * const blobReader = AvroReader.fromBlob(blob, { readerSchema });
+ * for await (const record of blobReader) {
  *   console.log(record);
  * }
  *
  * // Read from a URL with unlimited buffering
- * for await (const record of AvroReader.fromUrl("data.avro")) {
+ * const urlReader = await AvroReader.fromUrl("data.avro", { readerSchema });
+ * for await (const record of urlReader) {
  *   console.log(record);
  * }
  *
  * // Read from a URL with limited memory usage
- * for await (const record of AvroReader.fromUrl("data.avro", { cacheSize: 1024 * 1024 })) {
+ * const cachedUrlReader = await AvroReader.fromUrl("data.avro", {
+ *   cacheSize: 1024 * 1024,
+ *   readerSchema,
+ * });
+ * for await (const record of cachedUrlReader) {
+ *   console.log(record);
+ * }
+ *
+ * // Read from a stream with optional caching
+ * const streamReader = AvroReader.fromStream(stream, {
+ *   cacheSize: 1024,
+ *   readerSchema,
+ * });
+ * for await (const record of streamReader) {
  *   console.log(record);
  * }
  * ```
@@ -106,8 +146,11 @@ export class AvroReader {
    */
   public static fromBuffer(
     buffer: IReadableBuffer,
+    options?: FromBufferOptions,
   ): AvroReaderInstance {
-    const parser = new AvroFileParser(buffer);
+    const parser = new AvroFileParser(buffer, {
+      readerSchema: options?.readerSchema,
+    });
     return new AvroReaderInstanceImpl(parser);
   }
 
@@ -120,9 +163,12 @@ export class AvroReader {
    * @param blob The blob containing Avro data.
    * @returns AvroReaderInstance that provides access to header and records.
    */
-  public static fromBlob(blob: Blob): AvroReaderInstance {
+  public static fromBlob(
+    blob: Blob,
+    options?: FromBufferOptions,
+  ): AvroReaderInstance {
     const buffer = new BlobReadableBuffer(blob);
-    return AvroReader.fromBuffer(buffer);
+    return AvroReader.fromBuffer(buffer, options);
   }
 
   /**
@@ -153,7 +199,10 @@ export class AvroReader {
     }
 
     const stream = response.body;
-    return AvroReader.fromStream(stream, { cacheSize: options?.cacheSize });
+    return AvroReader.fromStream(stream, {
+      cacheSize: options?.cacheSize,
+      readerSchema: options?.readerSchema,
+    });
   }
 
   /**
@@ -187,6 +236,8 @@ export class AvroReader {
       buffer = new ForwardOnlyStreamReadableBufferAdapter(streamBuffer);
     }
 
-    return AvroReader.fromBuffer(buffer);
+    return AvroReader.fromBuffer(buffer, {
+      readerSchema: options?.readerSchema,
+    });
   }
 }
