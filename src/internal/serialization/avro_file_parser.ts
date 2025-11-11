@@ -3,9 +3,18 @@ import { Resolver } from "../schemas/resolver.ts";
 import { Type } from "../schemas/type.ts";
 import { ReadableTap } from "./tap.ts";
 import { type IReadableBuffer } from "./buffers/buffer.ts";
+import {
+  type Decoder,
+  type DecoderRegistry,
+  DeflateDecoder,
+  NullDecoder,
+} from "./decoders/mod.ts";
+
+// Re-export types for backward compatibility
+export type { Decoder, DecoderRegistry };
 
 // Type of Avro header.
-const HEADER_TYPE = createType({
+export const HEADER_TYPE = createType({
   type: "record",
   name: "org.apache.avro.file.Header",
   fields: [
@@ -16,7 +25,7 @@ const HEADER_TYPE = createType({
 });
 
 // Type of each block.
-const BLOCK_TYPE = createType({
+export const BLOCK_TYPE = createType({
   type: "record",
   name: "org.apache.avro.file.Block",
   fields: [
@@ -55,6 +64,8 @@ export interface ParsedAvroHeader {
 export interface AvroFileParserOptions {
   /** Optional reader schema used to resolve records written with a different schema. */
   readerSchema?: unknown;
+  /** Custom codec decoders. Cannot include "null" or "deflate" as they are built-in. */
+  decoders?: DecoderRegistry;
 }
 
 export class AvroFileParser {
@@ -64,15 +75,34 @@ export class AvroFileParser {
   #readerSchema: unknown;
   #readerType: Type | undefined;
   #resolver: Resolver | undefined;
+  #decoders: DecoderRegistry;
+  #builtInDecoders: DecoderRegistry;
 
   /**
    * Creates a new AvroFileParser.
    *
    * @param buffer The readable buffer containing Avro data.
+   * @param options Configuration options for parsing.
    */
   public constructor(buffer: IReadableBuffer, options?: AvroFileParserOptions) {
     this.#buffer = buffer;
     this.#readerSchema = options?.readerSchema;
+
+    // Initialize built-in decoders
+    this.#builtInDecoders = {
+      "null": new NullDecoder(),
+      "deflate": new DeflateDecoder(),
+    };
+
+    // Validate custom decoders (cannot override built-ins)
+    const customDecoders = options?.decoders || {};
+    for (const codec of Object.keys(customDecoders)) {
+      if (codec in this.#builtInDecoders) {
+        throw new Error(`Cannot override built-in decoder for codec: ${codec}`);
+      }
+    }
+
+    this.#decoders = { ...customDecoders };
   }
 
   /**
@@ -92,14 +122,46 @@ export class AvroFileParser {
   }
 
   /**
+   * Gets the decoder for the specified codec.
+   *
+   * @param codec The codec name (e.g., "null", "deflate", or custom codec)
+   * @returns The decoder instance
+   * @throws Error if codec is not supported
+   */
+  #getDecoder(codec: string): Decoder {
+    // Check built-in decoders first
+    if (codec in this.#builtInDecoders) {
+      return this.#builtInDecoders[codec];
+    }
+
+    // Check custom decoders
+    if (codec in this.#decoders) {
+      return this.#decoders[codec];
+    }
+
+    throw new Error(`Unsupported codec: ${codec}. Provide a custom decoder.`);
+  }
+
+  /**
    * Asynchronously iterates over all records in the Avro file.
    *
    * @returns AsyncIterableIterator that yields each record.
    */
   public async *iterRecords(): AsyncIterableIterator<unknown> {
     const header = await this.#parseHeader();
-    const { schemaType } = header;
+    const { schemaType, meta } = header;
     const resolver = this.#getResolver(schemaType);
+
+    // Get the codec from metadata
+    const codecBytes = meta.get("avro.codec");
+    const codecStr = (() => {
+      if (codecBytes === undefined) {
+        return "null";
+      }
+      const decoded = new TextDecoder().decode(codecBytes);
+      return decoded.length === 0 ? "null" : decoded;
+    })();
+    const decoder = this.#getDecoder(codecStr);
 
     // Use the tap that's positioned after the header
     const tap = this.#headerTap!;
@@ -112,9 +174,11 @@ export class AvroFileParser {
           sync: Uint8Array;
         };
 
-        // Create a tap for the block data
-        const blockData = block.data.slice();
-        const recordTap = new ReadableTap(blockData.buffer);
+        // Decompress block data if needed
+        const decompressedData = await decoder.decode(block.data);
+        const arrayBuffer = new ArrayBuffer(decompressedData.length);
+        new Uint8Array(arrayBuffer).set(decompressedData);
+        const recordTap = new ReadableTap(arrayBuffer);
 
         // Yield each record in the block
         for (let i = 0n; i < block.count; i += 1n) {
@@ -166,13 +230,12 @@ export class AvroFileParser {
     const schemaStr = new TextDecoder().decode(schemaJson);
     const schemaType = createType(JSON.parse(schemaStr));
 
-    // For simplicity, we assume null codec (no compression).
+    // Validate that we have a decoder for the codec
     const codec = meta.get("avro.codec");
-    if (codec) {
+    if (codec && codec.length > 0) {
       const codecStr = new TextDecoder().decode(codec);
-      if (codecStr !== "null") {
-        throw new Error(`Unsupported codec: ${codecStr}`);
-      }
+      // This will throw if codec is not supported
+      this.#getDecoder(codecStr);
     }
 
     const sync = (header as Record<string, unknown>).sync as Uint8Array;

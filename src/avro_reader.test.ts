@@ -4,6 +4,7 @@ import { AvroReader } from "./avro_reader.ts";
 import { InMemoryReadableBuffer } from "./internal/serialization/buffers/in_memory_buffer.ts";
 import type {
   AvroReaderInstance,
+  FromBufferOptions,
   FromStreamOptions,
   ParsedAvroHeader,
 } from "./avro_reader.ts";
@@ -128,6 +129,22 @@ function assertWeatherStationTempRecords(records: unknown[]): void {
     assertEquals(record.station, expected.station);
     assertEquals(record.temp, expected.temp);
   }
+}
+
+function createMockReaderInstance(): AvroReaderInstance {
+  const mockHeader: ParsedAvroHeader = {
+    magic: new Uint8Array(4),
+    meta: new Map<string, Uint8Array>(),
+    sync: new Uint8Array(16),
+  };
+
+  return {
+    getHeader: () => Promise.resolve(mockHeader),
+    next: () => Promise.resolve({ done: true, value: undefined }),
+    [Symbol.asyncIterator]() {
+      return this;
+    },
+  } as AvroReaderInstance;
 }
 
 describe("AvroReader", () => {
@@ -320,6 +337,71 @@ describe("AvroReader", () => {
       });
       assertEquals(capturedOptions?.cacheSize, 2048);
       assertEquals(capturedOptions?.readerSchema, undefined);
+    } finally {
+      globalThis.fetch = originalFetch;
+      AvroReader.fromStream = originalFromStream;
+    }
+  });
+
+  it("should forward decoders option when creating from stream", async () => {
+    const stream = await createWeatherAvroStream();
+    const passthroughDecoder = {
+      decode(compressedData: Uint8Array): Promise<Uint8Array> {
+        return Promise.resolve(compressedData);
+      },
+    };
+
+    let capturedOptions: FromBufferOptions | undefined;
+    const originalFromBuffer = AvroReader.fromBuffer;
+    AvroReader.fromBuffer = (_buffer, options) => {
+      capturedOptions = options;
+      return createMockReaderInstance();
+    };
+
+    try {
+      AvroReader.fromStream(stream, {
+        decoders: { custom: passthroughDecoder },
+      });
+      assertEquals(capturedOptions?.decoders?.custom, passthroughDecoder);
+    } finally {
+      AvroReader.fromBuffer = originalFromBuffer;
+    }
+  });
+
+  it("should forward decoders option when creating from URL", async () => {
+    const passthroughDecoder = {
+      decode(compressedData: Uint8Array): Promise<Uint8Array> {
+        return Promise.resolve(compressedData);
+      },
+    };
+
+    const originalFetch = globalThis.fetch;
+    let capturedOptions: FromStreamOptions | undefined;
+    const originalFromStream = AvroReader.fromStream;
+    AvroReader.fromStream = (_stream, options) => {
+      capturedOptions = options;
+      return createMockReaderInstance();
+    };
+
+    globalThis.fetch = () => {
+      return Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new Uint8Array([0x4F, 0x62, 0x6A, 0x01]));
+              controller.close();
+            },
+          }),
+          { status: 200, statusText: "OK" },
+        ),
+      );
+    };
+
+    try {
+      await AvroReader.fromUrl("https://example.com/test.avro", {
+        decoders: { custom: passthroughDecoder },
+      });
+      assertEquals(capturedOptions?.decoders?.custom, passthroughDecoder);
     } finally {
       globalThis.fetch = originalFetch;
       AvroReader.fromStream = originalFromStream;

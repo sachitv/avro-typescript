@@ -1,7 +1,11 @@
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { AvroFileParser } from "./avro_file_parser.ts";
-import { InMemoryReadableBuffer } from "./buffers/in_memory_buffer.ts";
+import { AvroFileParser, BLOCK_TYPE, HEADER_TYPE } from "./avro_file_parser.ts";
+import {
+  InMemoryReadableBuffer,
+  InMemoryWritableBuffer,
+} from "./buffers/in_memory_buffer.ts";
+import { WritableTap } from "./tap.ts";
 import { createType } from "../createType/mod.ts";
 import type { ParsedAvroHeader } from "./avro_file_parser.ts";
 
@@ -286,10 +290,27 @@ it("should cache header on multiple calls", async () => {
 });
 
 /**
+ * Load the weather-deflate.avro test file data.
+ */
+async function loadWeatherDeflateAvroFile(): Promise<Uint8Array> {
+  return await Deno.readFile("../../share/test/data/weather-deflate.avro");
+}
+
+/**
  * Load the weather-zstd.avro test file data.
  */
 async function loadWeatherZstdAvroFile(): Promise<Uint8Array> {
   return await Deno.readFile("../../share/test/data/weather-zstd.avro");
+}
+
+/**
+ * Create an InMemoryReadableBuffer from the weather-deflate.avro file.
+ */
+async function createWeatherDeflateAvroBuffer(): Promise<
+  InMemoryReadableBuffer
+> {
+  const fileData = await loadWeatherDeflateAvroFile();
+  return new InMemoryReadableBuffer(fileData.buffer as ArrayBuffer);
 }
 
 /**
@@ -299,6 +320,40 @@ async function createWeatherZstdAvroBuffer(): Promise<InMemoryReadableBuffer> {
   const fileData = await loadWeatherZstdAvroFile();
   return new InMemoryReadableBuffer(fileData.buffer as ArrayBuffer);
 }
+
+it("should parse header from weather-deflate.avro file", async () => {
+  const buffer = await createWeatherDeflateAvroBuffer();
+  const parser = new AvroFileParser(buffer);
+
+  const header = await parser.getHeader();
+  assertEquals(typeof header, "object");
+  assertEquals(header.magic.length, 4);
+  assertEquals(header.sync.length, 16);
+  const schemaJson = header.meta.get("avro.schema");
+  assert(schemaJson);
+  const schema = JSON.parse(new TextDecoder().decode(schemaJson));
+  assertEquals(typeof schema, "object");
+  const codec = header.meta.get("avro.codec");
+  assertEquals(codec ? new TextDecoder().decode(codec) : undefined, "deflate");
+});
+
+it("should iterate records from weather-deflate.avro file", async () => {
+  const buffer = await createWeatherDeflateAvroBuffer();
+  const parser = new AvroFileParser(buffer);
+
+  const records = [];
+  for await (const record of parser.iterRecords()) {
+    records.push(record);
+  }
+  assert(records.length > 0, "Should have at least one record");
+  // Check that records have the expected structure
+  for (const record of records) {
+    assert(typeof record === "object" && record !== null);
+    assert("station" in record);
+    assert("time" in record);
+    assert("temp" in record);
+  }
+});
 
 it("should reject unsupported zstd codec", async () => {
   const buffer = await createWeatherZstdAvroBuffer();
@@ -311,4 +366,148 @@ it("should reject unsupported zstd codec", async () => {
     Error,
     "Unsupported codec: zstandard",
   );
+});
+
+it("should use custom decoders for zstandard codec", async () => {
+  const buffer = await createWeatherZstdAvroBuffer();
+  const customDecoders = {
+    "zstandard": { decode: (data: Uint8Array) => Promise.resolve(data) }, // Mock decoder
+  };
+  const parser = new AvroFileParser(buffer, { decoders: customDecoders });
+
+  // getHeader should succeed because custom decoder is provided
+  const header = await parser.getHeader();
+  assertEquals(typeof header, "object");
+  assertEquals(header.magic.length, 4);
+  assertEquals(header.sync.length, 16);
+  const schemaJson = header.meta.get("avro.schema");
+  assert(schemaJson);
+  const schema = JSON.parse(new TextDecoder().decode(schemaJson));
+  assertEquals(typeof schema, "object");
+  const codec = header.meta.get("avro.codec");
+  assertEquals(
+    codec ? new TextDecoder().decode(codec) : undefined,
+    "zstandard",
+  );
+});
+
+it("should handle truncated file gracefully in iterRecords", async () => {
+  const fullData = await loadWeatherAvroFile();
+  // Truncate the file after the header (use enough bytes for header but not full file)
+  const truncatedData = fullData.slice(0, 300);
+  const arrayBuffer = new ArrayBuffer(truncatedData.length);
+  new Uint8Array(arrayBuffer).set(truncatedData);
+  const buffer = new InMemoryReadableBuffer(arrayBuffer);
+  const parser = new AvroFileParser(buffer);
+
+  // Should be able to get header
+  const header = await parser.getHeader();
+  assertWeatherHeader(header);
+
+  // iterRecords should handle the truncation gracefully (no records yielded)
+  const records = [];
+  for await (const record of parser.iterRecords()) {
+    records.push(record);
+  }
+  assertEquals(records.length, 0);
+});
+
+it("should reject custom decoders that override built-in decoders", async () => {
+  const buffer = await createWeatherAvroBuffer();
+  const customDecoders = {
+    "null": { decode: () => Promise.resolve(new Uint8Array()) }, // Trying to override built-in
+  };
+
+  assertThrows(
+    () => new AvroFileParser(buffer, { decoders: customDecoders }),
+    Error,
+    "Cannot override built-in decoder for codec: null",
+  );
+});
+
+/**
+ * Helper function to create a test buffer with boolean data.
+ * @param includeEmptyCodec If true, sets avro.codec to empty Uint8Array; if false, omits avro.codec
+ */
+async function createTestBuffer(
+  includeEmptyCodec: boolean,
+): Promise<InMemoryReadableBuffer> {
+  const arrayBuffer = new ArrayBuffer(1024);
+  const writableBuffer = new InMemoryWritableBuffer(arrayBuffer);
+  const writeTap = new WritableTap(writableBuffer);
+
+  // Constants
+  const magicBytes = new Uint8Array([0x4F, 0x62, 0x6A, 0x01]); // 'Obj\x01'
+  const syncBytes = new Uint8Array(16);
+  syncBytes.fill(0x42); // Fill with pattern for easy identification
+
+  // Create metadata with boolean schema
+  const meta = new Map<string, Uint8Array>();
+  meta.set("avro.schema", new TextEncoder().encode('"boolean"'));
+  if (includeEmptyCodec) {
+    meta.set("avro.codec", new Uint8Array(0)); // Empty codec
+  }
+
+  // Write header using HEADER_TYPE
+  const header = {
+    magic: magicBytes,
+    meta: meta,
+    sync: syncBytes,
+  };
+  await HEADER_TYPE.write(writeTap, header);
+
+  // Create boolean data (true = 1 byte)
+  const booleanType = createType("boolean");
+  const dataBuffer = new ArrayBuffer(1);
+  const dataWriteTap = new WritableTap(dataBuffer);
+  await booleanType.write(dataWriteTap, true);
+  const booleanData = new Uint8Array(dataBuffer);
+
+  // Write block using BLOCK_TYPE
+  const block = {
+    count: 1n, // 1 record
+    data: booleanData,
+    sync: syncBytes,
+  };
+  await BLOCK_TYPE.write(writeTap, block);
+
+  return new InMemoryReadableBuffer(arrayBuffer);
+}
+
+it("should handle empty avro.codec in meta", async () => {
+  const buffer = await createTestBuffer(true);
+  const parser = new AvroFileParser(buffer);
+
+  // Verify header
+  const parsedHeader = await parser.getHeader();
+  assertEquals(parsedHeader.magic.length, 4);
+  assertEquals(parsedHeader.sync.length, 16);
+  const codecJson = parsedHeader.meta.get("avro.codec");
+  assertEquals(codecJson, new Uint8Array(0));
+
+  // Verify records
+  const records = [];
+  for await (const record of parser.iterRecords()) {
+    records.push(record);
+  }
+  assertEquals(records.length, 1);
+  assertEquals(records[0], true);
+});
+
+it("should handle missing avro.codec in meta", async () => {
+  const buffer = await createTestBuffer(false);
+  const parser = new AvroFileParser(buffer);
+
+  // Verify header
+  const parsedHeader = await parser.getHeader();
+  const codecJson = parsedHeader.meta.get("avro.codec");
+  assertEquals(codecJson, undefined);
+
+  // Verify records
+  const records = [];
+  for await (const record of parser.iterRecords()) {
+    records.push(record);
+  }
+  assertEquals(records.length, 1);
+  assertEquals(records[0], true);
 });

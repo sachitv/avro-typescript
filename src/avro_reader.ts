@@ -5,15 +5,18 @@ import { FixedSizeStreamReadableBufferAdapter } from "./internal/serialization/s
 import { ForwardOnlyStreamReadableBufferAdapter } from "./internal/serialization/streams/forward_only_stream_readable_buffer_adapter.ts";
 import {
   AvroFileParser,
+  type DecoderRegistry,
   type ParsedAvroHeader,
 } from "./internal/serialization/avro_file_parser.ts";
 
 // Re-export for test utilities
-export type { ParsedAvroHeader };
+export type { DecoderRegistry, ParsedAvroHeader };
 
 interface ReaderSchemaOptions {
   /** Optional reader schema used to resolve records written with a different schema. */
   readerSchema?: unknown;
+  /** Custom codec decoders. Cannot include "null" or "deflate" as they are built-in. */
+  decoders?: DecoderRegistry;
 }
 
 /**
@@ -150,6 +153,7 @@ export class AvroReader {
   ): AvroReaderInstance {
     const parser = new AvroFileParser(buffer, {
       readerSchema: options?.readerSchema,
+      decoders: options?.decoders,
     });
     return new AvroReaderInstanceImpl(parser);
   }
@@ -202,6 +206,7 @@ export class AvroReader {
     return AvroReader.fromStream(stream, {
       cacheSize: options?.cacheSize,
       readerSchema: options?.readerSchema,
+      decoders: options?.decoders,
     });
   }
 
@@ -238,6 +243,7 @@ export class AvroReader {
 
     return AvroReader.fromBuffer(buffer, {
       readerSchema: options?.readerSchema,
+      decoders: options?.decoders,
     });
   }
 }
