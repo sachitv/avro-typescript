@@ -20,7 +20,7 @@ import { UuidLogicalType } from "../schemas/logical/uuid_logical_type.ts";
 import { IntType } from "../schemas/int_type.ts";
 import { LongType } from "../schemas/long_type.ts";
 import { RecordType } from "../schemas/record_type.ts";
-import { Type } from "../schemas/type.ts";
+import type { Type } from "../schemas/type.ts";
 
 describe("createType", () => {
   describe("invalid schema error handling", () => {

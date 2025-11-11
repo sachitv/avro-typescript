@@ -1,5 +1,5 @@
-import { type ReadableTapLike } from "../serialization/tap.ts";
-import { Type } from "./type.ts";
+import type { ReadableTapLike } from "../serialization/tap.ts";
+import type { Type } from "./type.ts";
 
 /**
  * Base resolver for schema evolution, allowing reading data written with one schema

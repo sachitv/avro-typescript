@@ -15,7 +15,7 @@ import { EnumType } from "./enum_type.ts";
 import { MapType } from "./map_type.ts";
 import { FixedType } from "./fixed_type.ts";
 import { Type } from "./type.ts";
-import { Resolver } from "./resolver.ts";
+import type { Resolver } from "./resolver.ts";
 import { TestTap as Tap } from "../serialization/test_tap.ts";
 
 describe("UnionType", () => {

@@ -7,7 +7,7 @@ import { encode } from "../serialization/text_encoding.ts";
 import { bigIntToSafeNumber } from "../serialization/conversion.ts";
 import { BaseType } from "./base_type.ts";
 import { Resolver } from "./resolver.ts";
-import { type JSONType, Type } from "./type.ts";
+import type { JSONType, Type } from "./type.ts";
 import { type ErrorHook, throwInvalidError } from "./error.ts";
 import { calculateVarintSize } from "./varint.ts";
 

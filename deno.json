@@ -1,4 +1,7 @@
 {
+  "name": "@apache/avro",
+  "version": "1.13.0",
+  "exports": "./src/avro_reader.ts",
   "imports": {
     "@std/assert": "jsr:@std/assert@1",
     "@std/expect": "jsr:@std/expect@^1.0.17",

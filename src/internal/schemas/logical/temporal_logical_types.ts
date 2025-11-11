@@ -1,5 +1,5 @@
-import { IntType } from "../int_type.ts";
-import { LongType } from "../long_type.ts";
+import type { IntType } from "../int_type.ts";
+import type { LongType } from "../long_type.ts";
 import { LogicalType, withLogicalTypeJSON } from "./logical_type.ts";
 import { bigIntToSafeNumber } from "../../serialization/conversion.ts";
 

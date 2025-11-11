@@ -4,7 +4,7 @@ import {
   type WritableTapLike,
 } from "../serialization/tap.ts";
 import { Resolver } from "./resolver.ts";
-import { type JSONType, Type } from "./type.ts";
+import type { JSONType, Type } from "./type.ts";
 import { NamedType } from "./named_type.ts";
 import { isValidName, type ResolvedNames } from "./resolve_names.ts";
 import { calculateVarintSize } from "./varint.ts";

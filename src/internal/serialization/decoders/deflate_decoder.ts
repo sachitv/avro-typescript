@@ -1,4 +1,4 @@
-import { type Decoder } from "./decoder.ts";
+import type { Decoder } from "./decoder.ts";
 
 /**
  * Built-in deflate decoder using modern web standards.
@@ -8,52 +8,23 @@ import { type Decoder } from "./decoder.ts";
  */
 export class DeflateDecoder implements Decoder {
   async decode(compressedData: Uint8Array): Promise<Uint8Array> {
-    if (typeof CompressionStream === "undefined") {
+    if (typeof DecompressionStream === "undefined") {
       throw new Error(
-        "Deflate codec not supported in this environment. CompressionStream API required.",
+        "Deflate codec not supported in this environment. DecompressionStream API required.",
       );
     }
 
-    try {
-      const decompressionStream = new CompressionStream("deflate-raw");
-      const writer = decompressionStream.writable.getWriter();
-      const reader = decompressionStream.readable.getReader();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(compressedData);
+        controller.close();
+      },
+    });
 
-      // Write compressed data to the stream
-      const arrayBuffer = new ArrayBuffer(compressedData.length);
-      new Uint8Array(arrayBuffer).set(compressedData);
-      writer.write(arrayBuffer);
-      writer.close();
+    const decompressed = await new Response(
+      stream.pipeThrough(new DecompressionStream("deflate-raw")),
+    ).arrayBuffer();
 
-      // Read decompressed data
-      const chunks: Uint8Array[] = [];
-      let done = false;
-
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          chunks.push(value);
-        }
-      }
-
-      // Combine all chunks into a single Uint8Array
-      const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-      const result = new Uint8Array(totalLength);
-      let offset = 0;
-
-      for (const chunk of chunks) {
-        result.set(chunk, offset);
-        offset += chunk.length;
-      }
-
-      return result;
-    } catch (error) {
-      throw new Error(
-        `Failed to decompress deflate data: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
+    return new Uint8Array(decompressed);
   }
 }

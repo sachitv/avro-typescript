@@ -1,10 +1,11 @@
-import {
-  type ReadableTapLike,
-  type WritableTapLike,
+import type {
+  ReadableTapLike,
+  WritableTapLike,
 } from "../../serialization/tap.ts";
 import { Resolver } from "../resolver.ts";
-import { NamedType } from "../named_type.ts";
-import { type JSONType, Type } from "../type.ts";
+import type { NamedType } from "../named_type.ts";
+import { Type } from "../type.ts";
+import type { JSONType } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
 
 export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {

@@ -1,6 +1,6 @@
-import { FixedType } from "../fixed_type.ts";
+import type { FixedType } from "../fixed_type.ts";
 import {
-  LogicalType,
+  type LogicalType,
   NamedLogicalType,
   withLogicalTypeJSON,
 } from "./logical_type.ts";

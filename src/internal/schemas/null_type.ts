@@ -1,10 +1,7 @@
-import {
-  type ReadableTapLike,
-  type WritableTapLike,
-} from "../serialization/tap.ts";
+import type { ReadableTapLike, WritableTapLike } from "../serialization/tap.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
-import { type JSONType } from "./type.ts";
-import { ErrorHook, throwInvalidError } from "./error.ts";
+import type { JSONType } from "./type.ts";
+import { type ErrorHook, throwInvalidError } from "./error.ts";
 
 /**
  * Null type.

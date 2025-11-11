@@ -1,14 +1,11 @@
-import {
-  type ReadableTapLike,
-  type WritableTapLike,
-} from "../serialization/tap.ts";
+import type { ReadableTapLike, WritableTapLike } from "../serialization/tap.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
-import { type JSONType, Type } from "./type.ts";
+import type { JSONType, Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
 import { IntType } from "./int_type.ts";
 import { LongType } from "./long_type.ts";
 import { FloatType } from "./float_type.ts";
-import { ErrorHook, throwInvalidError } from "./error.ts";
+import { type ErrorHook, throwInvalidError } from "./error.ts";
 
 /**
  * Double type (64-bit).

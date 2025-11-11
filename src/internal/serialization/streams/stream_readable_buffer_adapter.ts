@@ -1,5 +1,5 @@
-import { type IReadableBuffer } from "../buffers/buffer.ts";
-import { type IStreamReadableBuffer } from "./streams.ts";
+import type { IReadableBuffer } from "../buffers/buffer.ts";
+import type { IStreamReadableBuffer } from "./streams.ts";
 
 /**
  * Adapter that wraps an IStreamReadableBuffer to provide IReadableBuffer interface.

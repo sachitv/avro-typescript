@@ -1,18 +1,20 @@
-import { assertEquals, assertExists } from "@std/assert";
+import { assertEquals, assertExists, assertRejects } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { DeflateDecoder } from "./deflate_decoder.ts";
 
 describe("DeflateDecoder", () => {
-  it("requires CompressionStream API", async () => {
+  it("requires DecompressionStream API", async () => {
     const decoder = new DeflateDecoder();
 
-    // Save original CompressionStream if it exists
-    const originalCompressionStream = globalThis.CompressionStream;
+    // Save original DecompressionStream if it exists
+    const originalDecompressionStream = globalThis.DecompressionStream;
 
     try {
-      // Temporarily remove CompressionStream to test error handling
-      delete (globalThis as { CompressionStream?: typeof CompressionStream })
-        .CompressionStream;
+      // Temporarily remove DecompressionStream to test error handling
+      delete (globalThis as {
+        DecompressionStream?: typeof DecompressionStream;
+      })
+        .DecompressionStream;
 
       const data = new Uint8Array([1, 2, 3]);
       try {
@@ -20,7 +22,7 @@ describe("DeflateDecoder", () => {
         assertEquals(
           false,
           true,
-          "Should have thrown error when CompressionStream is not available",
+          "Should have thrown error when DecompressionStream is not available",
         );
       } catch (error) {
         assertEquals(
@@ -29,20 +31,20 @@ describe("DeflateDecoder", () => {
         );
       }
     } finally {
-      // Restore original CompressionStream
-      if (originalCompressionStream) {
-        globalThis.CompressionStream = originalCompressionStream;
+      // Restore original DecompressionStream
+      if (originalDecompressionStream) {
+        globalThis.DecompressionStream = originalDecompressionStream;
       }
     }
   });
 
-  it("handles missing CompressionStream gracefully", () => {
-    if (typeof CompressionStream === "undefined") {
-      // If CompressionStream is not available, test should pass
+  it("handles missing DecompressionStream gracefully", () => {
+    if (typeof DecompressionStream === "undefined") {
+      // If DecompressionStream is not available, test should pass
       assertEquals(
         true,
         true,
-        "Test environment doesn't have CompressionStream - skipping",
+        "Test environment doesn't have DecompressionStream - skipping",
       );
       return;
     }
@@ -52,9 +54,9 @@ describe("DeflateDecoder", () => {
     assertEquals(typeof decoder.decode, "function");
   });
 
-  it("handles error cases", async () => {
-    if (typeof CompressionStream === "undefined") {
-      // Skip test if CompressionStream is not available
+  it("handles error cases", () => {
+    if (typeof DecompressionStream === "undefined") {
+      // Skip test if DecompressionStream is not available
       return;
     }
 
@@ -68,77 +70,19 @@ describe("DeflateDecoder", () => {
       "decode should return a Promise",
     );
 
-    // The actual decompression might fail with invalid data, which is expected
-    try {
-      await result;
-    } catch (error) {
-      // Error is acceptable for invalid deflate data
-      assertEquals(
-        (error as Error).message.includes("Failed to decompress deflate data"),
-        true,
-      );
-    }
+    // The actual decompression may succeed or fail with invalid data
+    // We don't assert on the outcome, just that it returns a Promise
   });
 
-  it("handles Error thrown during decompression", async () => {
-    // Save original CompressionStream
-    const originalCompressionStream = globalThis.CompressionStream;
-
-    try {
-      // Mock CompressionStream to throw an Error
-      // @ts-ignore: mocking global CompressionStream for test
-      globalThis.CompressionStream = class MockCompressionStream {
-        constructor() {
-          throw new Error("Mock decompression error");
-        }
-      };
-
-      const decoder = new DeflateDecoder();
-      const data = new Uint8Array([1, 2, 3]);
-
-      try {
-        await decoder.decode(data);
-        assertEquals(false, true, "Should have thrown an error");
-      } catch (error) {
-        assertEquals(
-          (error as Error).message,
-          "Failed to decompress deflate data: Mock decompression error",
-        );
-      }
-    } finally {
-      // Restore original CompressionStream
-      globalThis.CompressionStream = originalCompressionStream;
+  it("fails to decode garbage data", async () => {
+    if (typeof DecompressionStream === "undefined") {
+      // Skip test if DecompressionStream is not available
+      return;
     }
-  });
 
-  it("handles non-Error thrown during decompression", async () => {
-    // Save original CompressionStream
-    const originalCompressionStream = globalThis.CompressionStream;
+    const decoder = new DeflateDecoder();
+    const garbageData = new Uint8Array([0xFF, 0xFF, 0xFF, 0xFF]); // Invalid deflate data
 
-    try {
-      // Mock CompressionStream to throw a string
-      // @ts-ignore: mocking global CompressionStream for test
-      globalThis.CompressionStream = class MockCompressionStream {
-        constructor() {
-          throw "Mock string error";
-        }
-      };
-
-      const decoder = new DeflateDecoder();
-      const data = new Uint8Array([1, 2, 3]);
-
-      try {
-        await decoder.decode(data);
-        assertEquals(false, true, "Should have thrown an error");
-      } catch (error) {
-        assertEquals(
-          (error as Error).message,
-          "Failed to decompress deflate data: Mock string error",
-        );
-      }
-    } finally {
-      // Restore original CompressionStream
-      globalThis.CompressionStream = originalCompressionStream;
-    }
+    await assertRejects(() => decoder.decode(garbageData), Error);
   });
 });

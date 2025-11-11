@@ -14,7 +14,7 @@ import { FixedType } from "../schemas/fixed_type.ts";
 import { IntType } from "../schemas/int_type.ts";
 import { RecordType } from "../schemas/record_type.ts";
 import { StringType } from "../schemas/string_type.ts";
-import { Type } from "../schemas/type.ts";
+import type { Type } from "../schemas/type.ts";
 import { UnionType } from "../schemas/union_type.ts";
 
 describe("createType", () => {

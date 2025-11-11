@@ -1,10 +1,7 @@
 import { describe, it } from "@std/testing/bdd";
 import { expect } from "@std/expect";
 import { ReadableTap, WritableTap } from "./tap.ts";
-import {
-  type IReadableBuffer,
-  type IWritableBuffer,
-} from "./buffers/buffer.ts";
+import type { IReadableBuffer, IWritableBuffer } from "./buffers/buffer.ts";
 import { TestTap as Tap } from "./test_tap.ts";
 
 type EqualsFn<T> = (actual: T | undefined, expected: T) => void;

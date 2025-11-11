@@ -2,7 +2,7 @@ import { assert, assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../serialization/test_tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
-import { JSONType, Type } from "./type.ts";
+import type { JSONType, Type } from "./type.ts";
 import { throwInvalidError, ValidationError } from "./error.ts";
 import { encode } from "../serialization/text_encoding.ts";
 

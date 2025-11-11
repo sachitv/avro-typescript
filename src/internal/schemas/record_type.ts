@@ -1,12 +1,9 @@
-import {
-  type ReadableTapLike,
-  type WritableTapLike,
-} from "../serialization/tap.ts";
+import type { ReadableTapLike, WritableTapLike } from "../serialization/tap.ts";
 import { NamedType } from "./named_type.ts";
 import { Resolver } from "./resolver.ts";
-import { JSONType, Type } from "./type.ts";
-import { ErrorHook, throwInvalidError } from "./error.ts";
-import { isValidName, ResolvedNames } from "./resolve_names.ts";
+import { type JSONType, Type } from "./type.ts";
+import { type ErrorHook, throwInvalidError } from "./error.ts";
+import { isValidName, type ResolvedNames } from "./resolve_names.ts";
 
 type RecordFieldOrder = "ascending" | "descending" | "ignore";
 

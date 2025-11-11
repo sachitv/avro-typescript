@@ -1,4 +1,4 @@
-import { type IStreamReadableBuffer } from "./streams.ts";
+import type { IStreamReadableBuffer } from "./streams.ts";
 
 /**
  * A readable buffer implementation that reads data sequentially from a ReadableStream.

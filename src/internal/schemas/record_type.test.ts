@@ -7,7 +7,7 @@ import { StringType } from "./string_type.ts";
 import { BytesType } from "./bytes_type.ts";
 import { RecordType } from "./record_type.ts";
 import { resolveNames } from "./resolve_names.ts";
-import { Type } from "./type.ts";
+import type { Type } from "./type.ts";
 import { ValidationError } from "./error.ts";
 import { NullType } from "./null_type.ts";
 import { UnionType } from "./union_type.ts";

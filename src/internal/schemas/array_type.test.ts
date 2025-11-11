@@ -7,7 +7,7 @@ import { IntType } from "./int_type.ts";
 import { LongType } from "./long_type.ts";
 import { StringType } from "./string_type.ts";
 import { BytesType } from "./bytes_type.ts";
-import { Type } from "./type.ts";
+import type { Type } from "./type.ts";
 
 function createArray<T>(items: Type<T>): ArrayType<T> {
   return new ArrayType({ items });

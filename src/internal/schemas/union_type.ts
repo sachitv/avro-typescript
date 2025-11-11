@@ -1,8 +1,8 @@
 import { BaseType } from "./base_type.ts";
 import { NamedType } from "./named_type.ts";
 import { Resolver } from "./resolver.ts";
-import { JSONType, Type } from "./type.ts";
-import { ErrorHook, throwInvalidError } from "./error.ts";
+import { type JSONType, Type } from "./type.ts";
+import { type ErrorHook, throwInvalidError } from "./error.ts";
 import {
   type ReadableTapLike,
   WritableTap,

@@ -3,8 +3,8 @@ import { describe, it } from "@std/testing/bdd";
 
 import { TestTap as Tap } from "../serialization/test_tap.ts";
 import { NamedType } from "./named_type.ts";
-import { ResolvedNames, resolveNames } from "./resolve_names.ts";
-import { JSONType } from "./type.ts";
+import { type ResolvedNames, resolveNames } from "./resolve_names.ts";
+import type { JSONType } from "./type.ts";
 
 class DummyNamedType extends NamedType<string> {
   constructor(

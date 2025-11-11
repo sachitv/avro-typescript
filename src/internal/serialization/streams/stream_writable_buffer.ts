@@ -1,4 +1,4 @@
-import { type IStreamWritableBuffer } from "./streams.ts";
+import type { IStreamWritableBuffer } from "./streams.ts";
 
 /**
  * A writable buffer implementation that writes data sequentially to a WritableStream.

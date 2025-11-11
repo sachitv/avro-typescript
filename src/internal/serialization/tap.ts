@@ -3,10 +3,7 @@ import { compareUint8Arrays } from "./compare_bytes.ts";
 import { readUIntLE } from "./read_uint_le.ts";
 import { invert } from "./manipulate_bytes.ts";
 import { decode, encode } from "./text_encoding.ts";
-import {
-  type IReadableBuffer,
-  type IWritableBuffer,
-} from "./buffers/buffer.ts";
+import type { IReadableBuffer, IWritableBuffer } from "./buffers/buffer.ts";
 import {
   InMemoryReadableBuffer,
   InMemoryWritableBuffer,

@@ -1,4 +1,4 @@
-import { type IReadableBuffer, type IWritableBuffer } from "./buffer.ts";
+import type { IReadableBuffer, IWritableBuffer } from "./buffer.ts";
 
 /**
  * Shared strict in-memory buffer base with common functionality.

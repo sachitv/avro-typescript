@@ -1,5 +1,5 @@
-import { type IReadableBuffer } from "../buffers/buffer.ts";
-import { type IStreamReadableBuffer } from "./streams.ts";
+import type { IReadableBuffer } from "../buffers/buffer.ts";
+import type { IStreamReadableBuffer } from "./streams.ts";
 import { CircularBuffer } from "../../collections/circular_buffer.ts";
 
 /**

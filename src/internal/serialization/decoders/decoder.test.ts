@@ -1,6 +1,6 @@
 import { assertEquals, assertExists } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { type Decoder, type DecoderRegistry } from "./decoder.ts";
+import type { Decoder, DecoderRegistry } from "./decoder.ts";
 
 describe("Decoder interface and types", () => {
   it("should create a decoder that implements the interface", () => {

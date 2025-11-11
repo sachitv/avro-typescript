@@ -1,7 +1,7 @@
 import { assertEquals } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { AvroReader } from "./avro_reader.ts";
-import { type Decoder } from "./internal/serialization/decoders/decoder.ts";
+import type { Decoder } from "./internal/serialization/decoders/decoder.ts";
 import { InMemoryReadableBuffer } from "./internal/serialization/buffers/in_memory_buffer.ts";
 
 describe("AvroReader deflate codec support", () => {

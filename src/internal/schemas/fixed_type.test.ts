@@ -3,7 +3,7 @@ import { describe, it } from "@std/testing/bdd";
 import { FixedType } from "./fixed_type.ts";
 import { TestTap as Tap } from "../serialization/test_tap.ts";
 import { ReadableTap } from "../serialization/tap.ts";
-import { Type } from "./type.ts";
+import type { Type } from "./type.ts";
 import { resolveNames } from "./resolve_names.ts";
 
 function createFixedType(

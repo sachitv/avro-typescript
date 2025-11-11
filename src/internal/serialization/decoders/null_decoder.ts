@@ -1,4 +1,4 @@
-import { type Decoder } from "./decoder.ts";
+import type { Decoder } from "./decoder.ts";
 
 /**
  * Built-in null decoder (no compression).

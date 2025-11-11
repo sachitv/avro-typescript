@@ -4,9 +4,9 @@ import {
   type WritableTapLike,
 } from "../serialization/tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
-import { type JSONType } from "./type.ts";
+import type { JSONType } from "./type.ts";
 import { calculateVarintSize } from "./varint.ts";
-import { ErrorHook, throwInvalidError } from "./error.ts";
+import { type ErrorHook, throwInvalidError } from "./error.ts";
 
 /**
  * Int type (32-bit).

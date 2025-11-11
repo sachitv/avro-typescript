@@ -1,8 +1,5 @@
-import {
-  type ReadableTapLike,
-  type WritableTapLike,
-} from "../serialization/tap.ts";
-import { Resolver } from "./resolver.ts";
+import type { ReadableTapLike, WritableTapLike } from "../serialization/tap.ts";
+import type { Resolver } from "./resolver.ts";
 
 type CloneOptions = Record<string, unknown>;
 type ErrorHook = (

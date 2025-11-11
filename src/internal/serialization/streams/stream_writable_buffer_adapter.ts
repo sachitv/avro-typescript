@@ -1,5 +1,5 @@
-import { type IWritableBuffer } from "../buffers/buffer.ts";
-import { type IStreamWritableBuffer } from "./streams.ts";
+import type { IWritableBuffer } from "../buffers/buffer.ts";
+import type { IStreamWritableBuffer } from "./streams.ts";
 
 /**
  * Adapter that wraps an IStreamWritableBuffer to provide IWritableBuffer interface.

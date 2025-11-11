@@ -1,4 +1,4 @@
-import { type IReadableBuffer } from "./buffer.ts";
+import type { IReadableBuffer } from "./buffer.ts";
 
 /**
  * A read-only buffer implementation that provides random access read operations

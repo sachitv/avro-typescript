@@ -1,8 +1,8 @@
 import { createType, type SchemaLike } from "../createType/mod.ts";
-import { Resolver } from "../schemas/resolver.ts";
+import type { Resolver } from "../schemas/resolver.ts";
 import { Type } from "../schemas/type.ts";
 import { ReadableTap } from "./tap.ts";
-import { type IReadableBuffer } from "./buffers/buffer.ts";
+import type { IReadableBuffer } from "./buffers/buffer.ts";
 import {
   type Decoder,
   type DecoderRegistry,

@@ -4,10 +4,10 @@ import {
   type WritableTapLike,
 } from "../serialization/tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
-import { type JSONType, Type } from "./type.ts";
+import type { JSONType, Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
 import { IntType } from "./int_type.ts";
-import { ErrorHook, throwInvalidError } from "./error.ts";
+import { type ErrorHook, throwInvalidError } from "./error.ts";
 import { calculateVarintSize } from "./varint.ts";
 
 const MIN_LONG = -(1n << 63n);

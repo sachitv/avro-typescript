@@ -2,8 +2,8 @@ import { assertEquals, assertRejects } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
 import { TestTap as Tap } from "../serialization/test_tap.ts";
-import { ErrorHook, ValidationError } from "./error.ts";
-import { JSONType } from "./type.ts";
+import { type ErrorHook, ValidationError } from "./error.ts";
+import type { JSONType } from "./type.ts";
 
 // Simple concrete implementation for testing
 class TestFixedSizeType extends FixedSizeBaseType<number> {

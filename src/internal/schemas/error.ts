@@ -1,4 +1,4 @@
-import { Type } from "./type.ts";
+import type { Type } from "./type.ts";
 import { safeStringify } from "./json.ts";
 
 export type ErrorHook<T = unknown> = (

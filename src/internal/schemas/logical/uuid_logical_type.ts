@@ -1,9 +1,9 @@
 import { FixedType } from "../fixed_type.ts";
 import { StringType } from "../string_type.ts";
-import { NamedType } from "../named_type.ts";
+import type { NamedType } from "../named_type.ts";
 import { withLogicalTypeJSON } from "./logical_type.ts";
 import { LogicalType } from "./logical_type.ts";
-import { Type } from "../type.ts";
+import type { Type } from "../type.ts";
 
 const UUID_REGEX =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;

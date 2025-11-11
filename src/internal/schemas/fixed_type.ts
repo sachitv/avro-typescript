@@ -5,9 +5,9 @@ import {
 } from "../serialization/tap.ts";
 import { NamedType } from "./named_type.ts";
 import { Resolver } from "./resolver.ts";
-import { JSONType, Type } from "./type.ts";
-import { ErrorHook, throwInvalidError } from "./error.ts";
-import { ResolvedNames } from "./resolve_names.ts";
+import type { JSONType, Type } from "./type.ts";
+import { type ErrorHook, throwInvalidError } from "./error.ts";
+import type { ResolvedNames } from "./resolve_names.ts";
 import { compareUint8Arrays } from "../serialization/compare_bytes.ts";
 
 export interface FixedTypeParams extends ResolvedNames {

@@ -1,5 +1,5 @@
 import { BaseType } from "./base_type.ts";
-import { ResolvedNames } from "./resolve_names.ts";
+import type { ResolvedNames } from "./resolve_names.ts";
 
 /**
  * Base class for Avro types that carry a schema name (`record`, `enum`, `fixed`).
