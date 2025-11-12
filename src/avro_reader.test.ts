@@ -74,7 +74,7 @@ async function createWeatherAvroStream(): Promise<ReadableStream> {
  * Assert that a reader has the expected interface.
  */
 function assertReaderInterface(reader: AvroReaderInstance): void {
-  assertEquals(typeof reader[Symbol.asyncIterator], "function");
+  assertEquals(typeof reader.iterRecords, "function");
   assertEquals(typeof reader.getHeader, "function");
 }
 
@@ -83,7 +83,7 @@ function assertReaderInterface(reader: AvroReaderInstance): void {
  */
 async function readAllRecords(reader: AvroReaderInstance): Promise<unknown[]> {
   const records = [];
-  for await (const record of reader) {
+  for await (const record of reader.iterRecords()) {
     records.push(record);
   }
   return records;
@@ -138,12 +138,17 @@ function createMockReaderInstance(): AvroReaderInstance {
     sync: new Uint8Array(16),
   };
 
-  return {
-    getHeader: () => Promise.resolve(mockHeader),
+  const mockIterator: AsyncIterableIterator<unknown> = {
     next: () => Promise.resolve({ done: true, value: undefined }),
     [Symbol.asyncIterator]() {
       return this;
     },
+  };
+
+  return {
+    getHeader: () => Promise.resolve(mockHeader),
+    close: () => Promise.resolve(),
+    iterRecords: () => mockIterator,
   } as AvroReaderInstance;
 }
 
@@ -308,12 +313,16 @@ describe("AvroReader", () => {
         meta: new Map(),
         sync: new Uint8Array(16),
       };
-      return {
-        getHeader: () => Promise.resolve(mockHeader),
+      const mockIterator: AsyncIterableIterator<unknown> = {
         next: () => Promise.resolve({ done: true, value: undefined }),
         [Symbol.asyncIterator]: function () {
           return this;
         },
+      };
+      return {
+        getHeader: () => Promise.resolve(mockHeader),
+        close: () => Promise.resolve(),
+        iterRecords: () => mockIterator,
       } as AvroReaderInstance;
     };
 
@@ -440,6 +449,121 @@ describe("AvroReader", () => {
       assertWeatherStationTempRecords(records);
     } finally {
       URL.revokeObjectURL(url);
+    }
+  });
+
+  it("should support close() method", async () => {
+    const buffer = await createWeatherAvroBuffer();
+    const reader = AvroReader.fromBuffer(buffer);
+
+    // Should be able to close without error
+    await reader.close();
+
+    // Should be able to close multiple times without error
+    await reader.close();
+    await reader.close();
+  });
+
+  it("should call closeHook when closing", async () => {
+    const buffer = await createWeatherAvroBuffer();
+    let closeHookCalled = false;
+
+    const reader = AvroReader.fromBuffer(buffer, {
+      closeHook: () => {
+        closeHookCalled = true;
+      },
+    });
+
+    await reader.close();
+    assertEquals(closeHookCalled, true);
+  });
+
+  it("should handle async closeHook", async () => {
+    const buffer = await createWeatherAvroBuffer();
+    let closeHookCalled = false;
+
+    const reader = AvroReader.fromBuffer(buffer, {
+      closeHook: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        closeHookCalled = true;
+      },
+    });
+
+    await reader.close();
+    assertEquals(closeHookCalled, true);
+  });
+
+  it("should handle closeHook that throws", async () => {
+    const buffer = await createWeatherAvroBuffer();
+
+    const reader = AvroReader.fromBuffer(buffer, {
+      closeHook: () => {
+        throw new Error("Close hook error");
+      },
+    });
+
+    // Should not throw, close hook errors are ignored
+    await reader.close();
+  });
+
+  it("should call closeHook only once", async () => {
+    const buffer = await createWeatherAvroBuffer();
+    let callCount = 0;
+
+    const reader = AvroReader.fromBuffer(buffer, {
+      closeHook: () => {
+        callCount++;
+      },
+    });
+
+    await reader.close();
+    await reader.close();
+    await reader.close();
+
+    assertEquals(callCount, 1);
+  });
+
+  it("should support closeHook in fromStream", async () => {
+    const stream = await createWeatherAvroStream();
+    let closeHookCalled = false;
+
+    const reader = AvroReader.fromStream(stream, {
+      closeHook: () => {
+        closeHookCalled = true;
+      },
+    });
+
+    await reader.close();
+    assertEquals(closeHookCalled, true);
+  });
+
+  it("should call closeHook in fromUrl", async () => {
+    let cancelCalled = false;
+
+    class MockReadableStream extends ReadableStream<Uint8Array> {
+      override cancel() {
+        cancelCalled = true;
+        return Promise.resolve();
+      }
+    }
+
+    const mockStream = new MockReadableStream();
+
+    // Mock fetch to return a response with the mock stream
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = () =>
+      Promise.resolve({
+        ok: true,
+        body: mockStream,
+      } as Response);
+
+    try {
+      const reader = await AvroReader.fromUrl("http://example.com/test.avro");
+      await reader.close();
+      assertEquals(cancelCalled, true);
+    } finally {
+      // Restore original fetch
+      globalThis.fetch = originalFetch;
     }
   });
 });

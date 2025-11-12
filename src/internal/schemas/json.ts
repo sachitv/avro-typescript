@@ -1,5 +1,5 @@
 /** @internal */
-export function safeJsonStringify(obj: unknown, indent = 2): string {
+export function _safeJSONStringify(obj: unknown, indent = 2): string {
   const cache: unknown[] = [];
   const retVal = JSON.stringify(obj, (_key, value) => {
     if (typeof value === "bigint") return String(value);
@@ -21,7 +21,7 @@ export function safeStringify(value: unknown): string {
   ) {
     return String(value);
   }
-  const jsonStr = safeJsonStringify(value);
+  const jsonStr = _safeJSONStringify(value);
   if (jsonStr === undefined) {
     return String(value);
   }

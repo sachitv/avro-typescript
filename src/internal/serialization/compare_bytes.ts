@@ -11,8 +11,9 @@ import { clampLengthForView } from "./clamp.ts";
  * @param offsetB The starting offset in viewB.
  * @param lengthB The length of the byte range in viewB.
  * @returns A negative, positive, or zero number indicating the comparison result.
+ * @internal
  */
-export function compareByteRanges(
+export function _compareByteRanges(
   viewA: DataView,
   offsetA: number,
   lengthA: number,
@@ -51,5 +52,5 @@ export function compareByteRanges(
 export function compareUint8Arrays(a: Uint8Array, b: Uint8Array): number {
   const viewA = new DataView(a.buffer, a.byteOffset, a.byteLength);
   const viewB = new DataView(b.buffer, b.byteOffset, b.byteLength);
-  return compareByteRanges(viewA, 0, a.length, viewB, 0, b.length);
+  return _compareByteRanges(viewA, 0, a.length, viewB, 0, b.length);
 }

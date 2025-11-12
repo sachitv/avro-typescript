@@ -1,11 +1,11 @@
 import { describe, it } from "@std/testing/bdd";
 import { expect } from "@std/expect";
-import { safeJsonStringify, safeStringify } from "./json.ts";
+import { _safeJSONStringify, safeStringify } from "./json.ts";
 
-describe("safeJsonStringify", () => {
+describe("_safeJSONStringify", () => {
   it("should stringify normal objects", () => {
     const obj = { a: 1, b: "test" };
-    expect(safeJsonStringify(obj)).toBe(
+    expect(_safeJSONStringify(obj)).toBe(
       `{
   "a": 1,
   "b": "test"
@@ -17,17 +17,17 @@ describe("safeJsonStringify", () => {
     // deno-lint-ignore no-explicit-any
     const obj: any = { a: 1 };
     obj.self = obj;
-    const result = safeJsonStringify(obj);
+    const result = _safeJSONStringify(obj);
     expect(result).toContain('"self": "[Circular]"');
   });
 
   it("should handle bigint", () => {
-    expect(safeJsonStringify(123n)).toBe('"123"');
+    expect(_safeJSONStringify(123n)).toBe('"123"');
   });
 
   it("should return undefined for functions", () => {
     const func = () => {};
-    expect(safeJsonStringify(func)).toBeUndefined();
+    expect(_safeJSONStringify(func)).toBeUndefined();
   });
 });
 

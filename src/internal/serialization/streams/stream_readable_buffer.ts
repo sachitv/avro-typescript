@@ -49,7 +49,8 @@ export class StreamReadableBuffer implements IStreamReadableBuffer {
   /**
    * Closes the stream and releases the reader lock.
    */
+  // deno-lint-ignore require-await
   public async close(): Promise<void> {
-    await this.#reader.releaseLock();
+    this.#reader.releaseLock();
   }
 }

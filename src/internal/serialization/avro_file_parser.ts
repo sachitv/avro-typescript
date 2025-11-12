@@ -9,34 +9,13 @@ import {
   DeflateDecoder,
   NullDecoder,
 } from "./decoders/mod.ts";
+import { BLOCK_TYPE, HEADER_TYPE, MAGIC_BYTES } from "./avro_constants.ts";
 
 // Re-export types for backward compatibility
 export type { Decoder, DecoderRegistry };
 
-// Type of Avro header.
-export const HEADER_TYPE = createType({
-  type: "record",
-  name: "org.apache.avro.file.Header",
-  fields: [
-    { name: "magic", type: { type: "fixed", name: "Magic", size: 4 } },
-    { name: "meta", type: { type: "map", values: "bytes" } },
-    { name: "sync", type: { type: "fixed", name: "Sync", size: 16 } },
-  ],
-});
-
-// Type of each block.
-export const BLOCK_TYPE = createType({
-  type: "record",
-  name: "org.apache.avro.file.Block",
-  fields: [
-    { name: "count", type: "long" },
-    { name: "data", type: "bytes" },
-    { name: "sync", type: { type: "fixed", name: "Sync", size: 16 } },
-  ],
-});
-
-// First 4 bytes of an Avro object container file.
-const MAGIC_BYTES = new Uint8Array([0x4F, 0x62, 0x6A, 0x01]); // 'Obj\x01'
+// Re-export constants for backward compatibility
+export { BLOCK_TYPE, HEADER_TYPE, MAGIC_BYTES };
 
 /**
  * Internal interface for Avro file header information.

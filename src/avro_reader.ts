@@ -17,6 +17,8 @@ interface ReaderSchemaOptions {
   readerSchema?: unknown;
   /** Custom codec decoders. Cannot include "null" or "deflate" as they are built-in. */
   decoders?: DecoderRegistry;
+  /** Optional hook to call when closing the reader. */
+  closeHook?: () => Promise<void> | void;
 }
 
 /**
@@ -35,6 +37,8 @@ export interface FromUrlOptions extends ReaderSchemaOptions {
 export interface FromStreamOptions extends ReaderSchemaOptions {
   /** Cache size for stream buffering in bytes (default: 0 = unlimited) */
   cacheSize?: number;
+  /** Optional hook to call when closing the reader. */
+  closeHook?: () => Promise<void> | void;
 }
 
 /**
@@ -45,13 +49,23 @@ export type FromBufferOptions = ReaderSchemaOptions;
 /**
  * Interface for Avro reader instances that provide access to header and records.
  */
-export interface AvroReaderInstance extends AsyncIterableIterator<unknown> {
+export interface AvroReaderInstance {
   /**
    * Gets the parsed Avro file header with proper typing.
    *
    * @returns Promise that resolves to the parsed header information.
    */
   getHeader(): Promise<ParsedAvroHeader>;
+
+  /**
+   * Closes the reader and releases any resources.
+   */
+  close(): Promise<void>;
+
+  /**
+   * Returns an async iterator over the records in the Avro file.
+   */
+  iterRecords(): AsyncIterableIterator<unknown>;
 }
 
 /**
@@ -65,22 +79,39 @@ const DEFAULT_CACHE_SIZE = 0;
 class AvroReaderInstanceImpl implements AvroReaderInstance {
   #parser: AvroFileParser;
   #recordIterator: AsyncIterableIterator<unknown>;
+  #closeHook?: () => Promise<void> | void;
+  #closed = false;
 
-  constructor(parser: AvroFileParser) {
+  constructor(
+    parser: AvroFileParser,
+    closeHook?: () => Promise<void> | void,
+  ) {
     this.#parser = parser;
     this.#recordIterator = parser.iterRecords();
+    this.#closeHook = closeHook;
   }
 
   async getHeader(): Promise<ParsedAvroHeader> {
     return await this.#parser.getHeader();
   }
 
-  async next(): Promise<IteratorResult<unknown>> {
-    return await this.#recordIterator.next();
+  iterRecords(): AsyncIterableIterator<unknown> {
+    return this.#recordIterator;
   }
 
-  [Symbol.asyncIterator](): AsyncIterableIterator<unknown> {
-    return this;
+  async close(): Promise<void> {
+    if (this.#closed) {
+      return;
+    }
+    if (this.#closeHook) {
+      try {
+        await this.#closeHook();
+      } catch {
+        // Ignore close hook errors
+      }
+      this.#closeHook = undefined;
+    }
+    this.#closed = true;
   }
 }
 
@@ -103,19 +134,19 @@ class AvroReaderInstanceImpl implements AvroReaderInstance {
  *
  * // Read from a buffer (for example when the Avro file is already in memory)
  * const bufferReader = AvroReader.fromBuffer(buffer, { readerSchema });
- * for await (const record of bufferReader) {
+ * for await (const record of bufferReader.iterRecords()) {
  *   console.log(record);
  * }
  *
  * // Read from a blob (e.g., file input)
  * const blobReader = AvroReader.fromBlob(blob, { readerSchema });
- * for await (const record of blobReader) {
+ * for await (const record of blobReader.iterRecords()) {
  *   console.log(record);
  * }
  *
  * // Read from a URL with unlimited buffering
  * const urlReader = await AvroReader.fromUrl("data.avro", { readerSchema });
- * for await (const record of urlReader) {
+ * for await (const record of urlReader.iterRecords()) {
  *   console.log(record);
  * }
  *
@@ -124,7 +155,7 @@ class AvroReaderInstanceImpl implements AvroReaderInstance {
  *   cacheSize: 1024 * 1024,
  *   readerSchema,
  * });
- * for await (const record of cachedUrlReader) {
+ * for await (const record of cachedUrlReader.iterRecords()) {
  *   console.log(record);
  * }
  *
@@ -133,7 +164,7 @@ class AvroReaderInstanceImpl implements AvroReaderInstance {
  *   cacheSize: 1024,
  *   readerSchema,
  * });
- * for await (const record of streamReader) {
+ * for await (const record of streamReader.iterRecords()) {
  *   console.log(record);
  * }
  * ```
@@ -155,7 +186,7 @@ export class AvroReader {
       readerSchema: options?.readerSchema,
       decoders: options?.decoders,
     });
-    return new AvroReaderInstanceImpl(parser);
+    return new AvroReaderInstanceImpl(parser, options?.closeHook);
   }
 
   /**
@@ -207,6 +238,9 @@ export class AvroReader {
       cacheSize: options?.cacheSize,
       readerSchema: options?.readerSchema,
       decoders: options?.decoders,
+      closeHook: async () => {
+        await stream.cancel();
+      },
     });
   }
 
@@ -244,6 +278,7 @@ export class AvroReader {
     return AvroReader.fromBuffer(buffer, {
       readerSchema: options?.readerSchema,
       decoders: options?.decoders,
+      closeHook: options?.closeHook,
     });
   }
 }

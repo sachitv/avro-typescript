@@ -43,7 +43,7 @@ describe("AvroReader deflate codec support", () => {
     const reader = AvroReader.fromBuffer(buffer);
     const records: unknown[] = [];
 
-    for await (const record of reader) {
+    for await (const record of reader.iterRecords()) {
       records.push(record);
     }
 
@@ -96,7 +96,7 @@ describe("AvroReader deflate codec support", () => {
     const reader = AvroReader.fromBuffer(buffer);
 
     try {
-      for await (const _record of reader) {
+      for await (const _record of reader.iterRecords()) {
         // Should not reach here
       }
       assertEquals(
@@ -122,7 +122,7 @@ describe("AvroReader deflate codec support", () => {
     const reader = AvroReader.fromBuffer(buffer);
     const records: unknown[] = [];
 
-    for await (const record of reader) {
+    for await (const record of reader.iterRecords()) {
       records.push(record);
     }
 

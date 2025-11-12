@@ -51,6 +51,6 @@ export class StreamWritableBuffer implements IStreamWritableBuffer {
    */
   public async close(): Promise<void> {
     await this.#writer.close();
-    await this.#writer.releaseLock();
+    this.#writer.releaseLock();
   }
 }
