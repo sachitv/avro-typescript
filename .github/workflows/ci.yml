@@ -34,4 +34,13 @@ jobs:
         with:
           deno-version: "2.5.6"
       - name: Run tests with coverage enabled
-        run: deno task coverage
+        run: deno task test:ci
+      - name: Check coverage
+        run: deno run -A jsr:@ashishkujoy/deno-coverage-checker
+      - name: Publish test results
+        uses: dorny/test-reporter@v2
+        if: success() || failure()
+        with:
+          name: Test Results
+          path: test-results.xml
+          reporter: java-junit
