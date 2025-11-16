@@ -28,16 +28,8 @@ export async function* readAvroRecords(
   }
 }
 
-if (import.meta.main) {
-  const filePath = Deno.args[0] ??
-    new URL("../test-data/weather.avro", import.meta.url).pathname;
+const filePath = new URL("../test-data/weather.avro", import.meta.url).pathname;
 
-  try {
-    for await (const record of readAvroRecords(filePath)) {
-      console.log(record);
-    }
-  } catch (error) {
-    console.error("Error reading AVRO file:", error);
-    Deno.exit(1);
-  }
+for await (const record of readAvroRecords(filePath)) {
+  console.log(record);
 }
