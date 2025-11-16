@@ -566,4 +566,120 @@ describe("AvroReader", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  describe("Binary Compatibility Tests", () => {
+    /**
+     * Load the syncInMeta.avro test file data.
+     */
+    async function loadSyncInMetaAvroFile(): Promise<Uint8Array> {
+      return await Deno.readFile("../../share/test/data/syncInMeta.avro");
+    }
+
+    /**
+     * Create an InMemoryReadableBuffer from the syncInMeta.avro file.
+     */
+    async function createSyncInMetaAvroBuffer(): Promise<
+      InMemoryReadableBuffer
+    > {
+      const fileData = await loadSyncInMetaAvroFile();
+      return new InMemoryReadableBuffer(fileData.buffer as ArrayBuffer);
+    }
+
+    /**
+     * Create a Blob from the syncInMeta.avro file.
+     */
+    async function createSyncInMetaAvroBlob(): Promise<Blob> {
+      const fileData = await loadSyncInMetaAvroFile();
+      return new Blob([fileData.buffer as ArrayBuffer]);
+    }
+
+    /**
+     * Create a ReadableStream from the syncInMeta.avro file.
+     */
+    async function createSyncInMetaAvroStream(): Promise<ReadableStream> {
+      const fileData = await loadSyncInMetaAvroFile();
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue(fileData);
+          controller.close();
+        },
+      });
+    }
+
+    /**
+     * Verify that header has expected properties for syncInMeta.avro.
+     */
+    function assertSyncInMetaHeader(header: ParsedAvroHeader): void {
+      assertEquals(typeof header, "object");
+      assertEquals(header.magic.length, 4);
+      assertEquals(header.sync.length, 16);
+      const schemaJson = header.meta.get("avro.schema");
+      assert(schemaJson);
+      const schema = JSON.parse(new TextDecoder().decode(schemaJson));
+      assertEquals(typeof schema, "object");
+      // The file should have sync metadata
+      const syncMeta = header.meta.get("avro.sync");
+      assert(syncMeta);
+      assertEquals(syncMeta.length, 16);
+    }
+
+    /**
+     * Verify that records match expected syncInMeta data structure.
+     */
+    function assertSyncInMetaRecords(records: unknown[]): void {
+      assertEquals(records.length, 6001);
+
+      for (let i = 0; i < records.length; i++) {
+        const record = records[i] as Record<string, unknown>;
+        const expectedFields = ["Age", "First", "ID", "Last", "Phone"];
+        assertEquals(Object.keys(record).sort(), expectedFields);
+
+        // Verify that all expected fields exist
+        assertEquals(typeof record.Age, "number");
+        assertEquals(typeof record.First, "string");
+        assertEquals(typeof record.Last, "string");
+        assertEquals(typeof record.ID, "bigint");
+        assertEquals(typeof record.Phone, "string");
+      }
+    }
+
+    it("should read syncInMeta.avro file header and records from buffer", async () => {
+      const buffer = await createSyncInMetaAvroBuffer();
+      const reader = AvroReader.fromBuffer(buffer);
+
+      // Verify header access - should not fail
+      const header = await reader.getHeader();
+      assertSyncInMetaHeader(header);
+
+      // Read all records and verify structure
+      const records = await readAllRecords(reader);
+      assertSyncInMetaRecords(records);
+    });
+
+    it("should read syncInMeta.avro file header and records from blob", async () => {
+      const blob = await createSyncInMetaAvroBlob();
+      const reader = AvroReader.fromBlob(blob);
+
+      // Verify header access - should not fail
+      const header = await reader.getHeader();
+      assertSyncInMetaHeader(header);
+
+      // Read all records and verify structure
+      const records = await readAllRecords(reader);
+      assertSyncInMetaRecords(records);
+    });
+
+    it("should read syncInMeta.avro file header and records from stream", async () => {
+      const stream = await createSyncInMetaAvroStream();
+      const reader = AvroReader.fromStream(stream);
+
+      // Verify header access - should not fail
+      const header = await reader.getHeader();
+      assertSyncInMetaHeader(header);
+
+      // Read all records and verify structure
+      const records = await readAllRecords(reader);
+      assertSyncInMetaRecords(records);
+    });
+  });
 });

@@ -4,6 +4,8 @@ export * from "./helpers/protocol_helpers.ts";
 export { Protocol } from "./protocol_core.ts";
 export {
   createFetchTransport,
+  createInMemoryTransport,
+  createInMemoryTransportPair,
   createWebSocketTransport,
 } from "./protocol/transports.ts";
 export type {
@@ -14,6 +16,7 @@ export type {
   BinaryWritable,
   BinaryWritableLike,
   FetchTransportOptions,
+  InMemoryTransportPair,
   StatelessTransportFactory,
   WebSocketTransportOptions,
 } from "./protocol/transports.ts";

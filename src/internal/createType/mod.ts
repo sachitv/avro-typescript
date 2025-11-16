@@ -156,6 +156,9 @@ function constructType(schema: SchemaLike, context: CreateTypeContext): Type {
   }
 
   if (Array.isArray(type)) {
+    // When we're dealing with an array as a schema, it is a Union.
+    // > https://avro.apache.org/docs/1.12.0/specification/#unions
+    // > `Unions, as mentioned above, are represented using JSON arrays`.
     return createUnionType(type as SchemaLike[], context);
   }
 
@@ -383,6 +386,14 @@ function createRecordType(
     });
   };
 
+  /*
+  The Avro spec (section 2.8 "Protocols") treats the implicit "request" type
+  declared on each RPC message as a record-like structure that is not a
+  standalone named type; it exists solely within that message's scope. Record
+  and error types are bona fide named types that can be reused elsewhere, so
+  only those should be registered in the shared registry. Skipping "request"
+  avoids polluting the registry with per-message-only definitions.
+  */
   const shouldRegister = typeName !== "request";
   if (shouldRegister && context.registry.has(resolved.fullName)) {
     throw new Error(
