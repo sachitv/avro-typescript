@@ -89,8 +89,6 @@ const PRIMITIVE_FACTORIES: Record<PrimitiveTypeName, () => Type> = {
 
 /**
  * Constructs an Avro {@link Type} from a schema definition.
- *
- * TODO: add logical type support similar to the JavaScript implementation.
  */
 export function createType(
   schema: SchemaLike,
