@@ -56,7 +56,7 @@ const expectUint8ArrayEqual = (
 };
 
 const expectTapEqual = async (actual: Tap, expected: Tap): Promise<void> => {
-  expect(actual._testOnlyPos).toBe(expected._testOnlyPos);
+  expect(actual.getPos()).toBe(expected.getPos());
   expectUint8ArrayEqual(
     await actual._testOnlyBuf(),
     await expected._testOnlyBuf(),
@@ -117,11 +117,11 @@ function registerWriterReaderTests<T>(
       for (const elem of opts.elems) {
         const tap = newTap(size);
         await opts.writer(tap, elem);
-        const writtenPos = tap._testOnlyPos;
+        const writtenPos = tap.getPos();
         tap._testOnlyResetPos();
         const actual = await opts.reader(tap);
         equals(actual, elem);
-        expect(tap._testOnlyPos).toBe(writtenPos);
+        expect(tap.getPos()).toBe(writtenPos);
       }
     });
 
@@ -139,10 +139,10 @@ function registerWriterReaderTests<T>(
       for (const elem of opts.elems) {
         const tap = newTap(size);
         await opts.writer(tap, elem);
-        const expectedPos = tap._testOnlyPos;
+        const expectedPos = tap.getPos();
         tap._testOnlyResetPos();
         await opts.skipper(tap, elem);
-        expect(tap._testOnlyPos).toBe(expectedPos);
+        expect(tap.getPos()).toBe(expectedPos);
       }
     });
   });
@@ -467,7 +467,7 @@ describe("WritableTap byte emission", () => {
     const tap = newTap(4);
     const payload = toUint8Array([10, 20, 30, 40]);
     await tap.writeFixed(payload);
-    expect(tap._testOnlyPos).toBe(payload.length);
+    expect(tap.getPos()).toBe(payload.length);
     const buf = await tap._testOnlyBuf();
     expectUint8ArrayEqual(buf.subarray(0, payload.length), payload);
   });
@@ -489,16 +489,16 @@ describe("WritableTap byte emission", () => {
 
   it("writeBinary with len=0 does nothing", async () => {
     const tap = newTap(10);
-    const initialPos = tap._testOnlyPos;
+    const initialPos = tap.getPos();
     await tap.writeBinary("abc", 0);
-    expect(tap._testOnlyPos).toBe(initialPos);
+    expect(tap.getPos()).toBe(initialPos);
   });
 
   it("writeFixed with empty buffer does nothing", async () => {
     const tap = newTap(10);
-    const initialPos = tap._testOnlyPos;
+    const initialPos = tap.getPos();
     await tap.writeFixed(new Uint8Array(0));
-    expect(tap._testOnlyPos).toBe(initialPos);
+    expect(tap.getPos()).toBe(initialPos);
   });
 });
 
@@ -540,14 +540,14 @@ describe("Long pack & unpack", () => {
     buffer.fill(0);
     writeInt32LE(buffer, 0, 12);
     await tap.packLongBytes(buffer);
-    expect(tap._testOnlyPos).toBe(1);
+    expect(tap.getPos()).toBe(1);
     tap._testOnlyResetPos();
     expect(await tap.readLong()).toBe(12n);
     tap._testOnlyResetPos();
     writeInt32LE(buffer, 0, -37);
     writeInt32LE(buffer, 4, -1);
     await tap.packLongBytes(buffer);
-    expect(tap._testOnlyPos).toBe(1);
+    expect(tap.getPos()).toBe(1);
     tap._testOnlyResetPos();
     expect(await tap.readLong()).toBe(-37n);
     tap._testOnlyResetPos();
@@ -556,7 +556,7 @@ describe("Long pack & unpack", () => {
     await tap.packLongBytes(buffer);
     const buf = await tap._testOnlyBuf();
     expectUint8ArrayEqual(
-      buf.subarray(0, tap._testOnlyPos),
+      buf.subarray(0, tap.getPos()),
       toUint8Array([1]),
     );
     tap._testOnlyResetPos();
@@ -607,11 +607,11 @@ describe("Numeric guard rails", () => {
     const tap = newTap(16);
     await tap.writeInt(42);
     await tap.writeInt(-7);
-    const afterWrites = tap._testOnlyPos;
+    const afterWrites = tap.getPos();
     tap._testOnlyResetPos();
     expect(await tap.readInt()).toBe(42);
     await tap.skipInt();
-    expect(tap._testOnlyPos).toBe(afterWrites);
+    expect(tap.getPos()).toBe(afterWrites);
   });
 });
 
@@ -684,10 +684,10 @@ describe("Construction & buffer compatibility", () => {
       isValid: async () => true,
     };
     const tap = new WritableTap(mockBuffer);
-    const initialPos = tap._testOnlyPos;
+    const initialPos = tap.getPos();
     // deno-lint-ignore no-explicit-any
     await (tap as any).appendRawBytes(new Uint8Array(0));
-    expect(tap._testOnlyPos).toBe(initialPos);
+    expect(tap.getPos()).toBe(initialPos);
   });
 
   it("constructor rejects invalid positions", () => {
@@ -883,8 +883,8 @@ describe("Cursor management", () => {
     const buffer = new ArrayBuffer(10);
     const tap = new WritableTap(buffer);
     await tap.writeBoolean(true);
-    expect(tap._testOnlyPos).toBe(1);
+    expect(tap.getPos()).toBe(1);
     tap._testOnlyResetPos();
-    expect(tap._testOnlyPos).toBe(0);
+    expect(tap.getPos()).toBe(0);
   });
 });

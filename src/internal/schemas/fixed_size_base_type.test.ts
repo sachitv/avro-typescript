@@ -76,9 +76,9 @@ describe("FixedSizeBaseType", () => {
       const value = 42;
       const buffer = await type.toBuffer(value);
       const tap = new Tap(buffer);
-      const posBefore = tap._testOnlyPos;
+      const posBefore = tap.getPos();
       await type.skip(tap);
-      const posAfter = tap._testOnlyPos;
+      const posAfter = tap.getPos();
       assertEquals(posAfter - posBefore, 4); // sizeBytes() returns 4
     });
   });

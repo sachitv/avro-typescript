@@ -155,7 +155,7 @@ describe("EnumType", () => {
     const buffer = await type.toBuffer("C");
     const tap = new Tap(buffer);
     await type.skip(tap);
-    assertEquals(tap._testOnlyPos, buffer.byteLength);
+    assertEquals(tap.getPos(), buffer.byteLength);
   });
 
   it("creates resolvers when writer symbols are compatible", async () => {

@@ -51,7 +51,7 @@ describe("ArrayType", () => {
     const buffer = await intArray.toBuffer([7, 8]);
     const tap = new Tap(buffer);
     await intArray.skip(tap);
-    assertEquals(tap._testOnlyPos, buffer.byteLength);
+    assertEquals(tap.getPos(), buffer.byteLength);
   });
 
   it("clones arrays deeply", () => {
@@ -165,7 +165,7 @@ describe("ArrayType", () => {
     const tempTap = new Tap(tempBuffer);
     await tempTap.writeLong(100n);
     await tempTap.writeLong(200n);
-    const blockSize = tempTap._testOnlyPos;
+    const blockSize = tempTap.getPos();
 
     // Create a buffer with negative count (size-prefixed)
     const buffer = new ArrayBuffer(7); // -2n(1) + blockSize(1) + block(4) + 0n(1)
@@ -178,7 +178,7 @@ describe("ArrayType", () => {
 
     const readTap = new Tap(buffer);
     await intArray.skip(readTap);
-    assertEquals(readTap._testOnlyPos, buffer.byteLength);
+    assertEquals(readTap.getPos(), buffer.byteLength);
   });
 
   it("throws error in toBuffer when value is not array", async () => {
@@ -333,7 +333,7 @@ describe("ArrayType", () => {
     // Terminator
     await tap.writeLong(0n);
 
-    const buf1 = multiBlockBuf.slice(0, tap._testOnlyPos);
+    const buf1 = multiBlockBuf.slice(0, tap.getPos());
     const buf2 = await intArray.toBuffer(items);
 
     // This forces match() to call #readArraySize on a size-prefixed block

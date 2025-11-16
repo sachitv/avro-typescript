@@ -59,9 +59,9 @@ describe("NullType", () => {
     it("should skip null in tap", async () => {
       const buffer = new ArrayBuffer(1);
       const tap = new Tap(buffer);
-      const posBefore = tap._testOnlyPos;
+      const posBefore = tap.getPos();
       await type.skip(tap);
-      const posAfter = tap._testOnlyPos;
+      const posAfter = tap.getPos();
       assertEquals(posAfter - posBefore, 0);
     });
   });

@@ -76,16 +76,16 @@ function isIWritable(value: unknown): value is IWritableBuffer {
 }
 
 abstract class TapBase {
-  public pos: number;
+  protected pos: number;
 
   protected constructor(pos: number) {
     this.pos = pos;
   }
 
   /**
-   * Returns the current cursor position within the buffer for testing.
+   * Returns the current cursor position within the buffer.
    */
-  get _testOnlyPos(): number {
+  getPos(): number {
     return this.pos;
   }
 

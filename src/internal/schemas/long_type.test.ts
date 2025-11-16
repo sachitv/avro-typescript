@@ -85,11 +85,11 @@ describe("LongType", () => {
       const buffer = new ArrayBuffer(size + 1);
       const tap = new Tap(buffer);
       await type.write(tap, value);
-      const posAfterWrite = tap._testOnlyPos;
+      const posAfterWrite = tap.getPos();
       assertEquals(posAfterWrite, size);
       tap._testOnlyResetPos();
       await type.skip(tap);
-      const posAfterSkip = tap._testOnlyPos;
+      const posAfterSkip = tap.getPos();
       assertEquals(posAfterSkip, size);
     });
   });

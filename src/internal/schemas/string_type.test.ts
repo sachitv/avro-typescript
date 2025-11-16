@@ -65,9 +65,9 @@ describe("StringType", () => {
     const str = "test";
     const buffer = await type.toBuffer(str);
     const tap = new Tap(buffer);
-    const posBefore = tap._testOnlyPos;
+    const posBefore = tap.getPos();
     await type.skip(tap);
-    const posAfter = tap._testOnlyPos;
+    const posAfter = tap.getPos();
     assertEquals(posAfter - posBefore, buffer.byteLength);
   });
 

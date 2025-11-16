@@ -555,7 +555,7 @@ describe("RecordType", () => {
       const buffer = await type.toBuffer({ id: 1, name: "Ann" });
       const tap = new Tap(buffer);
       await type.skip(tap);
-      assertEquals(tap._testOnlyPos, buffer.byteLength);
+      assertEquals(tap.getPos(), buffer.byteLength);
     });
   });
 

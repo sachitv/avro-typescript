@@ -95,9 +95,9 @@ describe("BytesType", () => {
       const data = new Uint8Array([1, 2, 3]);
       const buffer = await type.toBuffer(data);
       const tap = new Tap(buffer);
-      const posBefore = tap._testOnlyPos;
+      const posBefore = tap.getPos();
       await type.skip(tap);
-      const posAfter = tap._testOnlyPos;
+      const posAfter = tap.getPos();
       assertEquals(posAfter - posBefore, buffer.byteLength);
     });
   });

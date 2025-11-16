@@ -303,9 +303,9 @@ describe("UnionType", () => {
         const value = { int: 123 };
         const buffer = await unionType.toBuffer(value);
         const tap = new Tap(buffer);
-        const posBefore = tap._testOnlyPos;
+        const posBefore = tap.getPos();
         await unionType.skip(tap);
-        const posAfter = tap._testOnlyPos;
+        const posAfter = tap.getPos();
         assertEquals(posAfter - posBefore, buffer.byteLength);
       });
     });

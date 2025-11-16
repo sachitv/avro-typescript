@@ -28,19 +28,21 @@ const STRING_TYPE = createType("string");
 const BOOLEAN_TYPE = createType("boolean");
 
 async function readOptionalHandshake<T>(
-  tap: ReadableTap,
+  buffer: ArrayBuffer,
   reader: (tap: ReadableTap) => Promise<T>,
   expectHandshake: boolean,
-): Promise<T | undefined> {
+): Promise<{ handshake?: T; tap: ReadableTap }> {
+  const tap = new ReadableTap(buffer);
   if (expectHandshake) {
-    return await reader(tap);
+    const handshake = await reader(tap);
+    return { handshake, tap };
   }
-  const initialPos = tap.pos;
+  const initialPos = tap.getPos();
   try {
-    return await reader(tap);
+    const handshake = await reader(tap);
+    return { handshake, tap };
   } catch {
-    tap.pos = initialPos;
-    return undefined;
+    return { tap: new ReadableTap(buffer, initialPos) };
   }
 }
 
@@ -172,13 +174,15 @@ export async function decodeCallRequestEnvelope(
   options: { expectHandshake?: boolean } = {},
 ): Promise<CallRequestEnvelope> {
   const { expectHandshake = false } = options;
-  const tap = new ReadableTap(buffer);
 
-  const handshake = await readOptionalHandshake(
-    tap,
-    readHandshakeRequestFromTap,
-    expectHandshake,
-  );
+  const { handshake: handshakeResult, tap: handshakeTap } =
+    await readOptionalHandshake(
+      buffer,
+      readHandshakeRequestFromTap,
+      expectHandshake,
+    );
+  const handshake = handshakeResult;
+  const tap = handshakeTap;
 
   const metadataMap = await MAP_OF_BYTES_TYPE.read(tap) as MetadataMap;
   const metadata = cloneMetadataMap(metadataMap);
@@ -277,14 +281,15 @@ export async function decodeCallResponseEnvelope(
   options: { expectHandshake?: boolean } = {},
 ): Promise<CallResponseEnvelope> {
   const { expectHandshake = false } = options;
-  const tap = new ReadableTap(buffer);
 
-  const handshake: HandshakeResponseMessage | undefined =
+  const { handshake: handshakeResult, tap: handshakeTap } =
     await readOptionalHandshake(
-      tap,
+      buffer,
       readHandshakeResponseFromTap,
       expectHandshake,
     );
+  const handshake: HandshakeResponseMessage | undefined = handshakeResult;
+  const tap = handshakeTap;
 
   const metadataMap = await MAP_OF_BYTES_TYPE.read(tap) as MetadataMap;
   const metadata = cloneMetadataMap(metadataMap);

@@ -111,9 +111,9 @@ describe("FloatType", () => {
       const buffer = new ArrayBuffer(8);
       const tap = new Tap(buffer);
       await tap.writeFloat(123.5); // write something first
-      const posBefore = tap._testOnlyPos;
+      const posBefore = tap.getPos();
       await type.skip(tap);
-      const posAfter = tap._testOnlyPos;
+      const posAfter = tap.getPos();
       assertEquals(posAfter - posBefore, 4);
     });
   });

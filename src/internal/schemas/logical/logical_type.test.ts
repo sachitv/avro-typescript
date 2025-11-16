@@ -213,7 +213,7 @@ describe("LogicalType", () => {
     const buffer = new ArrayBuffer(100);
     const tap = new WritableTap(buffer);
     await type.write(tap, "test");
-    assertEquals(tap.pos > 0, true);
+    assertEquals(tap.getPos() > 0, true);
   });
 
   it("write throws when ensureValid fails", async () => {
@@ -232,8 +232,10 @@ describe("LogicalType", () => {
     const writeTap = new WritableTap(buffer);
     await writeTap.writeString("test");
 
-    const readBuffer = new ArrayBuffer(writeTap.pos);
-    new Uint8Array(readBuffer).set(new Uint8Array(buffer, 0, writeTap.pos));
+    const readBuffer = new ArrayBuffer(writeTap.getPos());
+    new Uint8Array(readBuffer).set(
+      new Uint8Array(buffer, 0, writeTap.getPos()),
+    );
     const readTap = new ReadableTap(readBuffer);
 
     const value = await type.read(readTap);
@@ -248,14 +250,16 @@ describe("LogicalType", () => {
     await writeTap.writeString("test");
     await writeTap.writeString("skip");
 
-    const readBuffer = new ArrayBuffer(writeTap.pos);
-    new Uint8Array(readBuffer).set(new Uint8Array(buffer, 0, writeTap.pos));
+    const readBuffer = new ArrayBuffer(writeTap.getPos());
+    new Uint8Array(readBuffer).set(
+      new Uint8Array(buffer, 0, writeTap.getPos()),
+    );
     const readTap = new ReadableTap(readBuffer);
 
     await type.read(readTap); // read first value
-    const initialPos = readTap.pos;
+    const initialPos = readTap.getPos();
     await type.skip(readTap); // skip second value
-    assert(readTap.pos > initialPos);
+    assert(readTap.getPos() > initialPos);
   });
 
   // Tests for missing coverage lines 107-112: match() method
@@ -270,10 +274,14 @@ describe("LogicalType", () => {
     await tap1.writeString("test");
     await tap2.writeString("test");
 
-    const readBuffer1 = new ArrayBuffer(tap1.pos);
-    const readBuffer2 = new ArrayBuffer(tap2.pos);
-    new Uint8Array(readBuffer1).set(new Uint8Array(buffer1, 0, tap1.pos));
-    new Uint8Array(readBuffer2).set(new Uint8Array(buffer2, 0, tap2.pos));
+    const readBuffer1 = new ArrayBuffer(tap1.getPos());
+    const readBuffer2 = new ArrayBuffer(tap2.getPos());
+    new Uint8Array(readBuffer1).set(
+      new Uint8Array(buffer1, 0, tap1.getPos()),
+    );
+    new Uint8Array(readBuffer2).set(
+      new Uint8Array(buffer2, 0, tap2.getPos()),
+    );
 
     const readTap1 = new ReadableTap(readBuffer1);
     const readTap2 = new ReadableTap(readBuffer2);
@@ -339,8 +347,10 @@ describe("LogicalType", () => {
     const writeTap = new WritableTap(buffer);
     await writeTap.writeString("test");
 
-    const readBuffer = new ArrayBuffer(writeTap.pos);
-    new Uint8Array(readBuffer).set(new Uint8Array(buffer, 0, writeTap.pos));
+    const readBuffer = new ArrayBuffer(writeTap.getPos());
+    new Uint8Array(readBuffer).set(
+      new Uint8Array(buffer, 0, writeTap.getPos()),
+    );
     const readTap = new ReadableTap(readBuffer);
 
     const value = await resolver.read(readTap);

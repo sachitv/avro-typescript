@@ -29,14 +29,14 @@ export class TestTap implements ReadableTapLike, WritableTapLike {
   }
 
   #syncPos(tap: ReadableTap | WritableTap): void {
-    this.#pos = tap._testOnlyPos;
+    this.#pos = tap.getPos();
   }
 
   async _testOnlyBuf(): Promise<Uint8Array> {
     return await new ReadableTap(this.#buffer)._testOnlyBuf();
   }
 
-  get _testOnlyPos(): number {
+  getPos(): number {
     return this.#pos;
   }
 

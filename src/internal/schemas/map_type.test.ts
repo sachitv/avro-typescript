@@ -181,7 +181,7 @@ describe("MapType", () => {
       const buffer = await intMap.toBuffer(map);
       const tap = new Tap(buffer);
       await intMap.skip(tap);
-      assertEquals(tap._testOnlyPos, buffer.byteLength);
+      assertEquals(tap.getPos(), buffer.byteLength);
     });
 
     it("skips encoded nested map blocks", async () => {
@@ -192,7 +192,7 @@ describe("MapType", () => {
       const buffer = await nestedMap.toBuffer(map);
       const tap = new Tap(buffer);
       await nestedMap.skip(tap);
-      assertEquals(tap._testOnlyPos, buffer.byteLength);
+      assertEquals(tap.getPos(), buffer.byteLength);
     });
 
     it("writes empty map correctly", async () => {
@@ -649,7 +649,7 @@ describe("readMapInto", () => {
     const skipTap = new Tap(buffer);
     await intMap.skip(skipTap);
     // After skipping, should be at end
-    assertEquals(skipTap._testOnlyPos, writeTap._testOnlyPos);
+    assertEquals(skipTap.getPos(), writeTap.getPos());
   });
 
   it("throws on insufficient data for map key", async () => {

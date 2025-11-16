@@ -63,9 +63,9 @@ describe("BooleanType", () => {
       const buffer = new ArrayBuffer(2);
       const tap = new Tap(buffer);
       await tap.writeBoolean(true); // write something first
-      const posBefore = tap._testOnlyPos;
+      const posBefore = tap.getPos();
       await type.skip(tap);
-      const posAfter = tap._testOnlyPos;
+      const posAfter = tap.getPos();
       assertEquals(posAfter - posBefore, 1);
     });
   });

@@ -19,7 +19,7 @@ class TestType extends BaseType<string> {
     const buf = new ArrayBuffer(value.length + 10); // extra space for length encoding
     const tap = new Tap(buf);
     await this.write(tap, value);
-    return buf.slice(0, tap._testOnlyPos);
+    return buf.slice(0, tap.getPos());
   }
 
   public override async write(tap: Tap, value: string): Promise<void> {

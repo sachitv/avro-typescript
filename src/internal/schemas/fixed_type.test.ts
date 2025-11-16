@@ -292,13 +292,13 @@ describe("FixedType", () => {
     view.set([1, 2, 3, 4, 5, 6, 7, 8]);
 
     const tap = new Tap(buf);
-    assertEquals(tap._testOnlyPos, 0);
+    assertEquals(tap.getPos(), 0);
 
     await fixedType.skip(tap);
-    assertEquals(tap._testOnlyPos, 4);
+    assertEquals(tap.getPos(), 4);
 
     await fixedType.skip(tap);
-    assertEquals(tap._testOnlyPos, 8);
+    assertEquals(tap.getPos(), 8);
   });
 
   it("matches encoded fixed-size buffers", async () => {
