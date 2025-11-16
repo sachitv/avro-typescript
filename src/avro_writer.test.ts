@@ -4,6 +4,7 @@ import { AvroWriter } from "./avro_writer.ts";
 import { AvroReader } from "./avro_reader.ts";
 import type { IWritableBuffer } from "./internal/serialization/buffers/buffer.ts";
 import { InMemoryReadableBuffer } from "./internal/serialization/buffers/in_memory_buffer.ts";
+import { concatUint8Arrays } from "./internal/collections/array_utils.ts";
 
 const SIMPLE_SCHEMA = {
   type: "record",
@@ -139,12 +140,5 @@ describe("AvroWriter", () => {
 });
 
 function concatChunks(chunks: Uint8Array[]): Uint8Array {
-  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  const combined = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    combined.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return combined;
+  return concatUint8Arrays(chunks);
 }
