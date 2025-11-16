@@ -5,7 +5,8 @@ import { AvroReader } from "../src/avro_reader.ts";
  * Asynchronously reads an AVRO file as a blob and yields each record.
  */
 export async function* readAvroRecordsFromBlob(
-  filePath: string,
+  filePath: string =
+    new URL("../test-data/weather.avro", import.meta.url).pathname,
 ): AsyncIterableIterator<unknown> {
   const file = await Deno.open(filePath, { read: true });
   const response = new Response(file.readable);
@@ -30,11 +31,8 @@ export async function* readAvroRecordsFromBlob(
 }
 
 if (import.meta.main) {
-  const filePath = Deno.args[0];
-  if (!filePath) {
-    console.error("Usage: deno run read_avro_blob.ts <file.avro>");
-    Deno.exit(1);
-  }
+  const filePath = Deno.args[0] ??
+    new URL("../test-data/weather.avro", import.meta.url).pathname;
 
   try {
     for await (const record of readAvroRecordsFromBlob(filePath)) {

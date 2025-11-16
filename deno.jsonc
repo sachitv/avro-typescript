@@ -12,7 +12,8 @@
   },
   "tasks": {
     "test": "deno test --allow-read",
-    "coverage": "deno task test --coverage",
+    // examples/ contains only sample code, so coverage reports skip it because there’s no point.
+    "coverage": "deno task test --coverage && deno coverage --exclude=examples/",
     "serve:coverage": "deno run --allow-net --allow-read --allow-sys https://deno.land/std@0.224.0/http/file_server.ts --port 8080 ./coverage/html"
   },
   "license": "Apache-2.0"

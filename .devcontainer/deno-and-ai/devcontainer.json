@@ -1,0 +1,23 @@
+{
+  "name": "Deno and AI",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers-community/features/deno:1": {
+      "version": "2.5.6"
+    },
+    "ghcr.io/devcontainer-community/devcontainer-features/opencode.ai:1": {
+      "version": "1.0.68"
+    },
+    "ghcr.io/jsburckhardt/devcontainer-features/codex:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {},
+      "extensions": [
+        "denoland.vscode-deno",
+        "sst-dev.opencode",
+        "openai.chatgpt"
+      ]
+    }
+  }
+}

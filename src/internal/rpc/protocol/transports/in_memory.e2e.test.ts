@@ -10,7 +10,7 @@ import { InMemoryReadableBuffer } from "../../../serialization/buffers/in_memory
 
 const protocolDefinitionPromise = (async () => {
   const url = new URL(
-    "../../../../../../../share/test/schemas/simple.avpr",
+    "../../../../../test-data/schemas/simple.avpr",
     import.meta.url,
   );
   const text = await Deno.readTextFile(url);
@@ -47,10 +47,10 @@ describe("in-memory transport end-to-end", () => {
     const serverProtocol = Protocol.create(definition);
 
     const addRequest = await readInteropDatum(
-      "../../../../../../../share/test/interop/rpc/add/onePlusOne/request.avro",
+      "../../../../../test-data/interop/rpc/add/onePlusOne/request.avro",
     ) as { arg1: number; arg2: number };
     const expectedResponse = await readInteropDatum(
-      "../../../../../../../share/test/interop/rpc/add/onePlusOne/response.avro",
+      "../../../../../test-data/interop/rpc/add/onePlusOne/response.avro",
     ) as number;
 
     serverProtocol.on("add", (request) => {
@@ -76,10 +76,10 @@ describe("in-memory transport end-to-end", () => {
     const serverProtocol = Protocol.create(definition);
 
     const helloRequest = await readInteropDatum(
-      "../../../../../../../share/test/interop/rpc/hello/world/request.avro",
+      "../../../../../test-data/interop/rpc/hello/world/request.avro",
     ) as { greeting: string };
     const expectedResponse = await readInteropDatum(
-      "../../../../../../../share/test/interop/rpc/hello/world/response.avro",
+      "../../../../../test-data/interop/rpc/hello/world/response.avro",
     ) as string;
 
     serverProtocol.on("hello", (request) => {
@@ -105,12 +105,12 @@ describe("in-memory transport end-to-end", () => {
     const serverProtocol = Protocol.create(definition);
 
     const echoRequest = await readInteropDatum(
-      "../../../../../../../share/test/interop/rpc/echo/foo/request.avro",
+      "../../../../../test-data/interop/rpc/echo/foo/request.avro",
     ) as {
       record: { name: string; kind: "FOO" | "BAR" | "BAZ"; hash: Uint8Array };
     };
     const expectedResponse = await readInteropDatum(
-      "../../../../../../../share/test/interop/rpc/echo/foo/response.avro",
+      "../../../../../test-data/interop/rpc/echo/foo/response.avro",
     ) as { name: string; kind: "FOO" | "BAR" | "BAZ"; hash: Uint8Array };
 
     serverProtocol.on("echo", (request) => {

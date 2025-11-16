@@ -35,7 +35,7 @@ describe("AvroReader deflate codec support", () => {
   it("supports deflate codec", async () => {
     // Read the deflate-compressed test file
     const deflateFile = await Deno.readFile(
-      "../../share/test/data/weather-deflate.avro",
+      "test-data/weather-deflate.avro",
     );
     const buffer = new InMemoryReadableBuffer(deflateFile.buffer);
 
@@ -61,7 +61,7 @@ describe("AvroReader deflate codec support", () => {
 
     // Read the regular (non-compressed) test file
     const regularFile = await Deno.readFile(
-      "../../share/test/data/weather.avro",
+      "test-data/weather.avro",
     );
     const buffer = new InMemoryReadableBuffer(regularFile.buffer);
 
@@ -89,7 +89,7 @@ describe("AvroReader deflate codec support", () => {
     // Create a mock file with unsupported codec in metadata
     // For this test, we'll try to read a file with a codec we don't support
     const zstdFile = await Deno.readFile(
-      "../../share/test/data/weather-zstd.avro",
+      "test-data/weather-zstd.avro",
     );
     const buffer = new InMemoryReadableBuffer(zstdFile.buffer);
 
@@ -115,7 +115,7 @@ describe("AvroReader deflate codec support", () => {
   it("maintains backward compatibility", async () => {
     // Test that existing code without decoders still works
     const regularFile = await Deno.readFile(
-      "../../share/test/data/weather.avro",
+      "test-data/weather.avro",
     );
     const buffer = new InMemoryReadableBuffer(regularFile.buffer);
 

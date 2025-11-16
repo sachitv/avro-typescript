@@ -5,7 +5,7 @@ import { randomSeeded } from "@std/random";
 import { createType } from "./mod.ts";
 
 const RECORD_SCHEMA_URL = new URL(
-  "../../../../../share/test/schemas/RecordWithRequiredFields.avsc",
+  "../../../test-data/schemas/RecordWithRequiredFields.avsc",
   import.meta.url,
 );
 const RECORD_SCHEMA = JSON.parse(await Deno.readTextFile(RECORD_SCHEMA_URL));

@@ -38,7 +38,7 @@ const EXPECTED_WEATHER_STATION_TEMP_RECORDS = EXPECTED_WEATHER_RECORDS.map(
  * Load the weather.avro test file data.
  */
 async function loadWeatherAvroFile(): Promise<Uint8Array> {
-  return await Deno.readFile("../../share/test/data/weather.avro");
+  return await Deno.readFile("test-data/weather.avro");
 }
 
 /**
@@ -293,14 +293,14 @@ it("should cache header on multiple calls", async () => {
  * Load the weather-deflate.avro test file data.
  */
 async function loadWeatherDeflateAvroFile(): Promise<Uint8Array> {
-  return await Deno.readFile("../../share/test/data/weather-deflate.avro");
+  return await Deno.readFile("test-data/weather-deflate.avro");
 }
 
 /**
  * Load the weather-zstd.avro test file data.
  */
 async function loadWeatherZstdAvroFile(): Promise<Uint8Array> {
-  return await Deno.readFile("../../share/test/data/weather-zstd.avro");
+  return await Deno.readFile("test-data/weather-zstd.avro");
 }
 
 /**
