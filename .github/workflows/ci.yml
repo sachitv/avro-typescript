@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: "2.5.6"
+      - name: Run deno lint
+        run: deno lint
+
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: "2.5.6"
+      - name: Run deno fmt --check
+        run: deno fmt --check
+
+  test_and_coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: "2.5.6"
+      - name: Run tests with coverage enabled
+        run: deno task test:ci
+      - name: Check coverage
+        run: deno run -A jsr:@ashishkujoy/deno-coverage-checker
+      - name: Publish test results
+        uses: dorny/test-reporter@v2
+        if: success() || failure()
+        with:
+          name: Test Results
+          path: test-results.xml
+          reporter: java-junit
