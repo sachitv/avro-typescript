@@ -1,5 +1,7 @@
 # Avro TypeScript
 
+![CI](https://github.com/sachitv/avro-typescript/actions/workflows/ci.yml/badge.svg?branch=main)
+
 `avro-typescript` is an open source implementation of Apache Avro for
 TypeScript. It mirrors the Avro specifications from
 [Apache Avro](https://avro.apache.org/) and provides tooling around schema
