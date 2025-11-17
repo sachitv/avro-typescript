@@ -1,9 +1,9 @@
 // Example: decode an encrypted stream and re-encrypt via writable tap roundtrip.
-import { ReadableTap, WritableTap } from "../src/internal/serialization/tap.ts";
-import { StreamReadableBuffer } from "../src/internal/serialization/streams/stream_readable_buffer.ts";
-import { StreamReadableBufferAdapter } from "../src/internal/serialization/streams/stream_readable_buffer_adapter.ts";
-import { StreamWritableBuffer } from "../src/internal/serialization/streams/stream_writable_buffer.ts";
-import { StreamWritableBufferAdapter } from "../src/internal/serialization/streams/stream_writable_buffer_adapter.ts";
+import { ReadableTap, WritableTap } from "../src/serialization/tap.ts";
+import { StreamReadableBuffer } from "../src/serialization/streams/stream_readable_buffer.ts";
+import { StreamReadableBufferAdapter } from "../src/serialization/streams/stream_readable_buffer_adapter.ts";
+import { StreamWritableBuffer } from "../src/serialization/streams/stream_writable_buffer.ts";
+import { StreamWritableBufferAdapter } from "../src/serialization/streams/stream_writable_buffer_adapter.ts";
 
 const XOR_KEY = 0x5a;
 

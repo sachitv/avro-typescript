@@ -1,7 +1,7 @@
 // Example: adapt a decrypted stream into Avro's tap API using stream adapters.
-import { ReadableTap } from "../src/internal/serialization/tap.ts";
-import { StreamReadableBuffer } from "../src/internal/serialization/streams/stream_readable_buffer.ts";
-import { StreamReadableBufferAdapter } from "../src/internal/serialization/streams/stream_readable_buffer_adapter.ts";
+import { ReadableTap } from "../src/serialization/tap.ts";
+import { StreamReadableBuffer } from "../src/serialization/streams/stream_readable_buffer.ts";
+import { StreamReadableBufferAdapter } from "../src/serialization/streams/stream_readable_buffer_adapter.ts";
 
 /**
  * This demo shows how to take an encrypted ReadableStream, decrypt it chunk by

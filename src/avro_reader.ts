@@ -1,13 +1,13 @@
-import type { IReadableBuffer } from "./internal/serialization/buffers/buffer.ts";
-import { BlobReadableBuffer } from "./internal/serialization/buffers/blob_readable_buffer.ts";
-import { StreamReadableBuffer } from "./internal/serialization/streams/stream_readable_buffer.ts";
-import { FixedSizeStreamReadableBufferAdapter } from "./internal/serialization/streams/fixed_size_stream_readable_buffer_adapter.ts";
-import { ForwardOnlyStreamReadableBufferAdapter } from "./internal/serialization/streams/forward_only_stream_readable_buffer_adapter.ts";
+import type { IReadableBuffer } from "./serialization/buffers/buffer.ts";
+import { BlobReadableBuffer } from "./serialization/buffers/blob_readable_buffer.ts";
+import { StreamReadableBuffer } from "./serialization/streams/stream_readable_buffer.ts";
+import { FixedSizeStreamReadableBufferAdapter } from "./serialization/streams/fixed_size_stream_readable_buffer_adapter.ts";
+import { ForwardOnlyStreamReadableBufferAdapter } from "./serialization/streams/forward_only_stream_readable_buffer_adapter.ts";
 import {
   AvroFileParser,
   type DecoderRegistry,
   type ParsedAvroHeader,
-} from "./internal/serialization/avro_file_parser.ts";
+} from "./serialization/avro_file_parser.ts";
 
 // Re-export for test utilities
 export type { DecoderRegistry, ParsedAvroHeader };
