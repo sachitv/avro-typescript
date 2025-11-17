@@ -5,3 +5,7 @@ updates:
     target-branch: "main"
     schedule:
       interval: "weekly"
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"

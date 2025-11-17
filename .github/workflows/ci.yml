@@ -7,7 +7,7 @@ on:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v5
       - uses: denoland/setup-deno@v2
@@ -17,7 +17,7 @@ jobs:
         run: deno lint
 
   fmt:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v5
       - uses: denoland/setup-deno@v2
@@ -27,7 +27,7 @@ jobs:
         run: deno fmt --check
 
   test_and_coverage:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v5
       - uses: denoland/setup-deno@v2
@@ -44,3 +44,12 @@ jobs:
           name: Test Results
           path: test-results.xml
           reporter: java-junit
+
+  validate-pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: semantic-pull-request
+        uses: amannn/action-semantic-pull-request@v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
