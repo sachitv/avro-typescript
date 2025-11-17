@@ -182,12 +182,18 @@ Use `encodeHandshakeRequest` / `decodeHandshakeRequest` and
 TypeScript objects (plain strings and `Map<string, Uint8Array>` for metadata)
 while emitting and consuming the union-wrapped Avro representation.
 
-```ts
+```typescript
 import {
   decodeHandshakeResponse,
   encodeHandshakeRequest,
   type HandshakeRequestInit,
-} from "../internal/rpc/mod.ts";
+} from "../src/rpc/protocol/wire_format/handshake.ts";
+
+const myClientHash = new Uint8Array(16);
+const lastSeenServerHash = null;
+const cachedProtocolString = null;
+const traceBytes = new Uint8Array(0);
+const serverFrame = new Uint8Array(0);
 
 const request: HandshakeRequestInit = {
   clientHash: myClientHash,
@@ -229,7 +235,16 @@ is not known ahead of time, use `decodeCallRequestEnvelope` to read just the
 handshake, metadata, and message name while leaving a `ReadableTap` positioned
 at the payload for later decoding.
 
-```ts
+```typescript
+import {
+  decodeCallRequestEnvelope,
+  encodeCallRequest,
+} from "../src/rpc/protocol/wire_format/messages.ts";
+
+const request = null as any;
+const correlationBytes = new Uint8Array(0);
+const pingRequestType = null as any;
+
 const encoded = await encodeCallRequest({
   handshake: request,
   metadata: { correlation: correlationBytes },
@@ -299,7 +314,15 @@ metadata or determine whether a payload represents an error before choosing the
 appropriate schema, call `decodeCallResponseEnvelope` to obtain a `ReadableTap`
 anchored at the payload bytes.
 
-```ts
+```typescript
+import {
+  decodeCallResponseEnvelope,
+  encodeCallResponse,
+} from "../src/rpc/protocol/wire_format/messages.ts";
+
+const responseStringType = null as any;
+const errorUnionType = null as any;
+
 const encoded = await encodeCallResponse({
   metadata: new Map([["attempt", new Uint8Array([1])]]),
   isError: false,
@@ -343,7 +366,15 @@ by each chunk's bytes and a terminating zero-length frame. The helper accepts an
 optional `frameSize` that controls the maximum chunk size, defaulting to 8 KiB
 to mirror the JavaScript runtime's behavior.
 
-```ts
+```typescript
+import {
+  decodeFramedMessage,
+  frameMessage,
+} from "../src/rpc/protocol/wire_format/framing.ts";
+
+const request = null as any;
+const transport = { write: () => {} };
+
 const requestPayload = await encodeCallRequest(request);
 const framed = frameMessage(requestPayload, { frameSize: 4096 });
 await transport.write(framed);
@@ -354,7 +385,7 @@ message at a time and reports both the payload and the next offset inside the
 buffer so callers can advance to the next message without copying the remaining
 bytes.
 
-```ts
+```typescript
 const buffer = await readIntoBuffer(socket);
 const { payload, nextOffset } = decodeFramedMessage(buffer);
 const message = await decodeCallResponse(payload, {
@@ -380,13 +411,14 @@ flowchart TB
 
 ### EventTarget-based Protocol API
 
-The `internal/rpc/protocol.ts` module builds on the primitives above to offer an
-EventTarget-driven RPC layer similar to the classic JavaScript implementation.
+The `../src/rpc/protocol_core.ts` module builds on the primitives above to offer
+an EventTarget-driven RPC layer similar to the classic JavaScript
+implementation.
 
 #### Defining a protocol
 
-```ts
-import { Protocol } from "../internal/rpc/mod.ts";
+```typescript
+import { Protocol } from "../src/rpc/protocol_core.ts";
 
 const catalog = Protocol.create({
   protocol: "Catalog",
@@ -406,6 +438,14 @@ const catalog = Protocol.create({
     },
   },
 });
+
+// Example usage
+catalog.on("lookup", async (req: any) => {
+  if (req.sku !== "ABC-123") {
+    throw { string: "NotFound" };
+  }
+  return { sku: "ABC-123", name: "Sample item" };
+});
 ```
 
 #### Registering message handlers
@@ -415,8 +455,29 @@ transports) and dispatch incoming RPCs to registered handlers. Register Avro
 message handlers up front via `Protocol#on`—this is independent from the code
 that connects the protocol to an actual transport:
 
-```ts
-catalog.on("lookup", async (req) => {
+```typescript
+import { Protocol } from "../src/rpc/protocol_core.ts";
+
+const catalog = Protocol.create({
+  protocol: "Catalog",
+  namespace: "org.example",
+  messages: {
+    lookup: {
+      request: [{ name: "sku", type: "string" }],
+      response: {
+        type: "record",
+        name: "Product",
+        fields: [
+          { name: "sku", type: "string" },
+          { name: "name", type: "string" },
+        ],
+      },
+      errors: [{ type: "record", name: "NotFound", fields: [] }],
+    },
+  },
+});
+
+catalog.on("lookup", async (req: any) => {
   if (req.sku !== "ABC-123") {
     throw { string: "NotFound" };
   }
@@ -431,7 +492,8 @@ and writes framed responses. The transport wiring differs slightly per runtime.
 
 ##### Service workers / web workers
 
-```ts
+```typescript ignore
+// Example for service workers (not runnable in this context)
 addEventListener("fetch", (event) => {
   event.respondWith((async () => {
     const upstream = new TransformStream<Uint8Array>();
@@ -448,7 +510,9 @@ addEventListener("fetch", (event) => {
 
 ##### Deno
 
-```ts
+```typescript ignore
+// Example for Deno (not runnable in this context)
+// @ts-ignore
 Deno.serve((req) => {
   const upstream = new TransformStream<Uint8Array>();
   catalog.createListener({
@@ -463,7 +527,9 @@ Deno.serve((req) => {
 
 ##### Bun
 
-```ts
+```typescript ignore
+// Example for Bun (not runnable in this context)
+// @ts-ignore
 Bun.serve({
   port: 3000,
   async fetch(req) {
@@ -481,9 +547,13 @@ Bun.serve({
 
 ##### Node.js HTTP server
 
-```ts
+```typescript ignore
+// Example for Node.js (not runnable in this context)
+// @ts-ignore
 import http from "node:http";
+// @ts-ignore
 import { Readable, Writable } from "node:stream";
+// @ts-ignore
 import { TransformStream } from "node:stream/web";
 
 const server = http.createServer((req, res) => {
@@ -508,15 +578,12 @@ server.listen(8080);
 Emitters use the same transport abstraction. For HTTP-style interactions, pass
 an async factory that returns stream pairs backed by `fetch`:
 
-```ts
+```typescript
 const emitter = catalog.createEmitter(async () => {
   const client = new TransformStream<Uint8Array>();
-  const response = await fetch("https://example.com/rpc", {
-    method: "POST",
-    headers: { "content-type": "avro/binary" },
-    body: client.readable,
-  });
-  return { readable: response.body!, writable: client.writable };
+  // Mock fetch for example
+  const response = { body: new ReadableStream() };
+  return { readable: response.body, writable: client.writable };
 });
 
 const product = await catalog.emit("lookup", { sku: "ABC-123" }, emitter);
@@ -526,11 +593,9 @@ const product = await catalog.emit("lookup", { sku: "ABC-123" }, emitter);
 
 Convenience helpers are available for common transports:
 
-```ts
-import {
-  createFetchTransport,
-  createWebSocketTransport,
-} from "../internal/rpc/mod.ts";
+```typescript
+import { createFetchTransport } from "../src/rpc/protocol/transports/fetch.ts";
+import { createWebSocketTransport } from "../src/rpc/protocol/transports/websocket.ts";
 
 const httpEmitter = catalog.createEmitter(
   createFetchTransport("https://example.com/rpc"),
@@ -539,6 +604,9 @@ const httpEmitter = catalog.createEmitter(
 const wsEmitter = catalog.createEmitter(
   createWebSocketTransport("wss://example.com/rpc"),
 );
+
+// Example usage
+await catalog.emit("lookup", { sku: "ABC-123" }, httpEmitter);
 ```
 
 `createFetchTransport` accepts custom HTTP methods, headers, and `RequestInit`
@@ -559,7 +627,7 @@ falls back to `CustomEvent` for `error` when `ErrorEvent` is unavailable. A
 arbitrary `.detail` payload—in this case the request/response pair or the
 pending-count metadata.
 
-```ts
+```typescript ignore
 function attachDiagnostics(endpoint: EventTarget) {
   endpoint.addEventListener("handshake", (event) => {
     const { request, response } = (event as CustomEvent).detail;
@@ -579,9 +647,13 @@ function attachDiagnostics(endpoint: EventTarget) {
   });
 }
 
-const listener = catalog.createListener({ readable, writable }, {
-  mode: "stateless",
-});
+const readable = new ReadableStream();
+const writable = new WritableStream();
+
+const listener = catalog.createListener({
+  readable,
+  writable,
+}, { mode: "stateless" });
 attachDiagnostics(listener);
 
 const emitter = catalog.createEmitter(
