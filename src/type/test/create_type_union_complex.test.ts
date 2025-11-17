@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { describe, it } from "@std/testing/bdd";
+import { beforeAll, describe, it } from "@std/testing/bdd";
 import { randomSeeded } from "@std/random";
 
 import { createType } from "../create_type.ts";
@@ -8,8 +8,12 @@ const RECORD_SCHEMA_URL = new URL(
   "../../../test-data/schemas/RecordWithRequiredFields.avsc",
   import.meta.url,
 );
-const RECORD_SCHEMA = JSON.parse(await Deno.readTextFile(RECORD_SCHEMA_URL));
-const recordType = createType(RECORD_SCHEMA);
+let recordType: ReturnType<typeof createType>;
+
+async function loadRecordType() {
+  const RECORD_SCHEMA = JSON.parse(await Deno.readTextFile(RECORD_SCHEMA_URL));
+  recordType = createType(RECORD_SCHEMA);
+}
 
 const UNION_BRANCH_NAME = "org.apache.avro.UnionRecord" as const;
 const ENUM_VALUES = ["A", "B"] as const;
@@ -99,6 +103,10 @@ const buildNullUnionRecord = (ctx: RandomContext): RecordWithUnion => ({
 });
 
 describe("createType deep union coverage", () => {
+  beforeAll(async () => {
+    await loadRecordType();
+  });
+
   it("round trips random nested union records with arrays and maps", async () => {
     const samples = [0n, 1n, 2n].map((offset) => {
       const context = createRandomContext(RANDOM_SEED_BASE + offset);

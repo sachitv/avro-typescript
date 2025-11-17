@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { describe, it } from "@std/testing/bdd";
+import { beforeAll, describe, it } from "@std/testing/bdd";
 import { Protocol } from "../../../protocol_core.ts";
 import type { ProtocolDefinition } from "../../../definitions/protocol_definitions.ts";
 import { createInMemoryTransportPair } from "../in_memory.ts";
@@ -8,14 +8,16 @@ import type { StatelessListener } from "../../../message_endpoint/listener.ts";
 import { AvroFileParser } from "../../../../serialization/avro_file_parser.ts";
 import { InMemoryReadableBuffer } from "../../../../serialization/buffers/in_memory_buffer.ts";
 
-const protocolDefinitionPromise = (async () => {
+let protocolDefinition: ProtocolDefinition;
+
+async function loadProtocolDefinition() {
   const url = new URL(
     "../../../../../test-data/schemas/simple.avpr",
     import.meta.url,
   );
   const text = await Deno.readTextFile(url);
-  return JSON.parse(text) as ProtocolDefinition;
-})();
+  protocolDefinition = JSON.parse(text) as ProtocolDefinition;
+}
 
 async function readInteropDatum(path: string): Promise<unknown> {
   const url = new URL(path, import.meta.url);
@@ -41,8 +43,12 @@ async function serveOnce(
 }
 
 describe("in-memory transport end-to-end", () => {
+  beforeAll(async () => {
+    await loadProtocolDefinition();
+  });
+
   it("handles the add/onePlusOne scenario", async () => {
-    const definition = await protocolDefinitionPromise;
+    const definition = protocolDefinition;
     const clientProtocol = Protocol.create(definition);
     const serverProtocol = Protocol.create(definition);
 
@@ -71,7 +77,7 @@ describe("in-memory transport end-to-end", () => {
   });
 
   it("handles the hello/world scenario", async () => {
-    const definition = await protocolDefinitionPromise;
+    const definition = protocolDefinition;
     const clientProtocol = Protocol.create(definition);
     const serverProtocol = Protocol.create(definition);
 
@@ -100,7 +106,7 @@ describe("in-memory transport end-to-end", () => {
   });
 
   it("handles the echo/foo scenario", async () => {
-    const definition = await protocolDefinitionPromise;
+    const definition = protocolDefinition;
     const clientProtocol = Protocol.create(definition);
     const serverProtocol = Protocol.create(definition);
 

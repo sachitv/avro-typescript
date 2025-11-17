@@ -7,7 +7,7 @@ import { StreamWritableBuffer } from "./serialization/streams/stream_writable_bu
 import { StreamWritableBufferAdapter } from "./serialization/streams/stream_writable_buffer_adapter.ts";
 
 export type { AvroWriterOptions } from "./serialization/avro_file_writer.ts";
-export type { EncoderRegistry } from "./serialization//encoders/encoder.ts";
+export type { EncoderRegistry } from "./serialization/encoders/encoder.ts";
 
 /**
  * Interface exposed by Avro writer instances.

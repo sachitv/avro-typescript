@@ -2,5 +2,6 @@
   "lines": 100,
   "branches": 100,
   "functions": 100,
-  "perFile": true
+  "perFile": true,
+  "exclude": "scripts/get_version.ts"
 }
