@@ -8,6 +8,10 @@ import { Type } from "../type.ts";
 import type { JSONType } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
 
+/**
+ * Base class for Avro logical types that wrap an underlying physical type
+ * while exposing a richer TypeScript representation.
+ */
 export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
   protected readonly underlyingType: Type<TUnderlying>;
 
@@ -163,6 +167,10 @@ class LogicalResolver<TValue, TUnderlying> extends Resolver<TValue> {
   }
 }
 
+/**
+ * Logical type variant for named Avro schemas (record, enum, fixed) that keeps
+ * track of the fully qualified name and aliases of the underlying type.
+ */
 export abstract class NamedLogicalType<TValue, TUnderlying>
   extends LogicalType<TValue, TUnderlying> {
   protected readonly namedType: NamedType<TUnderlying>;
@@ -185,6 +193,9 @@ export abstract class NamedLogicalType<TValue, TUnderlying>
   }
 }
 
+/**
+ * Helper to attach a logicalType annotation to an underlying Avro schema JSON.
+ */
 export function withLogicalTypeJSON(
   underlying: JSONType,
   logicalType: string,

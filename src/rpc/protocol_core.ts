@@ -26,6 +26,10 @@ import type {
   StatelessTransportFactory,
 } from "./protocol/transports/transport_helpers.ts";
 
+/**
+ * Core Avro RPC protocol representation that validates schemas, hashes the
+ * protocol definition, and coordinates message handlers and transports.
+ */
 export class Protocol implements ProtocolLike {
   #name: string;
   #namespace?: string;

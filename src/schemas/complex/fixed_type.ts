@@ -14,6 +14,9 @@ export interface FixedTypeParams extends ResolvedNames {
   size: number;
 }
 
+/**
+ * Avro `fixed` type representing a fixed-length byte sequence.
+ */
 export class FixedType extends NamedType<Uint8Array> {
   #size: number;
 

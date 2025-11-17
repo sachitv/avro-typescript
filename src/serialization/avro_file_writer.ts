@@ -30,7 +30,8 @@ export interface AvroWriterOptions {
 }
 
 /**
- * Internal writer responsible for emitting Avro object container files.
+ * Low-level writer for Avro object container files that manages schema
+ * serialization, block encoding, metadata, and sync markers.
  */
 export class AvroFileWriter {
   #tap: WritableTap;
