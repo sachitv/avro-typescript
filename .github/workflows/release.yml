@@ -19,7 +19,7 @@ jobs:
       - name: Get version
         id: version
         run: |
-          VERSION=$(deno eval "import config from './deno.jsonc'; console.log(config.version);")
+          VERSION=$(deno task get-version)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       - name: Check if tag exists
         run: |
