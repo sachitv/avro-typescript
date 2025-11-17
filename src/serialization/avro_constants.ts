@@ -1,7 +1,8 @@
 import { createType } from "../type/create_type.ts";
+import type { Type } from "../schemas/type.ts";
 
 // Type of Avro header.
-export const HEADER_TYPE = createType({
+export const HEADER_TYPE: Type = createType({
   type: "record",
   name: "org.apache.avro.file.Header",
   fields: [
@@ -12,7 +13,7 @@ export const HEADER_TYPE = createType({
 });
 
 // Type of each block.
-export const BLOCK_TYPE = createType({
+export const BLOCK_TYPE: Type = createType({
   type: "record",
   name: "org.apache.avro.file.Block",
   fields: [
@@ -23,4 +24,4 @@ export const BLOCK_TYPE = createType({
 });
 
 // First 4 bytes of an Avro object container file.
-export const MAGIC_BYTES = new Uint8Array([0x4F, 0x62, 0x6A, 0x01]); // 'Obj\x01'
+export const MAGIC_BYTES: Uint8Array = new Uint8Array([0x4F, 0x62, 0x6A, 0x01]); // 'Obj\x01'

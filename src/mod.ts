@@ -9,7 +9,11 @@ export { BaseType } from "./schemas/base_type.ts";
 export { PrimitiveType } from "./schemas/primitive/primitive_type.ts";
 export { FixedSizeBaseType } from "./schemas/primitive/fixed_size_base_type.ts";
 export { NamedType } from "./schemas/complex/named_type.ts";
-export { LogicalType, NamedLogicalType, withLogicalTypeJSON } from "./schemas/logical/logical_type.ts";
+export {
+  LogicalType,
+  NamedLogicalType,
+  withLogicalTypeJSON,
+} from "./schemas/logical/logical_type.ts";
 
 // Primitive types
 export { BooleanType } from "./schemas/primitive/boolean_type.ts";
@@ -51,11 +55,18 @@ export { safeStringify } from "./schemas/json.ts";
 // Serialization
 export { AvroFileParser } from "./serialization/avro_file_parser.ts";
 export { AvroFileWriter } from "./serialization/avro_file_writer.ts";
-export { HEADER_TYPE, BLOCK_TYPE, MAGIC_BYTES } from "./serialization/avro_constants.ts";
+export {
+  BLOCK_TYPE,
+  HEADER_TYPE,
+  MAGIC_BYTES,
+} from "./serialization/avro_constants.ts";
 
 // Buffers
 export { BlobReadableBuffer } from "./serialization/buffers/blob_readable_buffer.ts";
-export { InMemoryReadableBuffer, InMemoryWritableBuffer } from "./serialization/buffers/in_memory_buffer.ts";
+export {
+  InMemoryReadableBuffer,
+  InMemoryWritableBuffer,
+} from "./serialization/buffers/in_memory_buffer.ts";
 
 // Streams
 export { StreamReadableBuffer } from "./serialization/streams/stream_readable_buffer.ts";
@@ -75,15 +86,21 @@ export { DeflateDecoder } from "./serialization/decoders/deflate_decoder.ts";
 export { ReadableTap, WritableTap } from "./serialization/tap.ts";
 
 // Utilities
-export { encode, decode } from "./serialization/text_encoding.ts";
+export { decode, encode } from "./serialization/text_encoding.ts";
 
 // RPC - Protocols
 export { Protocol } from "./rpc/protocol_core.ts";
 
 // RPC - Message endpoints
 export { MessageEndpoint } from "./rpc/message_endpoint/base.ts";
-export { MessageEmitter, StatelessEmitter } from "./rpc/message_endpoint/emitter.ts";
-export { MessageListener, StatelessListener } from "./rpc/message_endpoint/listener.ts";
+export {
+  MessageEmitter,
+  StatelessEmitter,
+} from "./rpc/message_endpoint/emitter.ts";
+export {
+  MessageListener,
+  StatelessListener,
+} from "./rpc/message_endpoint/listener.ts";
 
 // RPC - Definitions
 export { Message } from "./rpc/definitions/message_definition.ts";
@@ -91,4 +108,7 @@ export { Message } from "./rpc/definitions/message_definition.ts";
 // RPC - Transports
 export { createFetchTransport } from "./rpc/protocol/transports/fetch.ts";
 export { createWebSocketTransport } from "./rpc/protocol/transports/websocket.ts";
-export { createInMemoryTransport, createInMemoryTransportPair } from "./rpc/protocol/transports/in_memory.ts";
+export {
+  createInMemoryTransport,
+  createInMemoryTransportPair,
+} from "./rpc/protocol/transports/in_memory.ts";
