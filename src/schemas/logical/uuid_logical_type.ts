@@ -3,7 +3,7 @@ import { StringType } from "../primitive/string_type.ts";
 import type { NamedType } from "../complex/named_type.ts";
 import { withLogicalTypeJSON } from "./logical_type.ts";
 import { LogicalType } from "./logical_type.ts";
-import type { Type } from "../type.ts";
+import type { JSONType, Type } from "../type.ts";
 
 const UUID_REGEX =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
@@ -62,7 +62,7 @@ export class UuidLogicalType extends LogicalType<string, string | Uint8Array> {
     return bytesToUuid(bytes);
   }
 
-  public override toJSON() {
+  public override toJSON(): JSONType {
     return withLogicalTypeJSON(this.#underlying.toJSON(), "uuid");
   }
 

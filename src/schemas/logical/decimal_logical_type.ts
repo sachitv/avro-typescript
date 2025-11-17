@@ -2,6 +2,7 @@ import { BytesType } from "../primitive/bytes_type.ts";
 import { FixedType } from "../complex/fixed_type.ts";
 import { withLogicalTypeJSON } from "./logical_type.ts";
 import { LogicalType } from "./logical_type.ts";
+import type { JSONType } from "../type.ts";
 
 interface DecimalParams {
   precision: number;
@@ -89,7 +90,7 @@ export class DecimalLogicalType extends LogicalType<bigint, Uint8Array> {
     return decodeBigInt(value);
   }
 
-  public override toJSON() {
+  public override toJSON(): JSONType {
     const extras: Record<string, unknown> = {
       precision: this.#precision,
     };

@@ -2,6 +2,7 @@ import type { IntType } from "../primitive/int_type.ts";
 import type { LongType } from "../primitive/long_type.ts";
 import { LogicalType, withLogicalTypeJSON } from "./logical_type.ts";
 import { bigIntToSafeNumber } from "../../serialization/conversion.ts";
+import type { JSONType } from "../type.ts";
 
 const MILLIS_PER_DAY = 86_400_000;
 const MICROS_PER_DAY = 86_400_000_000n;
@@ -34,7 +35,7 @@ export class DateLogicalType extends LogicalType<number, number> {
     return today + Math.floor(Math.random() * 2000) - 1000;
   }
 
-  public override toJSON() {
+  public override toJSON(): JSONType {
     return withLogicalTypeJSON(this.getUnderlyingType().toJSON(), "date");
   }
 }
@@ -67,7 +68,7 @@ export class TimeMillisLogicalType extends LogicalType<number, number> {
     return Math.floor(Math.random() * MILLIS_PER_DAY);
   }
 
-  public override toJSON() {
+  public override toJSON(): JSONType {
     return withLogicalTypeJSON(
       this.getUnderlyingType().toJSON(),
       "time-millis",
@@ -102,7 +103,7 @@ export class TimeMicrosLogicalType extends LogicalType<bigint, bigint> {
     return BigInt(Math.floor(Math.random() * Number(MICROS_PER_DAY)));
   }
 
-  public override toJSON() {
+  public override toJSON(): JSONType {
     return withLogicalTypeJSON(
       this.getUnderlyingType().toJSON(),
       "time-micros",
@@ -149,7 +150,7 @@ export class TimestampMillisLogicalType extends LogicalType<Date, bigint> {
     return diff < 0 ? -1 : diff > 0 ? 1 : 0;
   }
 
-  public override toJSON() {
+  public override toJSON(): JSONType {
     return withLogicalTypeJSON(
       this.getUnderlyingType().toJSON(),
       "timestamp-millis",
@@ -186,7 +187,7 @@ export class TimestampMicrosLogicalType extends LogicalType<bigint, bigint> {
     return nowMicros + offset;
   }
 
-  public override toJSON() {
+  public override toJSON(): JSONType {
     return withLogicalTypeJSON(
       this.getUnderlyingType().toJSON(),
       "timestamp-micros",
@@ -223,7 +224,7 @@ export class TimestampNanosLogicalType extends LogicalType<bigint, bigint> {
     return nowNanos + offset;
   }
 
-  public override toJSON() {
+  public override toJSON(): JSONType {
     return withLogicalTypeJSON(
       this.getUnderlyingType().toJSON(),
       "timestamp-nanos",
@@ -262,7 +263,7 @@ export class LocalTimestampMillisLogicalType
     return Math.trunc(now + offset);
   }
 
-  public override toJSON() {
+  public override toJSON(): JSONType {
     return withLogicalTypeJSON(
       this.getUnderlyingType().toJSON(),
       "local-timestamp-millis",
@@ -300,7 +301,7 @@ export class LocalTimestampMicrosLogicalType
     return nowMicros + offset;
   }
 
-  public override toJSON() {
+  public override toJSON(): JSONType {
     return withLogicalTypeJSON(
       this.getUnderlyingType().toJSON(),
       "local-timestamp-micros",
@@ -338,7 +339,7 @@ export class LocalTimestampNanosLogicalType
     return nowNanos + offset;
   }
 
-  public override toJSON() {
+  public override toJSON(): JSONType {
     return withLogicalTypeJSON(
       this.getUnderlyingType().toJSON(),
       "local-timestamp-nanos",

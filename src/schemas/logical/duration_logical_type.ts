@@ -4,6 +4,7 @@ import {
   NamedLogicalType,
   withLogicalTypeJSON,
 } from "./logical_type.ts";
+import type { JSONType } from "../type.ts";
 
 export interface DurationValue {
   months: number;
@@ -75,7 +76,7 @@ export class DurationLogicalType
     };
   }
 
-  public override toJSON() {
+  public override toJSON(): JSONType {
     return withLogicalTypeJSON(this.getUnderlyingType().toJSON(), "duration");
   }
 }
