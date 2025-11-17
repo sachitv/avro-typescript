@@ -2,12 +2,11 @@ name: Release
 
 on:
   workflow_dispatch:
-  pull_request:
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    # if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     permissions:
       contents: write
       id-token: write
@@ -38,4 +37,4 @@ jobs:
           name: Release ${{ steps.version.outputs.version }}
           generate_release_notes: true
       - name: Publish package
-        run: deno publish --dry-run
+        run: deno publish
