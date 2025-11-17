@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: "2.5.6"
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(deno eval "import config from './deno.jsonc'; console.log(config.version);")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Check if tag exists
+        run: |
+          if git tag -l | grep -q "^${{ steps.version.outputs.version }}$"; then
+            echo "Tag ${{ steps.version.outputs.version }} already exists"
+            exit 1
+          fi
+      - name: Create tag
+        run: |
+          git tag ${{ steps.version.outputs.version }}
+          git push origin ${{ steps.version.outputs.version }}
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+      - name: Publish package
+        run: deno publish --dry-run
