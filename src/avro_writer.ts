@@ -1,13 +1,13 @@
-import type { IWritableBuffer } from "./internal/serialization/buffers/buffer.ts";
+import type { IWritableBuffer } from "./serialization/buffers/buffer.ts";
 import {
   AvroFileWriter,
   type AvroWriterOptions,
-} from "./internal/serialization/avro_file_writer.ts";
-import { StreamWritableBuffer } from "./internal/serialization/streams/stream_writable_buffer.ts";
-import { StreamWritableBufferAdapter } from "./internal/serialization/streams/stream_writable_buffer_adapter.ts";
+} from "./serialization/avro_file_writer.ts";
+import { StreamWritableBuffer } from "./serialization/streams/stream_writable_buffer.ts";
+import { StreamWritableBufferAdapter } from "./serialization/streams/stream_writable_buffer_adapter.ts";
 
-export type { AvroWriterOptions } from "./internal/serialization/avro_file_writer.ts";
-export type { EncoderRegistry } from "./internal/serialization/encoders/mod.ts";
+export type { AvroWriterOptions } from "./serialization/avro_file_writer.ts";
+export type { EncoderRegistry } from "./serialization/encoders/encoder.ts";
 
 /**
  * Interface exposed by Avro writer instances.

@@ -26,8 +26,8 @@ and writer layers.
   - `registry`: reuse a shared `Map<string, Type>` to keep named type instances
     in sync (useful for recursive schema graphs or schema evolution).
 
-```ts
-import { createType } from "../internal/createType/mod.ts";
+```typescript
+import { createType } from "../src/type/create_type.ts";
 
 const schema = {
   type: "record",
@@ -50,7 +50,12 @@ custom tooling that needs schema-aware decoding/encoding.
 to the most common data sources. All readers expose the same API for querying
 the header and iterating records:
 
-```ts
+```typescript ignore
+import { AvroReader } from "../src/avro_reader.ts";
+
+const buffer = new ArrayBuffer(0);
+const options = {};
+
 const reader = AvroReader.fromBuffer(buffer, options);
 for await (const record of reader.iterRecords()) {
   // ...
@@ -61,8 +66,8 @@ await reader.close();
 ### Buffer- or Blob-backed readers
 
 - `AvroReader.fromBuffer(buffer, options)` accepts any implementation of
-  `IReadableBuffer` (`src/internal/serialization/buffers/buffer.ts`). The
-  `buffer` must implement `read(offset, size)` and is random-access friendly.
+  `IReadableBuffer` (`../src/serialization/buffers/buffer.ts`). The `buffer`
+  must implement `read(offset, size)` and is random-access friendly.
 - `AvroReader.fromBlob(blob, options)` wraps the blob with `BlobReadableBuffer`
   to provide random access without materializing the entire file.
 
@@ -93,13 +98,13 @@ await reader.close();
 
 - `AvroWriter.toBuffer(buffer, options)`: accepts any `IWritableBuffer` that
   implements `appendBytes(data)` and `isValid()` (see
-  `src/internal/serialization/buffers/buffer.ts`).
+  `../src/serialization/buffers/buffer.ts`).
 - `AvroWriter.toStream(stream, options)`: writes to a
   `WritableStream<Uint8Array>` through `StreamWritableBuffer` +
   `StreamWritableBufferAdapter`.
 
 Writer options (`AvroWriterOptions`) live in
-`src/internal/serialization/avro_file_writer.ts` and allow you to provide:
+`../src/serialization/avro_file_writer.ts` and allow you to provide:
 
 - `schema`: the writer schema.
 - `codec`: `"null"` (default), `"deflate"`, or custom codecs via
@@ -107,7 +112,13 @@ Writer options (`AvroWriterOptions`) live in
 - `metadata`: attach arbitrary metadata key/value pairs to the container file.
 - `blockSize`, `syncInterval`: tune when blocks flush.
 
-```ts
+```typescript
+import { AvroWriter } from "../src/avro_writer.ts";
+
+const stream = new WritableStream();
+const schema = { type: "string" };
+const record = "test";
+
 const writer = AvroWriter.toStream(stream, {
   schema,
   codec: "deflate",
@@ -122,7 +133,7 @@ await writer.close();
 
 - `IReadableBuffer`/`IWritableBuffer` are the extension points for integrating
   Avro IO with your own buffer implementations
-  (`src/internal/serialization/buffers/buffer.ts`).
+  (`../src/serialization/buffers/buffer.ts`).
 - For stream sources, the project provides `IStreamReadableBuffer` and
   `IStreamWritableBuffer` along with helpers:
   - `StreamReadableBuffer`, `StreamWritableBuffer`: wrap Web Streams.
@@ -139,7 +150,16 @@ await writer.close();
   3. Combine with manual caching or thread-safe storage if you need to share the
      buffer across readers/writers.
 
-```ts
+<!--
+Deno.File can't be used in here for some reason.
+-->
+
+```typescript ignore
+import type { IReadableBuffer } from "../src/serialization/buffers/buffer.ts";
+import { AvroReader } from "../src/avro_reader.ts";
+
+const file = null as any;
+
 class FileSystemReadableBuffer implements IReadableBuffer {
   constructor(private file: Deno.File) {}
 

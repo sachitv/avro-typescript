@@ -26,3 +26,17 @@
 - `deno task coverage`: builds on the `test` task to emit coverage data to the
   `coverage` directory; serve the results with `deno task serve:coverage` if you
   want an HTML report that you can view in your browser.
+
+## Git hooks
+
+Run the bundled `scripts/pre-commit.sh` before every commit by symlinking it
+into your local hook directory. From the repo root:
+
+```bash
+chmod +x scripts/pre-commit.sh
+ln -sf ../../scripts/pre-commit.sh .git/hooks/pre-commit
+```
+
+The script still shares the fmt+lint pipeline defined in `scripts/`, but this
+approach avoids any extra tooling: the symlink directly points Git at the shell
+script so it executes automatically on every commit.
