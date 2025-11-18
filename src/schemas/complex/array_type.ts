@@ -37,6 +37,9 @@ export interface ArrayTypeParams<T> {
   items: Type<T>;
 }
 
+/**
+ * Avro `array` type for homogeneous collections of items described by a schema.
+ */
 export class ArrayType<T = unknown> extends BaseType<T[]> {
   readonly #itemsType: Type<T>;
 

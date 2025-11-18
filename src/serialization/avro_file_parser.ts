@@ -44,6 +44,10 @@ export interface AvroFileParserOptions {
   decoders?: DecoderRegistry;
 }
 
+/**
+ * Parser for Avro object container files that reads headers, resolves schemas,
+ * and streams decoded records from readable buffers.
+ */
 export class AvroFileParser {
   #buffer: IReadableBuffer;
   #header: AvroHeader | undefined;

@@ -116,6 +116,9 @@ interface FieldMapping {
   resolver?: Resolver;
 }
 
+/**
+ * Avro `record` type supporting ordered fields, aliases, and schema evolution.
+ */
 export class RecordType extends NamedType<Record<string, unknown>> {
   #fields: RecordField[];
   #fieldNameToIndex: Map<string, number>;

@@ -50,6 +50,9 @@ export function getBranchTypeName(type: Type): string {
   throw new Error("Unable to determine union branch name.");
 }
 
+/**
+ * Avro `union` type that supports values conforming to one of multiple schemas.
+ */
 export class UnionType extends BaseType<UnionValue> {
   readonly #types: Type[];
   readonly #branches: BranchInfo[];

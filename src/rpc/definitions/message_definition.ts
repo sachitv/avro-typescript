@@ -5,6 +5,10 @@ import type { UnionType } from "../../schemas/complex/union_type.ts";
 import type { Type } from "../../schemas/type.ts";
 import type { MessageDefinition } from "./protocol_definitions.ts";
 
+/**
+ * Schema-aware representation of an Avro RPC message definition including
+ * request, response, and error types.
+ */
 export class Message {
   readonly name: string;
   readonly doc?: string;

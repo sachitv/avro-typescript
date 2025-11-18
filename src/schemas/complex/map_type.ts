@@ -41,6 +41,9 @@ export async function readMapInto<T>(
   }
 }
 
+/**
+ * Avro `map` type for string-keyed collections of values matching a schema.
+ */
 export class MapType<T = unknown> extends BaseType<Map<string, T>> {
   readonly #valuesType: Type<T>;
 

@@ -14,6 +14,8 @@ export function _safeJSONStringify(obj: unknown, indent = 2): string {
 }
 
 export function safeStringify(value: unknown): string {
+  // Converts supported primitive values and complex objects into stable JSON
+  // while handling circular references and bigint values.
   if (
     typeof value === "string" || typeof value === "bigint" ||
     typeof value === "number" || typeof value === "boolean" || value === null ||
