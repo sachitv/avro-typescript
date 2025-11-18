@@ -31,6 +31,7 @@ jobs:
           skip-commit: true
           skip-tag: true
           git-push: false
+          output-file: "false"
       - name: Check if tag exists
         run: |
           if git tag -l | grep -q "^${{ steps.version.outputs.version }}$"; then
