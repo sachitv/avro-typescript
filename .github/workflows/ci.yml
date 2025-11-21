@@ -44,6 +44,13 @@ jobs:
         run: deno task test:ci
       - name: Check coverage
         run: deno run -A jsr:@ashishkujoy/deno-coverage-checker
+      - name: Generate LCOV report
+        run: deno coverage coverage --lcov > coverage.lcov
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.lcov
       - name: Publish test results
         uses: dorny/test-reporter@v2
         if: success() || failure()
