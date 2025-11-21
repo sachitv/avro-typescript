@@ -1,6 +1,7 @@
 # Avro TypeScript
 
-![CI](https://github.com/sachitv/avro-typescript/actions/workflows/ci.yml/badge.svg?branch=main)
+[![CI](https://github.com/sachitv/avro-typescript/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/sachitv/avro-typescript/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush)
+[![codecov](https://codecov.io/gh/sachitv/avro-typescript/branch/main/graph/badge.svg?token=0SWSYMKPT8)](https://codecov.io/gh/sachitv/avro-typescript)
 
 `avro-typescript` is an open source implementation of Apache Avro for
 TypeScript. It mirrors the Avro specifications from
