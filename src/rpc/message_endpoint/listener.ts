@@ -4,7 +4,6 @@ import type {
   HandshakeRequestMessage,
   HandshakeResponseInit,
 } from "../protocol/wire_format/handshake.ts";
-import { concatUint8Arrays } from "../../internal/collections/array_utils.ts";
 import {
   bytesEqual,
   bytesToHex,
@@ -40,6 +39,9 @@ export class StatelessListener extends MessageListener {
   #protocolFactory: ProtocolFactory;
   #requestDecoder: CallRequestEnvelopeDecoder;
   #runPromise: Promise<void>;
+  #exposeProtocol: boolean;
+  #maxRequestSize: number;
+  #requestTimeout: number;
 
   constructor(
     protocol: ProtocolLike,
@@ -51,6 +53,11 @@ export class StatelessListener extends MessageListener {
     this.#transport = transport;
     this.#protocolFactory = protocolFactory;
     this.#requestDecoder = opts.requestDecoder ?? decodeCallRequestEnvelope;
+    this.#exposeProtocol = opts.exposeProtocol ?? false;
+    // Security: limit request size to prevent DoS (default 10MB)
+    this.#maxRequestSize = opts.maxRequestSize ?? 10 * 1024 * 1024;
+    // Security: timeout to prevent hanging requests (default 30 seconds)
+    this.#requestTimeout = opts.requestTimeout ?? 30_000;
     this.#runPromise = this.#run();
   }
 
@@ -68,21 +75,46 @@ export class StatelessListener extends MessageListener {
   async #run(): Promise<void> {
     const duplex = toBinaryDuplex(this.#transport);
     const assembler = new FrameAssembler();
+    let totalSize = 0;
+
     try {
-      const chunks: Uint8Array[] = [];
-      while (true) {
-        const chunk = await duplex.readable.read();
-        if (chunk === null) {
-          break;
+      // Set up timeout for the entire request processing
+      const timeoutController = new AbortController();
+      const timeoutId = setTimeout(() => {
+        timeoutController.abort();
+      }, this.#requestTimeout);
+
+      try {
+        while (!timeoutController.signal.aborted) {
+          const chunk = await duplex.readable.read();
+          if (chunk === null) {
+            break;
+          }
+
+          // Security: check size limit to prevent DoS
+          totalSize += chunk.length;
+          if (totalSize > this.#maxRequestSize) {
+            throw new Error(
+              `request too large: ${totalSize} bytes (max: ${this.#maxRequestSize})`,
+            );
+          }
+
+          const messages = assembler.push(chunk);
+          if (messages.length > 0) {
+            // Process the first complete message
+            await this.#handleRequest(messages[0], duplex);
+            return; // Only process one request per connection in stateless mode
+          }
         }
-        chunks.push(chunk);
-      }
-      const payload = concatUint8Arrays(chunks);
-      const messages = assembler.push(payload);
-      if (!messages.length) {
+
+        if (timeoutController.signal.aborted) {
+          throw new Error("request timeout");
+        }
+
         throw new Error("no request payload");
+      } finally {
+        clearTimeout(timeoutId);
       }
-      await this.#handleRequest(messages[0], duplex);
     } catch (err) {
       this.dispatchError(err);
     } finally {
@@ -158,35 +190,62 @@ export class StatelessListener extends MessageListener {
     requestResolverKey: string;
   }> {
     let validationError: unknown = null;
+    let resolverError: unknown = null;
     const clientHashKey = bytesToHex(handshake.clientHash);
     const needsResolver = clientHashKey !== this.protocol.hashKey;
-    try {
-      if (needsResolver && !this.protocol.hasListenerResolvers(clientHashKey)) {
-        if (handshake.clientProtocol) {
-          const emitterProtocol = this.#protocolFactory(
-            JSON.parse(handshake.clientProtocol),
+
+    if (needsResolver && !this.protocol.hasListenerResolvers(clientHashKey)) {
+      if (handshake.clientProtocol) {
+        // Security: validate JSON before parsing
+        if (
+          typeof handshake.clientProtocol !== "string" ||
+          handshake.clientProtocol.length > 1024 * 1024
+        ) { // 1MB limit
+          validationError = new Error(
+            "invalid client protocol: too large or not a string",
           );
-          this.protocol.ensureListenerResolvers(clientHashKey, emitterProtocol);
         } else {
-          validationError = new Error("unknown client protocol hash");
+          try {
+            // Basic JSON validation
+            const parsedProtocol = JSON.parse(handshake.clientProtocol);
+            const emitterProtocol = this.#protocolFactory(parsedProtocol);
+            this.protocol.ensureListenerResolvers(
+              clientHashKey,
+              emitterProtocol,
+            );
+          } catch (err) {
+            validationError = err instanceof Error
+              ? err
+              : new Error("invalid client protocol JSON");
+          }
         }
+      } else {
+        resolverError = new Error("unknown client protocol hash");
       }
-    } catch (err) {
-      validationError = err;
     }
 
+    const handshakeIssue = validationError ?? resolverError;
     const serverMatch = bytesEqual(
       handshake.serverHash,
       this.protocol.getHashBytes(),
     );
+
+    // Protocol exposure logic:
+    // - Expose when server hash doesn't match AND client hash is known (normal schema evolution)
+    // - Expose when exposeProtocol is true (explicit discovery mode)
+    // - Never expose when there are validation errors (malformed input)
+    const clientHashKnown = !needsResolver;
+    const shouldExposeProtocol = ((!serverMatch && clientHashKnown) ||
+      this.#exposeProtocol) && !validationError;
+
     const response: HandshakeResponseInit = {
-      match: validationError ? "NONE" : serverMatch ? "BOTH" : "CLIENT",
-      serverProtocol: validationError || serverMatch
-        ? null
-        : this.protocol.toString(),
+      match: handshakeIssue ? "NONE" : serverMatch ? "BOTH" : "CLIENT",
+      serverProtocol: shouldExposeProtocol ? this.protocol.toString() : null,
       serverHash: serverMatch ? null : this.protocol.getHashBytes(),
       meta: validationError
         ? new Map([["error", textEncoder.encode(String(validationError))]])
+        : resolverError
+        ? new Map([["error", textEncoder.encode(String(resolverError))]])
         : null,
     };
     return { response, requestResolverKey: clientHashKey };
