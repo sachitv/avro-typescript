@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { StatelessListener } from "../message_endpoint/listener.ts";
+import { StatelessEmitter } from "../message_endpoint/emitter.ts";
 import { Protocol } from "../protocol_core.ts";
 import type { ProtocolDefinition } from "../definitions/protocol_definitions.ts";
 import type { MessageEmitter } from "../message_endpoint/emitter.ts";
@@ -227,5 +228,50 @@ describe("Protocol core", () => {
       Error,
       "missing client message: add",
     );
+  });
+
+  it("returns message by name", () => {
+    const protocol = Protocol.create(definition);
+    const message = protocol.getMessage("add");
+    assert(message !== undefined);
+    assertEquals(message.name, "add");
+    assertEquals(protocol.getMessage("nonexistent"), undefined);
+  });
+
+  it("returns message names", () => {
+    const protocol = Protocol.create(definition);
+    const names = protocol.getMessageNames();
+    assertEquals(names, ["add"]);
+  });
+
+  it("returns message definition", () => {
+    const protocol = Protocol.create(definition);
+    const def = protocol.getMessageDefinition("add");
+    assert(def !== undefined);
+    assertEquals(def.request.length, 1);
+    assertEquals(def.response, "int");
+    assertEquals(protocol.getMessageDefinition("nonexistent"), undefined);
+  });
+
+  it("returns protocol info", () => {
+    const protocol = Protocol.create(definition);
+    const info = protocol.getProtocolInfo();
+    assertEquals(info.name, "org.example.Math");
+    assertEquals(info.namespace, "org.example");
+    assertEquals(info.hashKey, protocol.hashKey);
+    assert(info.hashBytes instanceof Uint8Array);
+    assertEquals(info.messageNames, ["add"]);
+  });
+
+  it("creates stateless emitter", () => {
+    const protocol = Protocol.create(definition);
+    const transportFactory = () => Promise.resolve({} as BinaryDuplexLike);
+    const emitter = protocol.createEmitter(transportFactory);
+    assert(emitter instanceof StatelessEmitter);
+  });
+
+  it("returns undefined for unknown handler", () => {
+    const protocol = Protocol.create(definition);
+    assertEquals(protocol.getHandler("unknown"), undefined);
   });
 });

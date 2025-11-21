@@ -5,6 +5,7 @@ import type { Type } from "../schemas/type.ts";
 import { md5FromString } from "../internal/crypto/md5.ts";
 import { Message } from "./definitions/message_definition.ts";
 import type {
+  MessageDefinition,
   MessageHandler,
   MessageTransportOptions,
   ProtocolDefinition,
@@ -138,6 +139,35 @@ export class Protocol implements ProtocolLike {
       }
     }
     return named;
+  }
+
+  getMessage(name: string): Message | undefined {
+    return this.#messages.get(name);
+  }
+
+  getMessageNames(): readonly string[] {
+    return Array.from(this.#messages.keys());
+  }
+
+  getMessageDefinition(name: string): MessageDefinition | undefined {
+    const message = this.#messages.get(name);
+    if (!message) {
+      return undefined;
+    }
+    const json = message.toJSON();
+    // Type assertion is safe here since Message.toJSON() returns a structure
+    // compatible with MessageDefinition
+    return json as unknown as MessageDefinition;
+  }
+
+  getProtocolInfo(): import("./definitions/protocol_definitions.ts").ProtocolInfo {
+    return {
+      name: this.#name,
+      namespace: this.#namespace,
+      hashKey: this.#hashKey,
+      hashBytes: this.#hashBytes,
+      messageNames: this.getMessageNames(),
+    };
   }
 
   getType(name: string): Type | undefined {

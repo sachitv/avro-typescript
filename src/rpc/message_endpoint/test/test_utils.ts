@@ -55,7 +55,7 @@ export class MockDuplex implements BinaryDuplexLike {
     this.readable = {
       read: () => {
         if (this.throwOnRead) {
-          throw new Error("transport read failed");
+          return Promise.reject(new Error("transport read failed"));
         }
         return Promise.resolve(
           this.responseQueue.length > 0 ? this.responseQueue.shift()! : null,

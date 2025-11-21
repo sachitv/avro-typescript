@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { beforeEach, describe, it } from "@std/testing/bdd";
 import type { HandshakeRequestInit } from "../../protocol/wire_format/handshake.ts";
 import { Protocol } from "../../protocol_core.ts";
@@ -14,6 +14,8 @@ import { FrameAssembler } from "../../protocol/frame_assembler.ts";
 import { createType } from "../../../type/create_type.ts";
 import type { Message } from "../../definitions/message_definition.ts";
 import { MockDuplex } from "./test_utils.ts";
+import { discoverProtocol } from "../../discovery.ts";
+import type { BinaryDuplexLike } from "../../protocol/transports/transport_helpers.ts";
 
 describe("StatelessListener", () => {
   const protocol = Protocol.create({
@@ -90,9 +92,29 @@ describe("StatelessListener", () => {
   };
 
   const createHash = (modifier: number): Uint8Array => {
-    const hash = protocol.getHashBytes();
+    const hash = new Uint8Array(protocol.getHashBytes());
     hash[0] ^= modifier;
     return hash;
+  };
+
+  const createDuplexPair = (): {
+    clientSide: BinaryDuplexLike;
+    serverSide: BinaryDuplexLike;
+  } => {
+    const clientToServer = new TransformStream<Uint8Array, Uint8Array>();
+    const serverToClient = new TransformStream<Uint8Array, Uint8Array>();
+
+    const clientSide: BinaryDuplexLike = {
+      readable: serverToClient.readable,
+      writable: clientToServer.writable,
+    };
+
+    const serverSide: BinaryDuplexLike = {
+      readable: clientToServer.readable,
+      writable: serverToClient.writable,
+    };
+
+    return { clientSide, serverSide };
   };
 
   it("handles request and sends response", async () => {
@@ -123,6 +145,37 @@ describe("StatelessListener", () => {
 
     assertEquals(mockDuplex.sent.length, 1);
     assertEquals(handled, true);
+    listener.destroy();
+  });
+
+  it("does not emit an error after processing a request", async () => {
+    const mockDuplex = new MockDuplex();
+    const handshakeRequest: HandshakeRequestInit = {
+      clientHash: protocol.getHashBytes(),
+      clientProtocol: null,
+      serverHash: protocol.getHashBytes(),
+    };
+    const framedRequest = await frameTestRequest(handshakeRequest);
+    mockDuplex.setResponse(framedRequest);
+
+    const listener = new StatelessListener(
+      protocol,
+      mockDuplex,
+      {},
+      Protocol.create,
+    );
+
+    const errors: Error[] = [];
+    listener.addEventListener("error", (event) => {
+      const errorEvent = event as ErrorEvent;
+      if (errorEvent.error instanceof Error) {
+        errors.push(errorEvent.error);
+      }
+    });
+
+    await waitForListenerClose(listener);
+
+    assertEquals(errors.length, 0);
     listener.destroy();
   });
 
@@ -491,6 +544,412 @@ describe("StatelessListener", () => {
       textDecoder.decode(errorMeta ?? new Uint8Array()),
       "SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)",
     );
+    listener.destroy();
+  });
+
+  it("does not expose protocol on validation failure even when discovery is enabled", async () => {
+    const mockDuplex = new MockDuplex();
+    const handshakeRequest: HandshakeRequestInit = {
+      clientHash: createHash(14),
+      clientProtocol: "{broken json",
+      serverHash: protocol.getHashBytes(),
+    };
+    const framedRequest = await frameTestRequest(handshakeRequest);
+    mockDuplex.setResponse(framedRequest);
+
+    const listener = new StatelessListener(
+      protocol,
+      mockDuplex,
+      { exposeProtocol: true },
+      Protocol.create,
+    );
+
+    await waitForListenerClose(listener);
+
+    const response = await decodeCallResponse(
+      chunkToBuffer(mockDuplex.sent[0]),
+      {
+        responseType: message.responseType,
+        errorType: message.errorType,
+        expectHandshake: true,
+      },
+    );
+    assertEquals(response.handshake?.match, "NONE");
+    assertEquals(response.handshake?.serverProtocol, null);
+    listener.destroy();
+  });
+
+  it("does not expose protocol by default on unknown hash", async () => {
+    const mockDuplex = new MockDuplex();
+    const handshakeRequest: HandshakeRequestInit = {
+      clientHash: createHash(6),
+      clientProtocol: null,
+      serverHash: createHash(7),
+    };
+    const framedRequest = await frameTestRequest(handshakeRequest);
+    mockDuplex.setResponse(framedRequest);
+
+    const listener = new StatelessListener(
+      protocol,
+      mockDuplex,
+      {},
+      Protocol.create,
+    );
+
+    await waitForListenerClose(listener);
+
+    const response = await decodeCallResponse(
+      chunkToBuffer(mockDuplex.sent[0]),
+      {
+        responseType: message.responseType,
+        errorType: message.errorType,
+        expectHandshake: true,
+      },
+    );
+    assertEquals(response.handshake?.match, "NONE");
+    assertEquals(response.handshake?.serverProtocol, null);
+    listener.destroy();
+  });
+
+  it("exposes protocol when exposeProtocol is true on unknown hash", async () => {
+    const mockDuplex = new MockDuplex();
+    const handshakeRequest: HandshakeRequestInit = {
+      clientHash: createHash(8),
+      clientProtocol: null,
+      serverHash: createHash(9),
+    };
+    const framedRequest = await frameTestRequest(handshakeRequest);
+    mockDuplex.setResponse(framedRequest);
+
+    const listener = new StatelessListener(
+      protocol,
+      mockDuplex,
+      { exposeProtocol: true },
+      Protocol.create,
+    );
+
+    await waitForListenerClose(listener);
+
+    const response = await decodeCallResponse(
+      chunkToBuffer(mockDuplex.sent[0]),
+      {
+        responseType: message.responseType,
+        errorType: message.errorType,
+        expectHandshake: true,
+      },
+    );
+    assertEquals(response.handshake?.match, "NONE");
+    assertEquals(response.handshake?.serverProtocol, protocol.toString());
+    listener.destroy();
+  });
+
+  it("Protocol.discover retrieves protocol from server", async () => {
+    const { clientSide, serverSide } = createDuplexPair();
+
+    const listener = new StatelessListener(
+      protocol,
+      serverSide,
+      { exposeProtocol: true },
+      Protocol.create,
+    );
+
+    const discoveryPromise = discoverProtocol(() =>
+      Promise.resolve(clientSide)
+    );
+
+    await waitForListenerClose(listener);
+
+    const discoveredProtocol = await discoveryPromise;
+
+    assertEquals(discoveredProtocol.getName(), protocol.getName());
+    assertEquals(discoveredProtocol.getHashBytes(), protocol.getHashBytes());
+    assertEquals(discoveredProtocol.toString(), protocol.toString());
+
+    listener.destroy();
+  });
+
+  it("Protocol.discover fails when server does not expose protocol", async () => {
+    const { clientSide, serverSide } = createDuplexPair();
+
+    // Create listener that doesn't expose protocol
+    const listener = new StatelessListener(
+      protocol,
+      serverSide,
+      { exposeProtocol: false }, // Don't expose protocol
+      Protocol.create,
+    );
+
+    const discoveryPromise = discoverProtocol(() =>
+      Promise.resolve(clientSide)
+    );
+
+    await waitForListenerClose(listener);
+
+    await assertRejects(
+      () => discoveryPromise,
+      Error,
+      "Server did not provide protocol in handshake response",
+    );
+
+    listener.destroy();
+  });
+
+  it("respects configurable maxRequestSize and requestTimeout", async () => {
+    const mockDuplex = new MockDuplex();
+    // Create a large payload that exceeds the custom limit
+    const largePayload = new Uint8Array(1024); // 1KB, but we'll set limit to 512B
+    mockDuplex.setResponse(largePayload);
+
+    const listener = new StatelessListener(
+      protocol,
+      mockDuplex,
+      {
+        maxRequestSize: 512, // Small limit for testing
+        requestTimeout: 100, // Short timeout for testing
+      },
+      Protocol.create,
+    );
+
+    const errors: Error[] = [];
+    listener.addEventListener("error", (event) => {
+      const errorEvent = event as ErrorEvent;
+      if (errorEvent.error instanceof Error) {
+        errors.push(errorEvent.error);
+      }
+    });
+
+    await waitForListenerClose(listener);
+
+    // Should get size limit error
+    assertEquals(errors.length, 1);
+    assertEquals(errors[0].message.includes("too large"), true);
+
+    listener.destroy();
+  });
+
+  it("handles destroy called multiple times", async () => {
+    const mockDuplex = new MockDuplex();
+    const handshakeRequest: HandshakeRequestInit = {
+      clientHash: protocol.getHashBytes(),
+      clientProtocol: null,
+      serverHash: protocol.getHashBytes(),
+    };
+    const framedRequest = await frameTestRequest(handshakeRequest);
+    mockDuplex.setResponse(framedRequest);
+
+    const listener = new StatelessListener(
+      protocol,
+      mockDuplex,
+      {},
+      Protocol.create,
+    );
+
+    await waitForListenerClose(listener);
+
+    // Call destroy multiple times - should not throw
+    listener.destroy();
+    listener.destroy();
+  });
+
+  it("handles transport read error", async () => {
+    const mockDuplex = new MockDuplex();
+    mockDuplex.throwOnRead = true;
+
+    const listener = new StatelessListener(
+      protocol,
+      mockDuplex,
+      {},
+      Protocol.create,
+    );
+
+    const errors: Error[] = [];
+    listener.addEventListener("error", (event) => {
+      let error: Error | undefined;
+      if (event instanceof ErrorEvent) {
+        error = event.error;
+      } else if (event instanceof CustomEvent) {
+        error = event.detail;
+      }
+      if (error instanceof Error) {
+        errors.push(error);
+      }
+    });
+
+    await waitForListenerClose(listener);
+
+    assertEquals(errors.length, 1);
+    assertEquals(errors[0].message, "transport read failed");
+
+    listener.destroy();
+  });
+
+  it("handles invalid client protocol type", async () => {
+    const mockDuplex = new MockDuplex();
+    const handshakeRequest: HandshakeRequestInit = {
+      clientHash: createHash(10),
+      clientProtocol: null,
+      serverHash: protocol.getHashBytes(),
+    };
+    const framedRequest = await frameTestRequest(handshakeRequest);
+    mockDuplex.setResponse(framedRequest);
+
+    const listener = new StatelessListener(
+      protocol,
+      mockDuplex,
+      {
+        requestDecoder: () =>
+          Promise.resolve(
+            {
+              handshake: {
+                clientHash: createHash(10),
+                clientProtocol: 123 as unknown as string, // Invalid type
+                serverHash: protocol.getHashBytes(),
+                meta: null,
+              },
+              metadata: new Map(),
+              messageName: message.name,
+              bodyTap: new Uint8Array(0) as never,
+            } satisfies CallRequestEnvelope,
+          ),
+      },
+      Protocol.create,
+    );
+
+    await waitForListenerClose(listener);
+
+    const response = await decodeCallResponse(
+      chunkToBuffer(mockDuplex.sent[0]),
+      {
+        responseType: message.responseType,
+        errorType: message.errorType,
+        expectHandshake: true,
+      },
+    );
+    assertEquals(response.handshake?.match, "NONE");
+    const errorMeta = response.handshake?.meta?.get("error");
+    assertEquals(
+      textDecoder.decode(errorMeta ?? new Uint8Array()),
+      "Error: invalid client protocol: too large or not a string",
+    );
+
+    listener.destroy();
+  });
+
+  it("handles client protocol too large", async () => {
+    const mockDuplex = new MockDuplex();
+    const largeProtocol = "x".repeat(1024 * 1024 + 1); // >1MB
+    const handshakeRequest: HandshakeRequestInit = {
+      clientHash: createHash(11),
+      clientProtocol: largeProtocol,
+      serverHash: protocol.getHashBytes(),
+    };
+    const framedRequest = await frameTestRequest(handshakeRequest);
+    mockDuplex.setResponse(framedRequest);
+
+    const listener = new StatelessListener(
+      protocol,
+      mockDuplex,
+      {},
+      Protocol.create,
+    );
+
+    await waitForListenerClose(listener);
+
+    const response = await decodeCallResponse(
+      chunkToBuffer(mockDuplex.sent[0]),
+      {
+        responseType: message.responseType,
+        errorType: message.errorType,
+        expectHandshake: true,
+      },
+    );
+    assertEquals(response.handshake?.match, "NONE");
+    const errorMeta = response.handshake?.meta?.get("error");
+    assertEquals(
+      textDecoder.decode(errorMeta ?? new Uint8Array()),
+      "Error: invalid client protocol: too large or not a string",
+    );
+
+    listener.destroy();
+  });
+
+  it("handles request timeout", async () => {
+    const sent: Uint8Array[] = [];
+    const duplex: BinaryDuplexLike = {
+      readable: {
+        read: () =>
+          new Promise<Uint8Array | null>((resolve) =>
+            setTimeout(() => resolve(null), 200) // Delay longer than timeout
+          ),
+      },
+      writable: new WritableStream<Uint8Array>({
+        write: (chunk) => {
+          sent.push(chunk);
+        },
+      }),
+    };
+
+    const listener = new StatelessListener(
+      protocol,
+      duplex,
+      { requestTimeout: 100 }, // Short timeout
+      Protocol.create,
+    );
+
+    const errors: Error[] = [];
+    listener.addEventListener("error", (event) => {
+      const errorEvent = event as ErrorEvent;
+      if (errorEvent.error instanceof Error) {
+        errors.push(errorEvent.error);
+      }
+    });
+
+    await waitForListenerClose(listener);
+
+    assertEquals(errors.length, 1);
+    assertEquals(errors[0].message, "request timeout");
+
+    listener.destroy();
+  });
+
+  it("handles protocol factory non-Error throw", async () => {
+    const mockDuplex = new MockDuplex();
+    const handshakeRequest: HandshakeRequestInit = {
+      clientHash: createHash(13),
+      clientProtocol: '{"protocol":"Test","messages":{}}', // Valid JSON
+      serverHash: protocol.getHashBytes(),
+    };
+    const framedRequest = await frameTestRequest(handshakeRequest);
+    mockDuplex.setResponse(framedRequest);
+
+    const failingProtocolFactory = () => {
+      throw "protocol factory non-error failure"; // Throw a string, not an Error
+    };
+
+    const listener = new StatelessListener(
+      protocol,
+      mockDuplex,
+      {},
+      failingProtocolFactory,
+    );
+
+    await waitForListenerClose(listener);
+
+    const response = await decodeCallResponse(
+      chunkToBuffer(mockDuplex.sent[0]),
+      {
+        responseType: message.responseType,
+        errorType: message.errorType,
+        expectHandshake: true,
+      },
+    );
+    assertEquals(response.handshake?.match, "NONE");
+    const errorMeta = response.handshake?.meta?.get("error");
+    assertEquals(
+      textDecoder.decode(errorMeta ?? new Uint8Array()),
+      "Error: invalid client protocol JSON",
+    );
+
     listener.destroy();
   });
 });
