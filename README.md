@@ -69,9 +69,8 @@ writer helpers, including how to plug in custom readable and writable buffers.
 
 ## Constructing Avro Types with `createType`
 
-The `createType` factory lives in `src/internal/createType/mod.ts` and turns any
-valid Avro schema into a `Type` instance that is consumed throughout the reader
-and writer layers.
+The `createType` factory turns any valid Avro schema into a `Type` instance that
+is consumed throughout the reader and writer layers.
 
 - **Supported inputs**:
   - Primitive names: pass strings like `"int"`, `"string"`, or `"boolean"`.
@@ -89,7 +88,7 @@ and writer layers.
     in sync (useful for recursive schema graphs or schema evolution).
 
 ```typescript
-import { createType } from "src/type/create_type.ts";
+import { createType } from "jsr:@sachitv/avro-typescript";
 
 const schema = {
   type: "record",
@@ -108,12 +107,12 @@ custom tooling that needs schema-aware decoding/encoding.
 
 ## Reading Avro Files
 
-`AvroReader` (see `src/avro_reader.ts`) exposes four factory helpers that cater
-to the most common data sources. All readers expose the same API for querying
-the header and iterating records:
+`AvroReader` exposes four factory helpers that cater to the most common data
+sources. All readers expose the same API for querying the header and iterating
+records:
 
 ```typescript ignore
-import { AvroReader } from "src/avro_reader.ts";
+import { AvroReader } from "jsr:@sachitv/avro-typescript";
 
 const buffer = new ArrayBuffer(0);
 const options = {};
@@ -128,8 +127,8 @@ await reader.close();
 ### Buffer- or Blob-backed readers
 
 - `AvroReader.fromBuffer(buffer, options)` accepts any implementation of
-  `IReadableBuffer` (`src/serialization/buffers/buffer.ts`). The `buffer` must
-  implement `read(offset, size)` and is random-access friendly.
+  `IReadableBuffer`. The `buffer` must implement `read(offset, size)` and is
+  random-access friendly.
 - `AvroReader.fromBlob(blob, options)` wraps the blob with `BlobReadableBuffer`
   to provide random access without materializing the entire file.
 
@@ -156,17 +155,15 @@ await reader.close();
 
 ## Writing Avro Files
 
-`AvroWriter` mirrors the reader helpers (`src/avro_writer.ts`). It exposes:
+`AvroWriter` mirrors the reader helpers. It exposes:
 
 - `AvroWriter.toBuffer(buffer, options)`: accepts any `IWritableBuffer` that
-  implements `appendBytes(data)` and `isValid()` (see
-  `src/serialization/buffers/buffer.ts`).
+  implements `appendBytes(data)` and `isValid()`.
 - `AvroWriter.toStream(stream, options)`: writes to a
   `WritableStream<Uint8Array>` through `StreamWritableBuffer` +
   `StreamWritableBufferAdapter`.
 
-Writer options (`AvroWriterOptions`) live in
-`src/serialization/avro_file_writer.ts` and allow you to provide:
+Writer options (`AvroWriterOptions`) allow you to provide:
 
 - `schema`: the writer schema.
 - `codec`: `"null"` (default), `"deflate"`, or custom codecs via
@@ -175,7 +172,7 @@ Writer options (`AvroWriterOptions`) live in
 - `blockSize`, `syncInterval`: tune when blocks flush.
 
 ```typescript
-import { AvroWriter } from "src/avro_writer.ts";
+import { AvroWriter } from "jsr:@sachitv/avro-typescript";
 
 const stream = new WritableStream();
 const schema = { type: "string" };
@@ -194,8 +191,7 @@ await writer.close();
 ## Custom Readables and Writables
 
 - `IReadableBuffer`/`IWritableBuffer` are the extension points for integrating
-  Avro IO with your own buffer implementations
-  (`src/serialization/buffers/buffer.ts`).
+  Avro IO with your own buffer implementations.
 - For stream sources, the project provides `IStreamReadableBuffer` and
   `IStreamWritableBuffer` along with helpers:
   - `StreamReadableBuffer`, `StreamWritableBuffer`: wrap Web Streams.
@@ -217,8 +213,8 @@ Deno.File can't be used in here for some reason.
 -->
 
 ```typescript ignore
-import type { IReadableBuffer } from "src/serialization/buffers/buffer.ts";
-import { AvroReader } from "src/avro_reader.ts";
+import type { IReadableBuffer } from "jsr:@sachitv/avro-typescript";
+import { AvroReader } from "jsr:@sachitv/avro-typescript";
 
 const file = null as any;
 
@@ -414,9 +410,8 @@ flowchart TB
 
 ## Using the TypeScript RPC API
 
-All runtime helpers live under `src/internal/rpc` and focus on the stateless
-binary structure of handshake frames, call requests, call responses, and framed
-messages.
+All runtime helpers focus on the stateless binary structure of handshake frames,
+call requests, call responses, and framed messages.
 
 ### Handshake helpers
 
@@ -431,7 +426,7 @@ import {
   decodeHandshakeResponse,
   encodeHandshakeRequest,
   type HandshakeRequestInit,
-} from "src/rpc/protocol/wire_format/handshake.ts";
+} from "jsr:@sachitv/avro-typescript";
 
 const myClientHash = new Uint8Array(16);
 const lastSeenServerHash = null;
@@ -483,7 +478,7 @@ at the payload for later decoding.
 import {
   decodeCallRequestEnvelope,
   encodeCallRequest,
-} from "src/rpc/protocol/wire_format/messages.ts";
+} from "jsr:@sachitv/avro-typescript";
 
 const request = null as any;
 const correlationBytes = new Uint8Array(0);
@@ -562,7 +557,7 @@ anchored at the payload bytes.
 import {
   decodeCallResponseEnvelope,
   encodeCallResponse,
-} from "src/rpc/protocol/wire_format/messages.ts";
+} from "jsr:@sachitv/avro-typescript";
 
 const responseStringType = null as any;
 const errorUnionType = null as any;
@@ -614,7 +609,7 @@ to mirror the JavaScript runtime's behavior.
 import {
   decodeFramedMessage,
   frameMessage,
-} from "src/rpc/protocol/wire_format/framing.ts";
+} from "jsr:@sachitv/avro-typescript";
 
 const request = null as any;
 const transport = { write: () => {} };
@@ -655,13 +650,13 @@ flowchart TB
 
 ### EventTarget-based Protocol API
 
-The `src/rpc/protocol_core.ts` module builds on the primitives above to offer an
-EventTarget-driven RPC layer similar to the classic JavaScript implementation.
+The package builds on the primitives above to offer an EventTarget-driven RPC
+layer similar to the classic JavaScript implementation.
 
 #### Defining a protocol
 
 ```typescript
-import { Protocol } from "src/rpc/protocol_core.ts";
+import { Protocol } from "jsr:@sachitv/avro-typescript";
 
 const catalog = Protocol.create({
   protocol: "Catalog",
@@ -693,13 +688,8 @@ catalog.on("lookup", async (req: any) => {
 
 #### Registering message handlers
 
-Handlers accept `{ readable, writable }` streams (or a factory for stateless
-transports) and dispatch incoming RPCs to registered handlers. Register Avro
-message handlers up front via `Protocol#on`—this is independent from the code
-that connects the protocol to an actual transport:
-
 ```typescript
-import { Protocol } from "src/rpc/protocol_core.ts";
+import { Protocol } from "jsr:@sachitv/avro-typescript";
 
 const catalog = Protocol.create({
   protocol: "Catalog",
@@ -837,8 +827,8 @@ const product = await catalog.emit("lookup", { sku: "ABC-123" }, emitter);
 Convenience helpers are available for common transports:
 
 ```typescript
-import { createFetchTransport } from "src/rpc/protocol/transports/fetch.ts";
-import { createWebSocketTransport } from "src/rpc/protocol/transports/websocket.ts";
+import { createFetchTransport } from "jsr:@sachitv/avro-typescript";
+import { createWebSocketTransport } from "jsr:@sachitv/avro-typescript";
 
 const httpEmitter = catalog.createEmitter(
   createFetchTransport("https://example.com/rpc"),

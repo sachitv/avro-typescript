@@ -53,6 +53,12 @@ export { ValidationError } from "./schemas/error.ts";
 export { safeStringify } from "./schemas/json.ts";
 
 // Serialization
+export type {
+  AvroFileParserOptions,
+  AvroHeader,
+  ParsedAvroHeader,
+} from "./serialization/avro_file_parser.ts";
+export type { AvroWriterOptions } from "./serialization/avro_file_writer.ts";
 export { AvroFileParser } from "./serialization/avro_file_parser.ts";
 export { AvroFileWriter } from "./serialization/avro_file_writer.ts";
 export {
@@ -62,6 +68,11 @@ export {
 } from "./serialization/avro_constants.ts";
 
 // Buffers
+export type {
+  IReadableAndWritableBuffer,
+  IReadableBuffer,
+  IWritableBuffer,
+} from "./serialization/buffers/buffer.ts";
 export { BlobReadableBuffer } from "./serialization/buffers/blob_readable_buffer.ts";
 export {
   InMemoryReadableBuffer,
@@ -69,6 +80,10 @@ export {
 } from "./serialization/buffers/in_memory_buffer.ts";
 
 // Streams
+export type {
+  IStreamReadableBuffer,
+  IStreamWritableBuffer,
+} from "./serialization/streams/streams.ts";
 export { StreamReadableBuffer } from "./serialization/streams/stream_readable_buffer.ts";
 export { StreamWritableBuffer } from "./serialization/streams/stream_writable_buffer.ts";
 export { StreamReadableBufferAdapter } from "./serialization/streams/stream_readable_buffer_adapter.ts";
@@ -77,12 +92,15 @@ export { FixedSizeStreamReadableBufferAdapter } from "./serialization/streams/fi
 export { ForwardOnlyStreamReadableBufferAdapter } from "./serialization/streams/forward_only_stream_readable_buffer_adapter.ts";
 
 // Encoders/Decoders
+export type { Encoder } from "./serialization/encoders/encoder.ts";
+export type { Decoder } from "./serialization/decoders/decoder.ts";
 export { NullEncoder } from "./serialization/encoders/null_encoder.ts";
 export { DeflateEncoder } from "./serialization/encoders/deflate_encoder.ts";
 export { NullDecoder } from "./serialization/decoders/null_decoder.ts";
 export { DeflateDecoder } from "./serialization/decoders/deflate_decoder.ts";
 
 // Taps
+export type { ReadableTapLike, WritableTapLike } from "./serialization/tap.ts";
 export { ReadableTap, WritableTap } from "./serialization/tap.ts";
 
 // Utilities
@@ -103,9 +121,52 @@ export {
 } from "./rpc/message_endpoint/listener.ts";
 
 // RPC - Definitions
+export type {
+  CallRequestEnvelopeOptions,
+  MessageDefinition,
+  MessageTransportOptions,
+  ProtocolDefinition,
+  ProtocolHandlerContext,
+  ProtocolInfo,
+  ProtocolLike,
+  ProtocolOptions,
+  ResolverEntry,
+} from "./rpc/definitions/protocol_definitions.ts";
 export { Message } from "./rpc/definitions/message_definition.ts";
 
+// RPC - Wire Format
+export type {
+  HandshakeRequestInit,
+  HandshakeRequestMessage,
+  HandshakeResponseInit,
+  HandshakeResponseMessage,
+} from "./rpc/protocol/wire_format/handshake.ts";
+export type {
+  CallRequestEnvelope,
+  CallRequestInit,
+  CallRequestMessage,
+  CallResponseEnvelope,
+  CallResponseInit,
+  CallResponseMessage,
+  DecodeCallRequestOptions,
+  DecodeCallResponseOptions,
+} from "./rpc/protocol/wire_format/messages.ts";
+export type {
+  DecodeFramedMessageOptions,
+  DecodeFramedMessageResult,
+  FrameMessageOptions,
+} from "./rpc/protocol/wire_format/framing.ts";
+
 // RPC - Transports
+export type {
+  BinaryDuplex,
+  BinaryDuplexLike,
+  BinaryReadable,
+  BinaryWritable,
+  FetchTransportOptions,
+  WebSocketTransportOptions,
+} from "./rpc/protocol/transports/transport_helpers.ts";
+export type { InMemoryTransportPair } from "./rpc/protocol/transports/in_memory.ts";
 export { createFetchTransport } from "./rpc/protocol/transports/fetch.ts";
 export { createWebSocketTransport } from "./rpc/protocol/transports/websocket.ts";
 export {
