@@ -609,7 +609,8 @@ describe("RecordType", () => {
       });
 
       assertThrows(
-        () => type.cloneFromValue("string" as unknown as Record<string, unknown>),
+        () =>
+          type.cloneFromValue("string" as unknown as Record<string, unknown>),
         Error,
         "Cannot clone non-record value.",
       );
@@ -624,7 +625,8 @@ describe("RecordType", () => {
         "Cannot clone non-record value.",
       );
       assertThrows(
-        () => type.cloneFromValue([1, 2, 3] as unknown as Record<string, unknown>),
+        () =>
+          type.cloneFromValue([1, 2, 3] as unknown as Record<string, unknown>),
         Error,
         "Cannot clone non-record value.",
       );
@@ -640,7 +642,10 @@ describe("RecordType", () => {
       });
 
       assertThrows(
-        () => type.cloneFromValue({ name: "Ann" } as unknown as Record<string, unknown>),
+        () =>
+          type.cloneFromValue(
+            { name: "Ann" } as unknown as Record<string, unknown>,
+          ),
         Error,
         "Missing value for record field id with no default.",
       );

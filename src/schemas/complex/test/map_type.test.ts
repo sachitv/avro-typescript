@@ -290,7 +290,8 @@ describe("MapType", () => {
 
     it("throws error in clone when value is not map", () => {
       assertThrows(
-        () => intMap.cloneFromValue("not a map" as unknown as Map<string, number>),
+        () =>
+          intMap.cloneFromValue("not a map" as unknown as Map<string, number>),
         Error,
         "Cannot clone non-map value.",
       );
