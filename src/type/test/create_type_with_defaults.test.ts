@@ -37,7 +37,11 @@ const FULL_SCHEMA = {
       default: "FOO",
     },
     { name: "arrayField", type: { type: "array", items: "int" }, default: [1] },
-    { name: "mapField", type: { type: "map", values: "int" }, default: { a: 1 } },
+    {
+      name: "mapField",
+      type: { type: "map", values: "int" },
+      default: { a: 1 },
+    },
     {
       name: "fixedField",
       type: { type: "fixed", name: "TestFixed", size: 1 },
