@@ -10,6 +10,10 @@ export abstract class NamedType<T = unknown> extends BaseType<T> {
   readonly #namespace: string;
   readonly #aliases: string[];
 
+  /**
+   * Creates a new NamedType.
+   * @param resolvedNames The resolved names (full name, namespace, aliases).
+   */
   protected constructor(resolvedNames: ResolvedNames) {
     super();
     this.#fullName = resolvedNames.fullName;

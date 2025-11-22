@@ -4,6 +4,10 @@ import type {
   StatelessTransportFactory,
 } from "./transport_helpers.ts";
 
+/**
+ * Represents a pair of in-memory transports for client-server communication,
+ * providing a client factory and a server accept method for testing or local use.
+ */
 export interface InMemoryTransportPair {
   /**
    * Factory passed to emitters to establish a new client connection.
@@ -20,7 +24,12 @@ interface DuplexPair {
   server: BinaryDuplexLike;
 }
 
-function createInMemoryTransportPair(): InMemoryTransportPair {
+/**
+ * Creates a pair of in-memory transports for testing or local communication.
+ *
+ * @returns An object containing a client factory and an accept method for the server.
+ */
+export function createInMemoryTransportPair(): InMemoryTransportPair {
   const pendingServers: BinaryDuplexLike[] = [];
   const pendingAccepts: Array<(duplex: BinaryDuplexLike) => void> = [];
 
@@ -48,11 +57,14 @@ function createInMemoryTransportPair(): InMemoryTransportPair {
   return { clientFactory, accept };
 }
 
+/**
+ * Creates a simple in-memory transport factory.
+ *
+ * @returns A factory function that creates a new in-memory transport for each request.
+ */
 export function createInMemoryTransport(): StatelessTransportFactory {
   return createInMemoryTransportPair().clientFactory;
 }
-
-export { createInMemoryTransportPair };
 
 function createDuplexPair(): DuplexPair {
   const clientChannel = new MemoryChannel();

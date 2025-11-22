@@ -63,6 +63,12 @@ export class Protocol implements ProtocolLike {
     this.#hashKey = bytesToHex(this.#hashBytes);
   }
 
+  /**
+   * Creates a new Protocol instance from a definition.
+   * @param attrs The protocol definition object.
+   * @param opts Protocol creation options.
+   * @returns A new Protocol instance.
+   */
   static create(
     attrs: ProtocolDefinition,
     opts: ProtocolOptions = {},
@@ -101,6 +107,10 @@ export class Protocol implements ProtocolLike {
     );
   }
 
+  /**
+   * Creates a subprotocol sharing the same context but without a parent reference.
+   * @returns A new Protocol instance.
+   */
   subprotocol(): Protocol {
     return new Protocol(
       this.#name,
@@ -111,26 +121,44 @@ export class Protocol implements ProtocolLike {
     );
   }
 
+  /**
+   * Gets the protocol name.
+   */
   getName(): string {
     return this.#name;
   }
 
+  /**
+   * Returns the string representation of the protocol (JSON).
+   */
   toString(): string {
     return stringifyProtocol(this);
   }
 
+  /**
+   * Gets the MD5 hash of the protocol as a hex string.
+   */
   get hashKey(): string {
     return this.#hashKey;
   }
 
+  /**
+   * Gets the MD5 hash of the protocol as bytes.
+   */
   getHashBytes(): Uint8Array {
     return this.#hashBytes.slice();
   }
 
+  /**
+   * Gets all messages defined in the protocol.
+   */
   getMessages(): Map<string, Message> {
     return this.#messages;
   }
 
+  /**
+   * Gets all named types defined in the protocol.
+   */
   getNamedTypes(): Type[] {
     const named: Type[] = [];
     for (const type of this.#types.values()) {
@@ -141,14 +169,23 @@ export class Protocol implements ProtocolLike {
     return named;
   }
 
+  /**
+   * Gets a specific message by name.
+   */
   getMessage(name: string): Message | undefined {
     return this.#messages.get(name);
   }
 
+  /**
+   * Gets the names of all messages in the protocol.
+   */
   getMessageNames(): readonly string[] {
     return Array.from(this.#messages.keys());
   }
 
+  /**
+   * Gets the definition of a specific message.
+   */
   getMessageDefinition(name: string): MessageDefinition | undefined {
     const message = this.#messages.get(name);
     if (!message) {
@@ -160,6 +197,9 @@ export class Protocol implements ProtocolLike {
     return json as unknown as MessageDefinition;
   }
 
+  /**
+   * Gets summary information about the protocol.
+   */
   getProtocolInfo(): import("./definitions/protocol_definitions.ts").ProtocolInfo {
     return {
       name: this.#name,
@@ -170,10 +210,16 @@ export class Protocol implements ProtocolLike {
     };
   }
 
+  /**
+   * Gets a type definition by name.
+   */
   getType(name: string): Type | undefined {
     return this.#types.get(name);
   }
 
+  /**
+   * Registers a message handler for a specific message name.
+   */
   on(name: string, handler: MessageHandler): this {
     if (!this.#messages.has(name)) {
       throw new Error(`unknown message: ${name}`);
@@ -182,6 +228,12 @@ export class Protocol implements ProtocolLike {
     return this;
   }
 
+  /**
+   * Emits a message using the provided emitter.
+   * @param name The name of the message to emit.
+   * @param request The request payload.
+   * @param emitter The emitter to use.
+   */
   async emit(
     name: string,
     request: unknown,
@@ -197,6 +249,11 @@ export class Protocol implements ProtocolLike {
     return await emitter.send(message, request);
   }
 
+  /**
+   * Creates a new message emitter for this protocol.
+   * @param transport The transport factory or instance.
+   * @param opts Transport options.
+   */
   createEmitter(
     transport: BinaryDuplexLike | StatelessTransportFactory,
     opts: MessageTransportOptions = {},
@@ -207,6 +264,11 @@ export class Protocol implements ProtocolLike {
     throw new Error("Stateful transports are not supported yet.");
   }
 
+  /**
+   * Creates a new message listener for this protocol.
+   * @param transport The transport instance.
+   * @param opts Transport options.
+   */
   createListener(
     transport: BinaryDuplexLike,
     opts: MessageTransportOptions = {},
@@ -217,6 +279,9 @@ export class Protocol implements ProtocolLike {
     return new StatelessListener(this, transport, opts, Protocol.create);
   }
 
+  /**
+   * Gets the handler registered for a specific message.
+   */
   getHandler(name: string): MessageHandler | undefined {
     const handler = this.#handlers.get(name);
     if (handler) {
@@ -225,6 +290,9 @@ export class Protocol implements ProtocolLike {
     return this.#parent?.getHandler(name);
   }
 
+  /**
+   * Gets schema resolvers for an emitter (client) given a server hash.
+   */
   getEmitterResolvers(
     hashKey: string,
     messageName: string,
@@ -232,6 +300,9 @@ export class Protocol implements ProtocolLike {
     return this.#emitterResolvers.get(hashKey)?.get(messageName);
   }
 
+  /**
+   * Gets schema resolvers for a listener (server) given a client hash.
+   */
   getListenerResolvers(
     hashKey: string,
     messageName: string,
@@ -239,14 +310,23 @@ export class Protocol implements ProtocolLike {
     return this.#listenerResolvers.get(hashKey)?.get(messageName);
   }
 
+  /**
+   * Checks if resolvers exist for a given client hash.
+   */
   hasListenerResolvers(hashKey: string): boolean {
     return this.#listenerResolvers.has(hashKey);
   }
 
+  /**
+   * Checks if resolvers exist for a given server hash.
+   */
   hasEmitterResolvers(hashKey: string): boolean {
     return this.#emitterResolvers.has(hashKey);
   }
 
+  /**
+   * Ensures resolvers exist for communicating with a remote protocol (client-side).
+   */
   ensureEmitterResolvers(hashKey: string, remote: ProtocolLike): void {
     if (this.#emitterResolvers.has(hashKey)) {
       return;
@@ -267,6 +347,9 @@ export class Protocol implements ProtocolLike {
     this.#emitterResolvers.set(hashKey, resolvers);
   }
 
+  /**
+   * Ensures resolvers exist for communicating with a remote protocol (server-side).
+   */
   ensureListenerResolvers(
     hashKey: string,
     emitterProtocol: ProtocolLike,

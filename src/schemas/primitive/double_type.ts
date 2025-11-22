@@ -14,6 +14,7 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
  * Double type (64-bit).
  */
 export class DoubleType extends FixedSizeBaseType<number> {
+  /** Checks if the value is a valid double. */
   public check(
     value: unknown,
     errorHook?: ErrorHook,
@@ -26,10 +27,12 @@ export class DoubleType extends FixedSizeBaseType<number> {
     return isValid;
   }
 
+  /** Reads a double value from the tap. */
   public override async read(tap: ReadableTapLike): Promise<number> {
     return await tap.readDouble();
   }
 
+  /** Writes a double value to the tap. */
   public override async write(
     tap: WritableTapLike,
     value: number,
@@ -40,27 +43,39 @@ export class DoubleType extends FixedSizeBaseType<number> {
     await tap.writeDouble(value);
   }
 
+  /** Skips a double value in the tap. */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipDouble();
   }
 
+  /**
+   * Gets the size in bytes.
+   */
   public sizeBytes(): number {
     return 8; // 8 bytes
   }
 
+  /** Clones the value to a number. */
   public override cloneFromValue(value: unknown): number {
     this.check(value, throwInvalidError, []);
     return value as number;
   }
 
+  /**
+   * Compares two double values.
+   */
   public override compare(val1: number, val2: number): number {
     return val1 < val2 ? -1 : val1 > val2 ? 1 : 0;
   }
 
+  /**
+   * Generates a random double value.
+   */
   public override random(): number {
     return Math.random();
   }
 
+  /** Creates a resolver for the given writer type. */
   public override createResolver(writerType: Type): Resolver {
     if (writerType instanceof IntType) {
       // Double can promote from int (32-bit to 64-bit double)
@@ -91,10 +106,12 @@ export class DoubleType extends FixedSizeBaseType<number> {
     }
   }
 
+  /** Returns the JSON representation of the type. */
   public override toJSON(): JSONType {
     return "double";
   }
 
+  /** Matches two taps for equality. */
   public override async match(
     tap1: ReadableTapLike,
     tap2: ReadableTapLike,

@@ -30,6 +30,18 @@ jobs:
       - name: Run deno fmt --check
         run: deno fmt --check
 
+  jsdoc:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: "2.5.6"
+      - name: Run JSDoc lint
+        run: deno task jsdoc:lint
+
   test_and_coverage:
     runs-on: ubuntu-24.04-arm
     permissions:

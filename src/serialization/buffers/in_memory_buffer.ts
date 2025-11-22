@@ -3,13 +3,22 @@ import type { IReadableBuffer, IWritableBuffer } from "./buffer.ts";
 /**
  * Shared strict in-memory buffer base with common functionality.
  */
-abstract class InMemoryBufferBase {
+export abstract class InMemoryBufferBase {
+  /** The underlying Uint8Array view of the buffer. */
   protected readonly view: Uint8Array;
 
+  /**
+   * Constructs an InMemoryBufferBase with the given ArrayBuffer.
+   * @param buf The ArrayBuffer to create the view from.
+   */
   constructor(buf: ArrayBuffer) {
     this.view = new Uint8Array(buf);
   }
 
+  /**
+   * Returns the length of the buffer in bytes.
+   * @returns The length of the buffer.
+   */
   // deno-lint-ignore require-await
   public async length(): Promise<number> {
     return this.view.length;
@@ -40,6 +49,11 @@ abstract class InMemoryBufferBase {
  */
 export class InMemoryReadableBuffer extends InMemoryBufferBase
   implements IReadableBuffer {
+  /**
+   * Checks if the offset and size are within buffer bounds.
+   * @param offset The starting offset.
+   * @param size The number of bytes to check.
+   */
   private checkBounds(offset: number, size: number): void {
     if (offset < 0 || size < 0) {
       throw new RangeError(
@@ -53,6 +67,12 @@ export class InMemoryReadableBuffer extends InMemoryBufferBase
     }
   }
 
+  /**
+   * Reads a portion of the buffer.
+   * @param offset The starting offset.
+   * @param size The number of bytes to read.
+   * @returns A Uint8Array containing the read bytes.
+   */
   // deno-lint-ignore require-await
   public async read(
     offset: number,
@@ -89,6 +109,11 @@ export class InMemoryWritableBuffer extends InMemoryBufferBase
   implements IWritableBuffer {
   #offset: number;
 
+  /**
+   * Creates a new writable buffer with the specified ArrayBuffer and initial offset.
+   * @param buf The underlying ArrayBuffer to write to.
+   * @param offset The starting offset within the buffer (default: 0).
+   */
   constructor(buf: ArrayBuffer, offset = 0) {
     super(buf);
     if (offset < 0 || offset > this.view.length) {
@@ -99,6 +124,12 @@ export class InMemoryWritableBuffer extends InMemoryBufferBase
     this.#offset = offset;
   }
 
+  /**
+   * Checks if writing the given data at the specified offset would exceed buffer bounds.
+   * Throws a RangeError if the operation would exceed bounds.
+   * @param offset The offset to write at.
+   * @param data The data to write.
+   */
   protected checkWriteBounds(offset: number, data: Uint8Array): void {
     if (offset < 0) {
       throw new RangeError(`Offset must be non-negative. Got offset=${offset}`);
@@ -110,6 +141,10 @@ export class InMemoryWritableBuffer extends InMemoryBufferBase
     }
   }
 
+  /**
+   * Appends the given bytes to the buffer at the current offset and advances the offset.
+   * @param data The bytes to append.
+   */
   // deno-lint-ignore require-await
   public async appendBytes(data: Uint8Array): Promise<void> {
     this.checkWriteBounds(this.#offset, data);
@@ -120,6 +155,11 @@ export class InMemoryWritableBuffer extends InMemoryBufferBase
     this.#offset += data.length;
   }
 
+  /**
+   * Checks if the buffer is in a valid state.
+   * Always returns true as this buffer throws on overflow instead of becoming invalid.
+   * @returns Always true.
+   */
   // deno-lint-ignore require-await
   public async isValid(): Promise<boolean> {
     return true; // Always valid since we throw on overflow instead of marking as invalid

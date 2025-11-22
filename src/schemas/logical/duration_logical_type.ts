@@ -6,16 +6,30 @@ import {
 } from "./logical_type.ts";
 import type { JSONType } from "../type.ts";
 
+/**
+ * Represents a duration value with months, days, and milliseconds.
+ */
 export interface DurationValue {
+  /** Number of months. */
   months: number;
+  /** Number of days. */
   days: number;
+  /** Number of milliseconds. */
   millis: number;
 }
 
 const MAX_UINT32 = 0xffffffff;
 
+/**
+ * Logical type for `duration`.
+ * Represents a duration of time.
+ */
 export class DurationLogicalType
   extends NamedLogicalType<DurationValue, Uint8Array> {
+  /**
+   * Creates a new DurationLogicalType.
+   * @param underlying The underlying fixed type (must be 12 bytes).
+   */
   constructor(underlying: FixedType) {
     super(underlying);
     if (underlying.getSize() !== 12) {
@@ -23,16 +37,31 @@ export class DurationLogicalType
     }
   }
 
+  /**
+   * Checks if this logical type can read from the given writer logical type.
+   * @param writer The writer logical type.
+   * @returns True if compatible.
+   */
   protected override canReadFromLogical(
     writer: LogicalType<unknown, unknown>,
   ): boolean {
     return writer instanceof DurationLogicalType;
   }
 
+  /**
+   * Checks if the value is an instance of DurationValue.
+   * @param value The value to check.
+   * @returns True if the value is a DurationValue.
+   */
   protected override isInstance(value: unknown): value is DurationValue {
     return isDurationValue(value);
   }
 
+  /**
+   * Converts the logical DurationValue to its underlying Uint8Array representation.
+   * @param value The DurationValue to convert.
+   * @returns The Uint8Array representation.
+   */
   protected override toUnderlying(value: DurationValue): Uint8Array {
     // The value is always valid here since isInstance ensures it.
     const buffer = new ArrayBuffer(12);
@@ -43,6 +72,11 @@ export class DurationLogicalType
     return new Uint8Array(buffer);
   }
 
+  /**
+   * Converts the underlying Uint8Array to a DurationValue.
+   * @param value The underlying bytes (must be 12 bytes).
+   * @returns The duration value.
+   */
   protected override fromUnderlying(value: Uint8Array): DurationValue {
     if (value.length !== 12) {
       throw new Error("Duration bytes must be 12 bytes long.");
@@ -55,6 +89,12 @@ export class DurationLogicalType
     };
   }
 
+  /**
+   * Compares two DurationValue instances lexicographically.
+   * @param a The first duration value.
+   * @param b The second duration value.
+   * @returns -1 if a < b, 0 if equal, 1 if a > b.
+   */
   public override compare(a: DurationValue, b: DurationValue): number {
     if (a.months !== b.months) {
       return a.months < b.months ? -1 : 1;
@@ -68,6 +108,10 @@ export class DurationLogicalType
     return 0;
   }
 
+  /**
+   * Generates a random DurationValue.
+   * @returns A random duration value.
+   */
   public override random(): DurationValue {
     return {
       months: Math.floor(Math.random() * 1200),
@@ -76,6 +120,10 @@ export class DurationLogicalType
     };
   }
 
+  /**
+   * Returns the JSON representation of this type.
+   * @returns The JSON type.
+   */
   public override toJSON(): JSONType {
     return withLogicalTypeJSON(this.getUnderlyingType().toJSON(), "duration");
   }

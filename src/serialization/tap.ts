@@ -9,47 +9,193 @@ import {
   InMemoryWritableBuffer,
 } from "./buffers/in_memory_buffer.ts";
 
+/**
+ * Interface for readable tap operations in Avro serialization.
+ */
 export interface ReadableTapLike {
+  /**
+   * Returns whether the cursor is positioned within the buffer bounds.
+   */
   isValid(): Promise<boolean>;
+  /**
+   * Returns the buffer contents from the start up to the current cursor.
+   * @throws RangeError if the cursor has advanced past the buffer length.
+   */
   getValue(): Promise<Uint8Array>;
+  /**
+   * Reads the next byte as a boolean value and advances the cursor by one byte.
+   */
   readBoolean(): Promise<boolean>;
+  /**
+   * Skips a boolean value by advancing the cursor by one byte.
+   */
   skipBoolean(): void;
+  /**
+   * Reads a variable-length zig-zag encoded 32-bit signed integer.
+   */
   readInt(): Promise<number>;
+  /**
+   * Reads a variable-length zig-zag encoded 64-bit signed integer as bigint.
+   */
   readLong(): Promise<bigint>;
+  /**
+   * Skips a zig-zag encoded 32-bit integer by delegating to `skipLong`.
+   */
   skipInt(): Promise<void>;
+  /**
+   * Skips a zig-zag encoded 64-bit integer, advancing past continuation bytes.
+   */
   skipLong(): Promise<void>;
+  /**
+   * Reads a 32-bit little-endian floating point number.
+   * @throws RangeError if the read would exceed the buffer.
+   */
   readFloat(): Promise<number>;
+  /**
+   * Skips a 32-bit floating point value by advancing four bytes.
+   */
   skipFloat(): void;
+  /**
+   * Reads a 64-bit little-endian floating point number.
+   * @throws RangeError if the read would exceed the buffer.
+   */
   readDouble(): Promise<number>;
+  /**
+   * Skips a 64-bit floating point value by advancing eight bytes.
+   */
   skipDouble(): void;
+  /**
+   * Reads a fixed-length byte sequence into a new buffer.
+   * @param len Number of bytes to read.
+   * @throws RangeError if the read exceeds the buffer.
+   */
   readFixed(len: number): Promise<Uint8Array>;
+  /**
+   * Skips a fixed-length byte sequence.
+   * @param len Number of bytes to skip.
+   */
   skipFixed(len: number): void;
+  /**
+   * Reads a length-prefixed byte sequence.
+   * @throws RangeError if insufficient data remains.
+   */
   readBytes(): Promise<Uint8Array>;
+  /**
+   * Skips a length-prefixed byte sequence.
+   */
   skipBytes(): Promise<void>;
+  /**
+   * Reads a length-prefixed UTF-8 string.
+   * @throws RangeError when the buffer is exhausted prematurely.
+   */
   readString(): Promise<string>;
+  /**
+   * Skips a length-prefixed UTF-8 string.
+   */
   skipString(): Promise<void>;
+  /**
+   * Compares the next boolean value with the one from another tap.
+   * @param tap Tap to compare against; both cursors advance.
+   * @returns 0 when equal, negative when this tap's value is false and the other true, positive otherwise.
+   */
   matchBoolean(tap: ReadableTapLike): Promise<number>;
+  /**
+   * Compares the next zig-zag encoded 32-bit integer with another tap.
+   * @returns Comparison result using -1/0/1 semantics.
+   */
   matchInt(tap: ReadableTapLike): Promise<number>;
+  /**
+   * Compares the next zig-zag encoded 64-bit integer with another tap.
+   * @returns Comparison result using -1/0/1 semantics.
+   */
   matchLong(tap: ReadableTapLike): Promise<number>;
+  /**
+   * Compares the next 32-bit float value with another tap.
+   * @returns Comparison result using -1/0/1 semantics.
+   */
   matchFloat(tap: ReadableTapLike): Promise<number>;
+  /**
+   * Compares the next 64-bit float value with another tap.
+   * @returns Comparison result using -1/0/1 semantics.
+   */
   matchDouble(tap: ReadableTapLike): Promise<number>;
+  /**
+   * Compares fixed-length byte sequences from this tap and another tap.
+   * @param tap Tap to compare against; both cursors advance by `len`.
+   * @param len Number of bytes to compare.
+   * @returns Comparison result using -1/0/1 semantics.
+   */
   matchFixed(tap: ReadableTapLike, len: number): Promise<number>;
+  /**
+   * Compares length-prefixed byte sequences from this tap and another tap.
+   * @returns Comparison result using -1/0/1 semantics.
+   */
   matchBytes(tap: ReadableTapLike): Promise<number>;
+  /** Matches a string value. */
   matchString(tap: ReadableTapLike): Promise<number>;
+  /** Unpacks a long-encoded byte array. */
   unpackLongBytes(): Promise<Uint8Array>;
 }
 
+/**
+ * Interface for writable tap operations compatible with Avro binary serialization.
+ */
 export interface WritableTapLike {
+  /**
+   * Returns whether the tap is valid for writing.
+   */
   isValid(): Promise<boolean>;
+  /**
+   * Writes a boolean value as a single byte.
+   * @param value The boolean value to write.
+   */
   writeBoolean(value: boolean): Promise<void>;
+  /**
+   * Writes a zig-zag encoded 32-bit signed integer.
+   * @param value The integer value to write.
+   */
   writeInt(value: number): Promise<void>;
+  /**
+   * Writes a zig-zag encoded 64-bit signed integer.
+   * @param value The bigint value to write.
+   */
   writeLong(value: bigint): Promise<void>;
+  /**
+   * Writes a 32-bit little-endian floating point number.
+   * @param value The float value to write.
+   */
   writeFloat(value: number): Promise<void>;
+  /**
+   * Writes a 64-bit little-endian floating point number.
+   * @param value The double value to write.
+   */
   writeDouble(value: number): Promise<void>;
+  /**
+   * Writes a fixed-length byte sequence from the provided buffer.
+   * @param buf Source buffer to copy from.
+   * @param len Optional number of bytes to write; defaults to the buffer length.
+   */
   writeFixed(buf: Uint8Array, len?: number): Promise<void>;
+  /**
+   * Writes a length-prefixed byte sequence backed by the provided buffer.
+   * @param buf The bytes to write.
+   */
   writeBytes(buf: Uint8Array): Promise<void>;
+  /**
+   * Writes a length-prefixed UTF-8 string.
+   * @param str The string to encode and write.
+   */
   writeString(str: string): Promise<void>;
+  /**
+   * Writes a binary string as raw bytes without a length prefix.
+   * @param str Source string containing binary data.
+   * @param len Number of bytes from the string to write.
+   */
   writeBinary(str: string, len: number): Promise<void>;
+  /**
+   * Encodes an 8-byte two's complement integer into zig-zag encoded varint bytes.
+   * @param arr Buffer containing the 8-byte value to encode; reused during processing.
+   */
   packLongBytes(arr: Uint8Array): Promise<void>;
 }
 
@@ -75,9 +221,12 @@ function isIWritable(value: unknown): value is IWritableBuffer {
     typeof (value as IWritableBuffer).isValid === "function";
 }
 
-abstract class TapBase {
+/** Abstract base class for tap implementations that manage buffer position. */
+export abstract class TapBase {
+  /** The current position in the buffer. */
   protected pos: number;
 
+  /** Initializes the tap with the given position. */
   protected constructor(pos: number) {
     this.pos = pos;
   }
@@ -101,9 +250,11 @@ abstract class TapBase {
  * Binary tap that exposes Avro-compatible read helpers on top of a readable buffer.
  */
 export class ReadableTap extends TapBase implements ReadableTapLike {
+  /** The readable buffer backing this tap. */
   protected readonly buffer: IReadableBuffer;
   #lengthHint?: number;
 
+  /** Creates a new ReadableTap with the given buffer and initial position. */
   constructor(buf: ArrayBuffer | IReadableBuffer, pos = 0) {
     assertValidPosition(pos);
     let buffer: IReadableBuffer;
@@ -166,6 +317,7 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
     return bytes;
   }
 
+  /** Retrieves the byte at the specified position in the buffer. */
   private async getByteAt(position: number): Promise<number> {
     const bytes = await this.buffer.read(position, 1);
     if (!bytes) {
@@ -474,8 +626,14 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
  * Binary tap that exposes Avro-compatible write helpers on top of a writable buffer.
  */
 export class WritableTap extends TapBase implements WritableTapLike {
+  /** The writable buffer backing this tap. */
   private readonly buffer: IWritableBuffer;
 
+  /**
+   * Creates a new WritableTap instance.
+   * @param buf The buffer to write to, either an ArrayBuffer or IWritableBuffer.
+   * @param pos The initial position in the buffer (default 0).
+   */
   constructor(buf: ArrayBuffer | IWritableBuffer, pos = 0) {
     assertValidPosition(pos);
     let buffer: IWritableBuffer;
@@ -492,6 +650,10 @@ export class WritableTap extends TapBase implements WritableTapLike {
     this.buffer = buffer;
   }
 
+  /**
+   * Appends raw bytes to the buffer and advances the cursor.
+   * @param bytes The bytes to append.
+   */
   private async appendRawBytes(bytes: Uint8Array): Promise<void> {
     if (bytes.length === 0) {
       return;
@@ -500,6 +662,7 @@ export class WritableTap extends TapBase implements WritableTapLike {
     await this.buffer.appendBytes(bytes);
   }
 
+  /** Checks if the buffer is valid. */
   async isValid(): Promise<boolean> {
     return await this.buffer.isValid();
   }

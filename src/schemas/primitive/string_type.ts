@@ -14,6 +14,7 @@ import { decode, encode } from "../../serialization/text_encoding.ts";
  * String type.
  */
 export class StringType extends PrimitiveType<string> {
+  /** Checks if the value is a valid string. */
   public override check(
     value: unknown,
     errorHook?: ErrorHook,
@@ -26,6 +27,7 @@ export class StringType extends PrimitiveType<string> {
     return isValid;
   }
 
+  /** Converts a string value to its Avro-encoded buffer representation. */
   public override async toBuffer(value: string): Promise<ArrayBuffer> {
     this.check(value, throwInvalidError, []);
     const strBytes = encode(value);
@@ -36,10 +38,12 @@ export class StringType extends PrimitiveType<string> {
     return buf;
   }
 
+  /** Reads a string value from the tap. */
   public override async read(tap: ReadableTapLike): Promise<string> {
     return await tap.readString();
   }
 
+  /** Writes a string value to the tap. */
   public override async write(
     tap: WritableTapLike,
     value: string,
@@ -50,18 +54,26 @@ export class StringType extends PrimitiveType<string> {
     await tap.writeString(value);
   }
 
+  /** Skips a string value in the tap. */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipString();
   }
 
+  /**
+   * Compares two string values.
+   */
   public override compare(val1: string, val2: string): number {
     return val1 < val2 ? -1 : val1 > val2 ? 1 : 0;
   }
 
+  /**
+   * Generates a random string value.
+   */
   public override random(): string {
     return Math.random().toString(36).substring(2, 10);
   }
 
+  /** Creates a resolver for reading from a writer type. */
   public override createResolver(writerType: Type): Resolver {
     if (writerType.toJSON() === "bytes") {
       // String can promote from bytes. We use an anonymous class here to avoid a
@@ -78,10 +90,12 @@ export class StringType extends PrimitiveType<string> {
     }
   }
 
+  /** Returns the JSON representation of the string type. */
   public override toJSON(): JSONType {
     return "string";
   }
 
+  /** Matches two readable taps for string equality. */
   public override async match(
     tap1: ReadableTapLike,
     tap2: ReadableTapLike,

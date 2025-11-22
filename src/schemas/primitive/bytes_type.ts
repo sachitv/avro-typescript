@@ -13,6 +13,7 @@ import { calculateVarintSize } from "../../internal/varint.ts";
  * Bytes type.
  */
 export class BytesType extends PrimitiveType<Uint8Array> {
+  /** Checks if the value is a valid bytes array. */
   public override check(
     value: unknown,
     errorHook?: ErrorHook,
@@ -25,10 +26,16 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     return isValid;
   }
 
+  /**
+   * Reads a byte array from the tap.
+   */
   public override async read(tap: ReadableTapLike): Promise<Uint8Array> {
     return await tap.readBytes();
   }
 
+  /**
+   * Writes a byte array to the tap.
+   */
   public override async write(
     tap: WritableTapLike,
     value: Uint8Array,
@@ -39,10 +46,16 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     await tap.writeBytes(value);
   }
 
+  /**
+   * Skips a byte array in the tap.
+   */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipBytes();
   }
 
+  /**
+   * Converts a byte array to an ArrayBuffer.
+   */
   public override async toBuffer(value: Uint8Array): Promise<ArrayBuffer> {
     this.check(value, throwInvalidError, []);
     // Pre-allocate buffer based on value length for efficiency
@@ -54,6 +67,9 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     return buf;
   }
 
+  /**
+   * Creates a resolver for the writer type.
+   */
   public override createResolver(writerType: Type): Resolver {
     if (writerType.toJSON() === "string") {
       // Bytes can promote from string. We use an anonymous class here to avoid a
@@ -73,6 +89,9 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     }
   }
 
+  /**
+   * Compares two byte arrays.
+   */
   public override compare(val1: Uint8Array, val2: Uint8Array): number {
     const len1 = val1.length;
     const len2 = val2.length;
@@ -85,6 +104,9 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     return len1 < len2 ? -1 : len1 > len2 ? 1 : 0;
   }
 
+  /**
+   * Clones a byte array value.
+   */
   public override cloneFromValue(value: unknown): Uint8Array {
     let bytes: Uint8Array;
     if (value instanceof Uint8Array) {
@@ -98,6 +120,9 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     return new Uint8Array(bytes);
   }
 
+  /**
+   * Generates a random byte array.
+   */
   public override random(): Uint8Array {
     // Generate at least one byte.
     const len = Math.ceil(Math.random() * 31) + 1;
@@ -116,10 +141,12 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     return bytes;
   }
 
+  /** Returns the JSON representation of the type. */
   public override toJSON(): JSONType {
     return "bytes";
   }
 
+  /** Matches bytes between two taps. */
   public override async match(
     tap1: ReadableTapLike,
     tap2: ReadableTapLike,

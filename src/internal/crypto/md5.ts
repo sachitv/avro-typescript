@@ -72,10 +72,20 @@ for (let i = 0; i < 64; i++) {
 
 const textEncoder = new TextEncoder();
 
+/**
+ * Computes MD5 hash from string.
+ * @param value The string to hash.
+ * @returns The MD5 hash as a Uint8Array.
+ */
 export function md5FromString(value: string): Uint8Array {
   return md5(textEncoder.encode(value));
 }
 
+/**
+ * Computes MD5 hash from Uint8Array.
+ * @param input The input bytes to hash.
+ * @returns The MD5 hash as a Uint8Array.
+ */
 export function md5(input: Uint8Array): Uint8Array {
   const data = pad(input);
 

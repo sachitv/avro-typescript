@@ -11,10 +11,20 @@ import type { JSONType, Type } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
 import { calculateVarintSize } from "../../internal/varint.ts";
 
+/**
+ * Parameters for creating a MapType.
+ */
 export interface MapTypeParams<T> {
+  /** The type of values in the map. */
   values: Type<T>;
 }
 
+/**
+ * Helper function to read a map from a tap.
+ * @param tap The tap to read from.
+ * @param readValue Function to read a single value.
+ * @param collect Function to collect each key-value pair.
+ */
 export async function readMapInto<T>(
   tap: ReadableTapLike,
   readValue: (tap: ReadableTapLike) => Promise<T>,
@@ -44,6 +54,10 @@ export async function readMapInto<T>(
 export class MapType<T = unknown> extends BaseType<Map<string, T>> {
   readonly #valuesType: Type<T>;
 
+  /**
+   * Creates a new MapType.
+   * @param params The map type parameters.
+   */
   constructor(params: MapTypeParams<T>) {
     super();
     if (!params.values) {
@@ -52,10 +66,16 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     this.#valuesType = params.values;
   }
 
+  /**
+   * Gets the type of values in the map.
+   */
   public getValuesType(): Type<T> {
     return this.#valuesType;
   }
 
+  /**
+   * Validates if the value is a valid map according to the schema.
+   */
   public override check(
     value: unknown,
     errorHook?: ErrorHook,
@@ -92,6 +112,11 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     return isValid;
   }
 
+  /**
+   * Writes the map value to the tap.
+   * @param tap The writable tap to write to.
+   * @param value The map value to write.
+   */
   public override async write(
     tap: WritableTapLike,
     value: Map<string, T>,
@@ -113,6 +138,9 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     await tap.writeLong(0n);
   }
 
+  /**
+   * Reads a map value from the provided tap.
+   */
   public override async read(
     tap: ReadableTapLike,
   ): Promise<Map<string, T>> {
@@ -127,6 +155,10 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     return result;
   }
 
+  /**
+   * Skips over a map value in the tap without reading it.
+   * @param tap The readable tap to skip from.
+   */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     while (true) {
       const rawCount = await tap.readLong();
@@ -149,6 +181,11 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     }
   }
 
+  /**
+   * Serializes the map value to an ArrayBuffer.
+   * @param value The map value to serialize.
+   * @returns The serialized ArrayBuffer.
+   */
   public override async toBuffer(value: Map<string, T>): Promise<ArrayBuffer> {
     if (!(value instanceof Map)) {
       throwInvalidError([], value, this);
@@ -192,6 +229,11 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     return buffer;
   }
 
+  /**
+   * Creates a deep clone of the map from the given value.
+   * @param value The value to clone, which can be a Map or a plain object.
+   * @returns A new Map instance with cloned values.
+   */
   public override cloneFromValue(value: unknown): Map<string, T> {
     const copy = new Map<string, T>();
 
@@ -215,6 +257,13 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     return copy;
   }
 
+  /**
+   * Compares two map values. Always throws an error as maps cannot be compared.
+   * @param _val1 First map value.
+   * @param _val2 Second map value.
+   * @returns Never returns, always throws.
+   * @throws Always throws an error.
+   */
   public override compare(
     _val1: Map<string, T>,
     _val2: Map<string, T>,
@@ -222,6 +271,10 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     throw new Error("maps cannot be compared");
   }
 
+  /**
+   * Generates a random map value.
+   * @returns A random Map with string keys and values of the map's value type.
+   */
   public override random(): Map<string, T> {
     const result = new Map<string, T>();
     // There should be at least one entry.
@@ -233,6 +286,10 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     return result;
   }
 
+  /**
+   * Returns the JSON schema representation of the map type.
+   * @returns The JSON representation as JSONType.
+   */
   public override toJSON(): JSONType {
     return {
       type: "map",
@@ -240,6 +297,13 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     };
   }
 
+  /**
+   * Compares two encoded buffers. Always throws an error as maps cannot be compared.
+   * @param _tap1 The first tap.
+   * @param _tap2 The second tap.
+   * @returns Never returns, always throws.
+   * @throws Always throws an error.
+   */
   // deno-lint-ignore require-await
   public override async match(
     _tap1: ReadableTapLike,
@@ -248,6 +312,11 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     throw new Error("maps cannot be compared");
   }
 
+  /**
+   * Creates a resolver for schema evolution from a writer type to this reader type.
+   * @param writerType The writer schema type.
+   * @returns A resolver for reading the writer type as this type.
+   */
   public override createResolver(writerType: Type): Resolver {
     if (!(writerType instanceof MapType)) {
       return super.createResolver(writerType);

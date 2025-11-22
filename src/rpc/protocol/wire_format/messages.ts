@@ -46,59 +46,125 @@ async function readOptionalHandshake<T>(
   }
 }
 
+/**
+ * Initialization object for encoding a call request in the Avro RPC wire format.
+ * Contains the data needed to construct a call request message, including optional handshake,
+ * metadata, message name, request payload, and the Avro type of the request.
+ */
 export interface CallRequestInit<T> {
+  /** Optional handshake request data for protocol negotiation in the Avro RPC wire format. */
   handshake?: HandshakeRequestInit | HandshakeRequestMessage;
+  /** Optional metadata map or initialization object for additional message metadata. */
   metadata?: MetadataInit | null;
+  /** The name of the RPC message being called. */
   messageName: string;
+  /** The request payload data to be sent. */
   request: T;
+  /** The Avro type definition for the request payload. */
   requestType: Type<T>;
 }
 
+/**
+ * Represents a decoded call request message in the Avro RPC wire format.
+ * Contains the parsed handshake (if present), metadata, message name, and request payload.
+ */
 export interface CallRequestMessage<T> {
+  /** Optional decoded handshake request message for protocol negotiation. */
   handshake?: HandshakeRequestMessage;
+  /** Metadata map containing additional message information. */
   metadata: MetadataMap;
+  /** The name of the RPC message being called. */
   messageName: string;
+  /** The decoded request payload data. */
   request: T;
 }
 
+/**
+ * Options for decoding a call request message from the Avro RPC wire format.
+ * Specifies the expected request type and whether a handshake is expected.
+ */
 export interface DecodeCallRequestOptions<T> {
+  /** The Avro type definition for the request payload. */
   requestType: Type<T>;
+  /** Whether to expect and parse handshake data in the message. */
   expectHandshake?: boolean;
 }
 
+/**
+ * Envelope for a call request message in the Avro RPC wire format.
+ * Contains the handshake (if present), metadata, message name, and a tap for reading the request body.
+ */
 export interface CallRequestEnvelope {
+  /** Optional decoded handshake request message. */
   handshake?: HandshakeRequestMessage;
+  /** Metadata map with message metadata. */
   metadata: MetadataMap;
+  /** The name of the RPC message. */
   messageName: string;
+  /** Readable tap positioned at the start of the request payload for lazy reading. */
   bodyTap: ReadableTap;
 }
 
+/**
+ * Initialization object for encoding a call response in the Avro RPC wire format.
+ * Contains the data needed to construct a call response message, including optional handshake,
+ * metadata, error flag, payload, and the Avro types for response and error.
+ */
 export interface CallResponseInit<TResponse, TError> {
+  /** Optional handshake response data for protocol negotiation. */
   handshake?: HandshakeResponseInit | HandshakeResponseMessage;
+  /** Optional metadata map or initialization object. */
   metadata?: MetadataInit | null;
+  /** Flag indicating whether this response represents an error. */
   isError: boolean;
+  /** The response or error payload data. */
   payload: TResponse | TError;
+  /** The Avro type definition for the response payload. */
   responseType: Type<TResponse>;
+  /** The Avro type definition for the error payload. */
   errorType: Type<TError>;
 }
 
+/**
+ * Represents a decoded call response message in the Avro RPC wire format.
+ * Contains the parsed handshake (if present), metadata, error flag, and payload.
+ */
 export interface CallResponseMessage<TResponse, TError> {
+  /** Optional decoded handshake response message. */
   handshake?: HandshakeResponseMessage;
+  /** Metadata map containing additional message information. */
   metadata: MetadataMap;
+  /** Flag indicating whether this response represents an error. */
   isError: boolean;
+  /** The decoded response or error payload data. */
   payload: TResponse | TError;
 }
 
+/**
+ * Options for decoding a call response message from the Avro RPC wire format.
+ * Specifies the expected response and error types, and whether a handshake is expected.
+ */
 export interface DecodeCallResponseOptions<TResponse, TError> {
+  /** The Avro type definition for the response payload. */
   responseType: Type<TResponse>;
+  /** The Avro type definition for the error payload. */
   errorType: Type<TError>;
+  /** Whether to expect and parse handshake data in the message. */
   expectHandshake?: boolean;
 }
 
+/**
+ * Envelope for a call response message in the Avro RPC wire format.
+ * Contains the handshake (if present), metadata, error flag, and a tap for reading the response body.
+ */
 export interface CallResponseEnvelope {
+  /** Optional decoded handshake response message. */
   handshake?: HandshakeResponseMessage;
+  /** Metadata map with message metadata. */
   metadata: MetadataMap;
+  /** Flag indicating whether this response represents an error. */
   isError: boolean;
+  /** Readable tap positioned at the start of the response or error payload for lazy reading. */
   bodyTap: ReadableTap;
 }
 

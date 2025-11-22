@@ -3,6 +3,13 @@ import type {
   StatelessTransportFactory,
 } from "./transport_helpers.ts";
 
+/**
+ * Creates a stateless transport factory using the Fetch API.
+ *
+ * @param endpoint The URL to send requests to.
+ * @param options Configuration options for the fetch transport.
+ * @returns A factory function that creates a new transport for each request.
+ */
 export function createFetchTransport(
   endpoint: string | URL,
   options: FetchTransportOptions = {},

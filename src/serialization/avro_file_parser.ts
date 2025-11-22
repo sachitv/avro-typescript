@@ -18,9 +18,13 @@ export { BLOCK_TYPE, HEADER_TYPE, MAGIC_BYTES };
  * Internal interface for Avro file header information.
  */
 export interface AvroHeader {
+  /** The magic bytes that identify the file as an Avro object container file, typically "Obj\x01". */
   magic: Uint8Array;
+  /** A map of metadata key-value pairs containing schema, codec, and other file information. */
   meta: Map<string, Uint8Array>;
+  /** A 16-byte synchronization marker used to separate data blocks in the file. */
   sync: Uint8Array;
+  /** The parsed Avro schema type derived from the schema in the metadata. */
   schemaType: Type;
 }
 
@@ -28,8 +32,11 @@ export interface AvroHeader {
  * Public interface for parsed Avro file header with proper typing.
  */
 export interface ParsedAvroHeader {
+  /** The magic bytes that identify the file as an Avro object container file, typically "Obj\x01". */
   magic: Uint8Array;
+  /** A map of metadata key-value pairs containing schema, codec, and other file information. */
   meta: Map<string, Uint8Array>;
+  /** A 16-byte synchronization marker used to separate data blocks in the file. */
   sync: Uint8Array;
 }
 

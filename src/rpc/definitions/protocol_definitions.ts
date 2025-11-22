@@ -5,21 +5,41 @@ import type { Resolver } from "../../schemas/resolver.ts";
 import type { Type } from "../../schemas/type.ts";
 import type { Message } from "./message_definition.ts";
 
+/**
+ * Represents the definition of an Avro protocol, which includes the protocol name, optional namespace,
+ * optional custom types, and a map of message definitions.
+ */
 export interface ProtocolDefinition {
+  /** The name of the protocol. */
   protocol: string;
+  /** Optional namespace for the protocol. */
   namespace?: string;
+  /** Optional array of custom schema types defined in the protocol. */
   types?: SchemaLike[];
+  /** Optional record of message names to their definitions. */
   messages?: Record<string, MessageDefinition>;
 }
 
+/**
+ * Defines a message within an Avro protocol, specifying the request parameters, response type,
+ * possible errors, and whether it's one-way.
+ */
 export interface MessageDefinition {
+  /** Optional documentation for the message. */
   doc?: string;
+  /** Array of schemas for the request parameters. */
   request: SchemaLike[];
+  /** Schema for the response. */
   response: SchemaLike;
+  /** Optional array of schemas for possible error types. */
   errors?: SchemaLike[];
+  /** Optional flag indicating if the message is one-way (no response expected). */
   "one-way"?: boolean;
 }
 
+/**
+ * Options for creating protocol types, extending CreateTypeOptions.
+ */
 export interface ProtocolOptions extends CreateTypeOptions {}
 
 /**
@@ -67,19 +87,33 @@ export interface MessageTransportOptions {
   requestTimeout?: number;
 }
 
+/**
+ * Context provided to message handlers during RPC processing.
+ */
 export interface ProtocolHandlerContext {
+  /** Metadata map associated with the message. */
   metadata: MetadataMap;
 }
 
+/**
+ * Options for decoding call request envelopes.
+ */
 export interface CallRequestEnvelopeOptions {
+  /** Whether to expect a handshake in the envelope. */
   expectHandshake?: boolean;
 }
 
+/**
+ * Function type for decoding call request envelopes from a buffer.
+ */
 export type CallRequestEnvelopeDecoder = (
   buffer: ArrayBuffer,
   options?: CallRequestEnvelopeOptions,
 ) => Promise<CallRequestEnvelope>;
 
+/**
+ * Interface for a message listener in the RPC system.
+ */
 export interface MessageListener {
   /**
    * Protocol that produced this listener so handlers can inspect it.
@@ -87,20 +121,35 @@ export interface MessageListener {
   readonly protocol: ProtocolLike;
 }
 
+/**
+ * Function type for handling incoming messages.
+ */
 export type MessageHandler = (
   request: unknown,
   listener: MessageListener,
   context: ProtocolHandlerContext,
 ) => Promise<unknown> | unknown;
 
+/**
+ * Entry containing resolvers for request, response, and error schemas.
+ */
 export interface ResolverEntry {
+  /** Optional resolver for the response schema. */
   response?: Resolver;
+  /** Optional resolver for error schemas. */
   error?: Resolver;
+  /** Optional resolver for the request schema. */
   request?: Resolver;
 }
 
+/**
+ * Represents an Avro RPC protocol instance, providing access to message definitions,
+ * handlers, resolvers for schema compatibility, and protocol metadata.
+ */
 export interface ProtocolLike {
+  /** The unique hash key identifying this protocol for compatibility checks. */
   hashKey: string;
+  /** Returns the hash bytes used for protocol identification. */
   getHashBytes(): Uint8Array;
   /**
    * Return a shallow copy of the protocol messages map. Mutating the returned
@@ -117,30 +166,49 @@ export interface ProtocolLike {
    * mutating the internal tracking array.
    */
   getMessageNames(): readonly string[];
+  /** Retrieves the message definition for the given message name. */
   getMessageDefinition(name: string): MessageDefinition | undefined;
+  /** Gets the handler function for the specified message name. */
   getHandler(name: string): MessageHandler | undefined;
+  /** Checks if resolvers are available for listening to messages from a protocol with the given hash key. */
   hasListenerResolvers(hashKey: string): boolean;
+  /** Checks if resolvers are available for emitting messages to a protocol with the given hash key. */
   hasEmitterResolvers(hashKey: string): boolean;
+  /** Ensures that resolvers for emitting messages to the remote protocol are set up. */
   ensureEmitterResolvers(hashKey: string, remote: ProtocolLike): void;
+  /** Ensures that resolvers for listening to messages from the emitter protocol are set up. */
   ensureListenerResolvers(hashKey: string, emitterProtocol: ProtocolLike): void;
+  /** Retrieves resolvers for emitting the specified message to a protocol with the given hash key. */
   getEmitterResolvers(
     hashKey: string,
     messageName: string,
   ): ResolverEntry | undefined;
+  /** Retrieves resolvers for listening to the specified message from a protocol with the given hash key. */
   getListenerResolvers(
     hashKey: string,
     messageName: string,
   ): ResolverEntry | undefined;
+  /** Returns a string representation of the protocol. */
   toString(): string;
+  /** Gets the name of the protocol. */
   getName(): string;
+  /** Returns an array of named types defined in the protocol. */
   getNamedTypes(): Type[];
+  /** Retrieves metadata information about the protocol. */
   getProtocolInfo(): ProtocolInfo;
 }
 
+/**
+ * Metadata information about an Avro RPC protocol.
+ */
 export interface ProtocolInfo {
+  /** The name of the protocol. */
   name: string;
+  /** Optional namespace for the protocol. */
   namespace?: string;
+  /** The unique hash key for the protocol. */
   hashKey: string;
+  /** The hash bytes for protocol identification. */
   hashBytes: Uint8Array;
   /**
    * Fresh array to guarantee the caller can't mutate the recorded list.
@@ -148,6 +216,9 @@ export interface ProtocolInfo {
   messageNames: readonly string[];
 }
 
+/**
+ * A factory function type for creating a ProtocolLike instance from a protocol definition.
+ */
 export type ProtocolFactory<T extends ProtocolLike = ProtocolLike> = (
   definition: ProtocolDefinition,
 ) => T;

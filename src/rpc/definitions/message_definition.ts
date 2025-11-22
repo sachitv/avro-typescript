@@ -10,13 +10,25 @@ import type { MessageDefinition } from "./protocol_definitions.ts";
  * request, response, and error types.
  */
 export class Message {
+  /** The name of the message. */
   readonly name: string;
+  /** Optional documentation for the message. */
   readonly doc?: string;
+  /** The record type representing the request parameters. */
   readonly requestType: RecordType;
+  /** The type returned by the message (if not one-way). */
   readonly responseType: Type;
+  /** The union type of possible errors. */
   readonly errorType: UnionType;
+  /** Whether the message is one-way (no response). */
   readonly oneWay: boolean;
 
+  /**
+   * Creates a new Message definition.
+   * @param name The name of the message.
+   * @param attrs The message attributes from the protocol definition.
+   * @param opts Options for creating types (namespace, registry).
+   */
   constructor(
     name: string,
     attrs: MessageDefinition,
@@ -50,6 +62,9 @@ export class Message {
     }
   }
 
+  /**
+   * Converts the message definition back to a JSON-compatible object.
+   */
   toJSON(): Record<string, unknown> {
     const json: Record<string, unknown> = {
       request: extractRequestFields(this.requestType),

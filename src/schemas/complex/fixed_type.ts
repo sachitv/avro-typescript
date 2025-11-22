@@ -10,7 +10,11 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
 import type { ResolvedNames } from "./resolve_names.ts";
 import { compareUint8Arrays } from "../../serialization/compare_bytes.ts";
 
+/**
+ * Parameters for creating a FixedType.
+ */
 export interface FixedTypeParams extends ResolvedNames {
+  /** The size in bytes. */
   size: number;
 }
 
@@ -20,6 +24,10 @@ export interface FixedTypeParams extends ResolvedNames {
 export class FixedType extends NamedType<Uint8Array> {
   #size: number;
 
+  /**
+   * Creates a new FixedType.
+   * @param params The fixed type parameters.
+   */
   constructor(params: FixedTypeParams) {
     const { size, ...names } = params;
 
@@ -33,6 +41,9 @@ export class FixedType extends NamedType<Uint8Array> {
     this.#size = size;
   }
 
+  /**
+   * Gets the size in bytes.
+   */
   public sizeBytes(): number {
     return this.#size;
   }
@@ -59,10 +70,20 @@ export class FixedType extends NamedType<Uint8Array> {
     await tap.skipFixed(this.sizeBytes());
   }
 
+  /**
+   * Gets the size in bytes.
+   */
   public getSize(): number {
     return this.#size;
   }
 
+  /**
+   * Checks if the value is a valid fixed-size byte array.
+   * @param value The value to check.
+   * @param errorHook Optional error hook for invalid values.
+   * @param path The path for error reporting.
+   * @returns True if valid, false otherwise.
+   */
   public override check(
     value: unknown,
     errorHook?: ErrorHook,
@@ -77,10 +98,20 @@ export class FixedType extends NamedType<Uint8Array> {
     return isValid;
   }
 
+  /**
+   * Reads a fixed-size byte array from the tap.
+   * @param tap The tap to read from.
+   * @returns The read byte array.
+   */
   public override async read(tap: ReadableTapLike): Promise<Uint8Array> {
     return await tap.readFixed(this.#size);
   }
 
+  /**
+   * Writes a fixed-size byte array to the tap.
+   * @param tap The tap to write to.
+   * @param value The byte array to write.
+   */
   public override async write(
     tap: WritableTapLike,
     value: Uint8Array,
@@ -91,6 +122,12 @@ export class FixedType extends NamedType<Uint8Array> {
     await tap.writeFixed(value, this.#size);
   }
 
+  /**
+   * Matches two fixed-size byte arrays from the taps.
+   * @param tap1 The first tap.
+   * @param tap2 The second tap.
+   * @returns The comparison result.
+   */
   public override async match(
     tap1: ReadableTapLike,
     tap2: ReadableTapLike,
@@ -98,6 +135,12 @@ export class FixedType extends NamedType<Uint8Array> {
     return await tap1.matchFixed(tap2, this.#size);
   }
 
+  /**
+   * Compares two fixed values for ordering.
+   * @param val1 The first value to compare.
+   * @param val2 The second value to compare.
+   * @returns A negative number if val1 < val2, zero if equal, positive if val1 > val2.
+   */
   public override compare(val1: Uint8Array, val2: Uint8Array): number {
     if (!(val1 instanceof Uint8Array) || !(val2 instanceof Uint8Array)) {
       throw new Error("Fixed comparison requires Uint8Array values.");
@@ -110,6 +153,11 @@ export class FixedType extends NamedType<Uint8Array> {
     return compareUint8Arrays(val1, val2);
   }
 
+  /**
+   * Clones a value into a Uint8Array, validating it against the fixed size.
+   * @param value The value to clone, either a Uint8Array or a string.
+   * @returns A new Uint8Array copy of the value.
+   */
   public override cloneFromValue(value: unknown): Uint8Array {
     let bytes: Uint8Array;
     if (value instanceof Uint8Array) {
@@ -123,6 +171,10 @@ export class FixedType extends NamedType<Uint8Array> {
     return new Uint8Array(bytes);
   }
 
+  /**
+   * Generates a random Uint8Array of the fixed size.
+   * @returns A random Uint8Array with the fixed length.
+   */
   public override random(): Uint8Array {
     const bytes = new Uint8Array(this.#size);
     for (let i = 0; i < this.#size; i++) {
@@ -131,6 +183,10 @@ export class FixedType extends NamedType<Uint8Array> {
     return bytes;
   }
 
+  /**
+   * Converts the fixed type to its JSON schema representation.
+   * @returns The JSON type object.
+   */
   public override toJSON(): JSONType {
     return {
       name: this.getFullName(),
@@ -139,6 +195,11 @@ export class FixedType extends NamedType<Uint8Array> {
     };
   }
 
+  /**
+   * Creates a resolver for schema evolution between fixed types.
+   * @param writerType The writer's type to resolve against.
+   * @returns A resolver for reading data written with the writer type.
+   */
   public override createResolver(writerType: Type): Resolver {
     if (!(writerType instanceof FixedType)) {
       return super.createResolver(writerType);

@@ -10,6 +10,9 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
  * Boolean type.
  */
 export class BooleanType extends FixedSizeBaseType<boolean> {
+  /**
+   * Validates if the value is a boolean.
+   */
   public check(
     value: unknown,
     errorHook?: ErrorHook,
@@ -22,10 +25,16 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     return isValid;
   }
 
+  /**
+   * Reads a boolean value from the tap.
+   */
   public async read(tap: ReadableTapLike): Promise<boolean> {
     return await tap.readBoolean();
   }
 
+  /**
+   * Writes a boolean value to the tap.
+   */
   public async write(
     tap: WritableTapLike,
     value: boolean,
@@ -36,31 +45,52 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     await tap.writeBoolean(value);
   }
 
+  /**
+   * Skips a boolean value in the tap.
+   */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipBoolean();
   }
 
+  /**
+   * Gets the size in bytes.
+   */
   public sizeBytes(): number {
     return 1; // 1 byte
   }
 
+  /**
+   * Clones a boolean value from the given value.
+   */
   public override cloneFromValue(value: unknown): boolean {
     this.check(value, throwInvalidError, []);
     return value as boolean;
   }
 
+  /**
+   * Compares two boolean values.
+   */
   public compare(val1: boolean, val2: boolean): number {
     return val1 === val2 ? 0 : val1 ? 1 : -1;
   }
 
+  /**
+   * Generates a random boolean value.
+   */
   public random(): boolean {
     return Math.random() < 0.5;
   }
 
+  /**
+   * Returns the JSON representation of the boolean type.
+   */
   public override toJSON(): JSONType {
     return "boolean";
   }
 
+  /**
+   * Matches two boolean values from the taps.
+   */
   public override async match(
     tap1: ReadableTapLike,
     tap2: ReadableTapLike,

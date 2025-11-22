@@ -11,10 +11,20 @@ import {
 import { bigIntToSafeNumber } from "../../serialization/conversion.ts";
 import { calculateVarintSize } from "../../internal/varint.ts";
 
+/**
+ * Represents a wrapped value for a union type.
+ */
 export type UnionWrappedValue = Record<string, unknown>;
+/**
+ * Represents a value for a union type, which can be a wrapped value or null.
+ */
 export type UnionValue = UnionWrappedValue | null;
 
+/**
+ * Parameters for creating a UnionType.
+ */
 export interface UnionTypeParams {
+  /** The types that make up the union. */
   types: Type[];
 }
 
@@ -30,6 +40,12 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /** @internal */
+/**
+ * Gets the branch name for a given type.
+ * @param type The type to get the name for.
+ * @returns The branch name.
+ * @internal
+ */
 export function getBranchTypeName(type: Type): string {
   if (type instanceof NamedType) {
     return type.getFullName();
@@ -58,6 +74,10 @@ export class UnionType extends BaseType<UnionValue> {
   readonly #branches: BranchInfo[];
   readonly #indices: Map<string, number>;
 
+  /**
+   * Creates a new UnionType.
+   * @param params The union type parameters.
+   */
   constructor(params: UnionTypeParams) {
     super();
 
@@ -97,10 +117,23 @@ export class UnionType extends BaseType<UnionValue> {
     });
   }
 
+  /**
+   * Gets the types in this union.
+   */
   public getTypes(): Type[] {
     return this.#types.slice();
   }
 
+  /**
+   * Checks if the given value conforms to this union type.
+   * For null values, verifies if a null branch exists.
+   * For wrapped values, ensures it's an object with a single key matching a branch name,
+   * and validates the inner value against the corresponding branch type.
+   * @param value The value to check.
+   * @param errorHook Optional error hook for validation errors.
+   * @param path The current path for error reporting.
+   * @returns True if the value is valid, false otherwise.
+   */
   public override check(
     value: unknown,
     errorHook?: ErrorHook,
@@ -160,6 +193,12 @@ export class UnionType extends BaseType<UnionValue> {
     return isValid;
   }
 
+  /**
+   * Serializes the union value to the writable tap.
+   * Writes the branch index as a long, followed by the branch value if not null.
+   * @param tap The writable tap to write to.
+   * @param value The union value to serialize.
+   */
   public override async write(
     tap: WritableTapLike,
     value: UnionValue,
@@ -171,6 +210,12 @@ export class UnionType extends BaseType<UnionValue> {
     }
   }
 
+  /**
+   * Deserializes a union value from the readable tap.
+   * Reads the branch index, and if not null, reads the branch value and wraps it in an object.
+   * @param tap The readable tap to read from.
+   * @returns The deserialized union value.
+   */
   public override async read(tap: ReadableTapLike): Promise<UnionValue> {
     const index = await this.#readBranchIndex(tap);
     const branch = this.#branches[index];
@@ -181,6 +226,11 @@ export class UnionType extends BaseType<UnionValue> {
     return { [branch.name]: branchValue };
   }
 
+  /**
+   * Skips over a union value in the readable tap.
+   * Reads the branch index and skips the branch value if not null.
+   * @param tap The readable tap to skip in.
+   */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     const index = await this.#readBranchIndex(tap);
     const branch = this.#branches[index];
@@ -189,6 +239,12 @@ export class UnionType extends BaseType<UnionValue> {
     }
   }
 
+  /**
+   * Converts the union value to an ArrayBuffer.
+   * Calculates the size needed for the index and branch value, then writes them to a new buffer.
+   * @param value The union value to convert.
+   * @returns The ArrayBuffer containing the serialized value.
+   */
   public override async toBuffer(value: UnionValue): Promise<ArrayBuffer> {
     const { index, branchValue } = this.#resolveBranch(value);
     const indexSize = calculateVarintSize(index);
@@ -210,6 +266,12 @@ export class UnionType extends BaseType<UnionValue> {
     return buffer;
   }
 
+  /**
+   * Creates a deep clone of the given value as a union value.
+   * Handles null values and wrapped objects by cloning the inner value using the branch type.
+   * @param value The value to clone.
+   * @returns The cloned union value.
+   */
   public override cloneFromValue(value: unknown): UnionValue {
     if (value === null) {
       if (!this.#indices.has("null")) {
@@ -227,6 +289,13 @@ export class UnionType extends BaseType<UnionValue> {
     return { [this.#branches[index].name]: cloned };
   }
 
+  /**
+   * Compares two union values for ordering.
+   * First compares by branch index; if equal, compares the branch values using the branch type's compare method.
+   * @param val1 The first union value.
+   * @param val2 The second union value.
+   * @returns Negative if val1 < val2, zero if equal, positive if val1 > val2.
+   */
   public override compare(val1: UnionValue, val2: UnionValue): number {
     const branch1 = this.#resolveBranch(val1);
     const branch2 = this.#resolveBranch(val2);
@@ -244,6 +313,11 @@ export class UnionType extends BaseType<UnionValue> {
     return branch1.index < branch2.index ? -1 : 1;
   }
 
+  /**
+   * Generates a random union value.
+   * Selects a random branch and generates a random value for that branch, wrapping it appropriately.
+   * @returns A random union value.
+   */
   public override random(): UnionValue {
     const index = Math.floor(Math.random() * this.#branches.length);
     const branch = this.#branches[index];
@@ -254,10 +328,22 @@ export class UnionType extends BaseType<UnionValue> {
     return { [branch.name]: value };
   }
 
+  /**
+   * Returns the JSON representation of the union type.
+   * An array of the JSON representations of each branch type.
+   * @returns The JSON type array.
+   */
   public override toJSON(): JSONType {
     return this.#types.map((type) => type.toJSON());
   }
 
+  /**
+   * Compares two serialized union values from taps for ordering.
+   * Reads the branch indices from both taps; if equal, compares the branch values using the branch type's match method.
+   * @param tap1 The first readable tap.
+   * @param tap2 The second readable tap.
+   * @returns Negative if tap1 < tap2, zero if equal, positive if tap1 > tap2.
+   */
   public override async match(
     tap1: ReadableTapLike,
     tap2: ReadableTapLike,
@@ -274,6 +360,13 @@ export class UnionType extends BaseType<UnionValue> {
     return idx1 < idx2 ? -1 : 1;
   }
 
+  /**
+   * Creates a resolver for schema evolution from the writer type to this union type.
+   * If the writer is also a union, creates resolvers for each branch.
+   * Otherwise, finds a compatible branch in this union and creates a resolver for it.
+   * @param writerType The writer type to resolve from.
+   * @returns A resolver for the union value.
+   */
   public override createResolver(writerType: Type): Resolver<UnionValue> {
     if (writerType instanceof UnionType) {
       const branchResolvers = writerType.getTypes().map((branch) =>
