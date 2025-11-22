@@ -110,7 +110,7 @@ export class EnumType extends NamedType<string> {
     return buffer;
   }
 
-  public override clone(value: unknown): string {
+  public override cloneFromValue(value: unknown): string {
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }

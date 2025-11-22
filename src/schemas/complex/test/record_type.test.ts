@@ -570,7 +570,7 @@ describe("RecordType", () => {
       });
 
       const original = { id: 9 };
-      const cloned = type.clone(original);
+      const cloned = type.cloneFromValue(original);
       assertEquals(cloned, { id: 9, name: "unknown" });
       (cloned as Record<string, unknown>).name = "changed";
       assertEquals(original, { id: 9 });
@@ -594,7 +594,7 @@ describe("RecordType", () => {
       });
 
       const original = { child: { id: 1 } };
-      const cloned = parentRecord.clone(original);
+      const cloned = parentRecord.cloneFromValue(original);
       assertEquals(cloned, { child: { id: 1, name: "unknown" }, age: 25 });
 
       // Verify deep cloning: modifying nested cloned object doesn't affect original
@@ -609,22 +609,22 @@ describe("RecordType", () => {
       });
 
       assertThrows(
-        () => type.clone("string" as unknown as Record<string, unknown>),
+        () => type.cloneFromValue("string" as unknown as Record<string, unknown>),
         Error,
         "Cannot clone non-record value.",
       );
       assertThrows(
-        () => type.clone(42 as unknown as Record<string, unknown>),
+        () => type.cloneFromValue(42 as unknown as Record<string, unknown>),
         Error,
         "Cannot clone non-record value.",
       );
       assertThrows(
-        () => type.clone(null as unknown as Record<string, unknown>),
+        () => type.cloneFromValue(null as unknown as Record<string, unknown>),
         Error,
         "Cannot clone non-record value.",
       );
       assertThrows(
-        () => type.clone([1, 2, 3] as unknown as Record<string, unknown>),
+        () => type.cloneFromValue([1, 2, 3] as unknown as Record<string, unknown>),
         Error,
         "Cannot clone non-record value.",
       );
@@ -640,7 +640,7 @@ describe("RecordType", () => {
       });
 
       assertThrows(
-        () => type.clone({ name: "Ann" } as unknown as Record<string, unknown>),
+        () => type.cloneFromValue({ name: "Ann" } as unknown as Record<string, unknown>),
         Error,
         "Missing value for record field id with no default.",
       );

@@ -210,10 +210,7 @@ export class UnionType extends BaseType<UnionValue> {
     return buffer;
   }
 
-  public override clone(
-    value: unknown,
-    opts?: Record<string, unknown>,
-  ): UnionValue {
+  public override cloneFromValue(value: unknown): UnionValue {
     if (value === null) {
       if (!this.#indices.has("null")) {
         throw new Error("Cannot clone null for a union without null branch.");
@@ -226,7 +223,7 @@ export class UnionType extends BaseType<UnionValue> {
       return null;
     }
 
-    const cloned = this.#branches[index].type.clone(branchValue, opts);
+    const cloned = this.#branches[index].type.cloneFromValue(branchValue);
     return { [this.#branches[index].name]: cloned };
   }
 

@@ -56,7 +56,7 @@ describe("ArrayType", () => {
 
   it("clones arrays deeply", () => {
     const original = [9, 10];
-    const cloned = intArray.clone(original);
+    const cloned = intArray.cloneFromValue(original);
     assertEquals(cloned, original);
     cloned[0] = 99;
     assertEquals(original[0], 9);
@@ -191,7 +191,7 @@ describe("ArrayType", () => {
 
   it("throws error in clone when value is not array", () => {
     assertThrows(
-      () => intArray.clone("not an array" as unknown as number[]),
+      () => intArray.cloneFromValue("not an array" as unknown as number[]),
       Error,
       "Cannot clone non-array value.",
     );
@@ -240,7 +240,7 @@ describe("ArrayType", () => {
     assert(!intArrayOfInts.check([1, 2])); // inner elements must be arrays
 
     // Test cloning
-    const cloned = intArrayOfInts.clone(nestedData);
+    const cloned = intArrayOfInts.cloneFromValue(nestedData);
     assertEquals(cloned, nestedData);
     cloned[0][0] = 99;
     assertEquals(nestedData[0][0], 1); // deep clone

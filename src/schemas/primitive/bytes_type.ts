@@ -92,7 +92,7 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     return len1 < len2 ? -1 : len1 > len2 ? 1 : 0;
   }
 
-  public override clone(value: unknown): Uint8Array {
+  public override cloneFromValue(value: unknown): Uint8Array {
     let bytes: Uint8Array;
     if (value instanceof Uint8Array) {
       bytes = value;

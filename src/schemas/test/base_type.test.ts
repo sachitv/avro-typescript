@@ -50,7 +50,7 @@ class TestType extends BaseType<string> {
     return isValid;
   }
 
-  public override clone(value: string): string {
+  public override cloneFromValue(value: string): string {
     if (!this.check(value)) {
       throw new Error(`Invalid value for clone: ${JSON.stringify(value)}`);
     }
@@ -103,7 +103,7 @@ class OtherType extends FixedSizeBaseType<number> {
     return typeof value === "number" && isFinite(value);
   }
 
-  public override clone(value: number): number {
+  public override cloneFromValue(value: number): number {
     if (!this.check(value)) {
       throw new Error(`Invalid value for clone: ${JSON.stringify(value)}`);
     }
@@ -253,7 +253,7 @@ describe("Type", () => {
   describe("clone", () => {
     it("should clone a string value", () => {
       const value = "test";
-      const cloned = type.clone(value);
+      const cloned = type.cloneFromValue(value);
       assertEquals(cloned, value);
       // Strings are immutable, so reference equality is fine
     });
@@ -261,7 +261,7 @@ describe("Type", () => {
     it("should throw for invalid values", () => {
       assertThrows(() => {
         // deno-lint-ignore no-explicit-any
-        (type as any).clone(123);
+        (type as any).cloneFromValue(123);
       });
     });
   });

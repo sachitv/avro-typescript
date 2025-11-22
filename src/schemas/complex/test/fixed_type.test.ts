@@ -219,7 +219,7 @@ describe("FixedType", () => {
   it("creates deep copy of fixed-size byte arrays when cloning", () => {
     const fixedType = createFixedType("Test", 4);
     const original = new Uint8Array([1, 2, 3, 4]);
-    const cloned = fixedType.clone(original);
+    const cloned = fixedType.cloneFromValue(original);
 
     assertEquals(cloned, original);
     assertEquals(cloned === original, false); // Different instances
@@ -227,7 +227,7 @@ describe("FixedType", () => {
 
   it("clones JSON string defaults", () => {
     const fixedType = createFixedType("Test", 3);
-    const cloned = fixedType.clone("\u0001\u0002\u0003");
+    const cloned = fixedType.cloneFromValue("\u0001\u0002\u0003");
     assertEquals([...cloned], [1, 2, 3]);
   });
 
@@ -235,7 +235,7 @@ describe("FixedType", () => {
     const fixedType = createFixedType("Test", 4);
 
     assertThrows(
-      () => fixedType.clone(new Uint8Array([1, 2, 3])),
+      () => fixedType.cloneFromValue(new Uint8Array([1, 2, 3])),
       Error,
       "Invalid value",
     );
@@ -244,7 +244,7 @@ describe("FixedType", () => {
   it("throws ValidationError when cloning unsupported default types", () => {
     const fixedType = createFixedType("Test", 4);
     assertThrows(() => {
-      fixedType.clone(123 as unknown);
+      fixedType.cloneFromValue(123 as unknown);
     }, ValidationError);
   });
 

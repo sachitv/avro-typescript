@@ -114,7 +114,7 @@ export class FixedType extends NamedType<Uint8Array> {
     return compareUint8Arrays(val1, val2);
   }
 
-  public override clone(value: unknown): Uint8Array {
+  public override cloneFromValue(value: unknown): Uint8Array {
     let bytes: Uint8Array;
     if (value instanceof Uint8Array) {
       bytes = value;

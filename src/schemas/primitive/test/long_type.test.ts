@@ -143,17 +143,17 @@ describe("LongType", () => {
 
   describe("inheritance from PrimitiveType and BaseType", () => {
     it("should clone bigint values", () => {
-      assertEquals(type.clone(42n), 42n);
-      assertEquals(type.clone(-42n), -42n);
+      assertEquals(type.cloneFromValue(42n), 42n);
+      assertEquals(type.cloneFromValue(-42n), -42n);
     });
 
     it("should clone JSON integer defaults", () => {
-      assertEquals(type.clone(123), 123n);
+      assertEquals(type.cloneFromValue(123), 123n);
     });
 
     it("should throw ValidationError for invalid clone", () => {
       assertThrows(() => {
-        type.clone(42.5 as unknown);
+        type.cloneFromValue(42.5 as unknown);
       }, ValidationError);
     });
 

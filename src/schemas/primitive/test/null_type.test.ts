@@ -101,13 +101,13 @@ describe("NullType", () => {
 
   describe("inheritance from FixedSizeBaseType and BaseType", () => {
     it("should clone null values", () => {
-      assertEquals(type.clone(null), null);
+      assertEquals(type.cloneFromValue(null), null);
     });
 
     it("should throw ValidationError for invalid clone", () => {
       assertThrows(() => {
         // deno-lint-ignore no-explicit-any
-        (type as any).clone("invalid");
+        (type as any).cloneFromValue("invalid");
       }, ValidationError);
     });
 

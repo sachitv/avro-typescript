@@ -140,13 +140,13 @@ describe("IntType", () => {
 
   describe("inheritance from PrimitiveType and BaseType", () => {
     it("should clone int values", () => {
-      assertEquals(type.clone(42), 42);
-      assertEquals(type.clone(-42), -42);
+      assertEquals(type.cloneFromValue(42), 42);
+      assertEquals(type.cloneFromValue(-42), -42);
     });
 
     it("should throw ValidationError for invalid clone", () => {
       assertThrows(() => {
-        type.clone(2147483648 as unknown as number);
+        type.cloneFromValue(2147483648 as unknown as number);
       }, ValidationError);
     });
 

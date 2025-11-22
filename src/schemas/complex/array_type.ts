@@ -173,11 +173,11 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     return buffer;
   }
 
-  public override clone(value: unknown, opts?: Record<string, unknown>): T[] {
+  public override cloneFromValue(value: unknown): T[] {
     if (!Array.isArray(value)) {
       throw new Error("Cannot clone non-array value.");
     }
-    return value.map((element) => this.#itemsType.clone(element, opts));
+    return value.map((element) => this.#itemsType.cloneFromValue(element));
   }
 
   public override compare(val1: T[], val2: T[]): number {

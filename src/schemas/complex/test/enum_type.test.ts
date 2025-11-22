@@ -249,8 +249,8 @@ describe("EnumType", () => {
       name: "Letter",
       symbols: ["A", "B"],
     });
-    assertEquals(type.clone("A"), "A");
-    assertThrows(() => type.clone("C"));
+    assertEquals(type.cloneFromValue("A"), "A");
+    assertThrows(() => type.cloneFromValue("C"));
   });
 
   it("compares according to symbol order", () => {

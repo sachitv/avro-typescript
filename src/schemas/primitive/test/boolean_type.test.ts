@@ -121,13 +121,13 @@ describe("BooleanType", () => {
 
   describe("inheritance from PrimitiveType and BaseType", () => {
     it("should clone boolean values", () => {
-      assertEquals(type.clone(true), true);
-      assertEquals(type.clone(false), false);
+      assertEquals(type.cloneFromValue(true), true);
+      assertEquals(type.cloneFromValue(false), false);
     });
 
     it("should throw ValidationError for invalid clone", () => {
       assertThrows(() => {
-        type.clone(123 as unknown as boolean);
+        type.cloneFromValue(123 as unknown as boolean);
       }, ValidationError);
     });
 

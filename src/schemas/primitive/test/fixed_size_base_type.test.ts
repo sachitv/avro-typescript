@@ -31,7 +31,7 @@ class TestFixedSizeType extends FixedSizeBaseType<number> {
     await tap.writeInt(value);
   }
 
-  public clone(value: number): number {
+  public cloneFromValue(value: number): number {
     return value;
   }
 

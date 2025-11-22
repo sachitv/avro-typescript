@@ -184,18 +184,18 @@ describe("LogicalType", () => {
     assertEquals(result, "test");
   });
 
-  // Tests for missing coverage lines 73-77: clone() method
-  it("clone creates a copy of the logical value", () => {
+  // Tests for missing coverage lines 73-77: cloneFromValue() method
+  it("cloneFromValue creates a copy of the logical value", () => {
     const type = new TestLogicalType();
     const original = "test";
-    const cloned = type.clone(original);
+    const cloned = type.cloneFromValue(original);
     assertEquals(cloned, original);
   });
 
-  it("clone throws when ensureValid fails", () => {
+  it("cloneFromValue throws when ensureValid fails", () => {
     const type = new TestLogicalType();
     assertThrows(() => {
-      type.clone("throw");
+      type.cloneFromValue("throw");
     });
   });
 

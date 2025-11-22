@@ -1,7 +1,6 @@
 import type { ReadableTapLike, WritableTapLike } from "../serialization/tap.ts";
 import type { Resolver } from "./resolver.ts";
 
-type CloneOptions = Record<string, unknown>;
 type ErrorHook = (
   path: string[],
   invalidValue: unknown,
@@ -48,10 +47,9 @@ export abstract class Type<T = unknown> {
   /**
    * Creates a deep clone of the value.
    * @param value The value to clone.
-   * @param opts Optional cloning options.
    * @returns The cloned value.
    */
-  public abstract clone(value: unknown, opts?: CloneOptions): T;
+  public abstract cloneFromValue(value: unknown): T;
 
   /**
    * Creates a resolver for schema evolution from a writer type to this reader type.

@@ -66,7 +66,7 @@ export class LongType extends PrimitiveType<bigint> {
     return BigInt(Math.floor(Math.random() * 1000));
   }
 
-  public override clone(value: unknown): bigint {
+  public override cloneFromValue(value: unknown): bigint {
     if (typeof value === "bigint") {
       this.check(value, throwInvalidError, []);
       return value;

@@ -195,10 +195,7 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     return buffer;
   }
 
-  public override clone(
-    value: unknown,
-    opts?: Record<string, unknown>,
-  ): Map<string, T> {
+  public override cloneFromValue(value: unknown): Map<string, T> {
     const copy = new Map<string, T>();
 
     if (value instanceof Map) {
@@ -206,7 +203,7 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
         if (typeof key !== "string") {
           throw new Error("Map keys must be strings to clone.");
         }
-        copy.set(key, this.#valuesType.clone(entry, opts));
+        copy.set(key, this.#valuesType.cloneFromValue(entry));
       }
       return copy;
     }
@@ -216,7 +213,7 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     }
 
     for (const [key, entry] of Object.entries(value)) {
-      copy.set(key, this.#valuesType.clone(entry, opts));
+      copy.set(key, this.#valuesType.cloneFromValue(entry));
     }
     return copy;
   }
