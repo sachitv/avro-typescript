@@ -282,6 +282,12 @@ describe("MapType", () => {
       assertEquals(original.get("outer")!.get("inner"), 1);
     });
 
+    it("clones plain object defaults into a map", () => {
+      const values = { a: 1, b: 2 };
+      const cloned = intMap.clone(values);
+      assertEquals(cloned, new Map([["a", 1], ["b", 2]]));
+    });
+
     it("throws error in clone when value is not map", () => {
       assertThrows(
         () => intMap.clone("not a map" as unknown as Map<string, number>),

@@ -236,7 +236,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   }
 
   public override clone(
-    value: Record<string, unknown>,
+    value: unknown,
     opts?: Record<string, unknown>,
   ): Record<string, unknown> {
     this.#ensureFields();
@@ -244,9 +244,10 @@ export class RecordType extends NamedType<Record<string, unknown>> {
       throw new Error("Cannot clone non-record value.");
     }
 
+    const recordValue = value as Record<string, unknown>;
     const result: Record<string, unknown> = {};
     for (const field of this.#fields) {
-      this.#cloneField(field, value, result, opts);
+      this.#cloneField(field, recordValue, result, opts);
     }
     return result;
   }

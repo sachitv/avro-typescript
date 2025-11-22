@@ -247,10 +247,14 @@ describe("BytesType", () => {
       assert(cloned !== original); // Different instances
     });
 
+    it("should clone JSON string defaults", () => {
+      const cloned = type.clone("\u0001\u0002\u00ff");
+      assertEquals([...cloned], [1, 2, 255]);
+    });
+
     it("should throw ValidationError for invalid clone", () => {
       assertThrows(() => {
-        // deno-lint-ignore no-explicit-any
-        (type as any).clone("invalid");
+        type.clone(123 as unknown);
       }, ValidationError);
     });
 

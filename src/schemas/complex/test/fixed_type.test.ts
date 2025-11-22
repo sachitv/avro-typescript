@@ -4,6 +4,7 @@ import { FixedType } from "../fixed_type.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import { ReadableTap } from "../../../serialization/tap.ts";
 import type { Type } from "../../type.ts";
+import { ValidationError } from "../../error.ts";
 import { resolveNames } from "../resolve_names.ts";
 
 function createFixedType(
@@ -224,6 +225,12 @@ describe("FixedType", () => {
     assertEquals(cloned === original, false); // Different instances
   });
 
+  it("clones JSON string defaults", () => {
+    const fixedType = createFixedType("Test", 3);
+    const cloned = fixedType.clone("\u0001\u0002\u0003");
+    assertEquals([...cloned], [1, 2, 3]);
+  });
+
   it("throws error when cloning invalid values", () => {
     const fixedType = createFixedType("Test", 4);
 
@@ -232,6 +239,13 @@ describe("FixedType", () => {
       Error,
       "Invalid value",
     );
+  });
+
+  it("throws ValidationError when cloning unsupported default types", () => {
+    const fixedType = createFixedType("Test", 4);
+    assertThrows(() => {
+      fixedType.clone(123 as unknown);
+    }, ValidationError);
   });
 
   it("generates random fixed-size byte arrays", () => {

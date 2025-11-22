@@ -45,9 +45,9 @@ export class NullType extends FixedSizeBaseType<null> {
     return 0; // Null takes no space
   }
 
-  public clone(value: null): null {
+  public override clone(value: unknown): null {
     this.check(value, throwInvalidError, []);
-    return value;
+    return value as null;
   }
 
   public compare(_val1: null, _val2: null): number {

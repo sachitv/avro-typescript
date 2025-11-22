@@ -66,6 +66,21 @@ export class LongType extends PrimitiveType<bigint> {
     return BigInt(Math.floor(Math.random() * 1000));
   }
 
+  public override clone(value: unknown): bigint {
+    if (typeof value === "bigint") {
+      this.check(value, throwInvalidError, []);
+      return value;
+    }
+
+    if (typeof value === "number" && Number.isInteger(value)) {
+      const candidate = BigInt(value);
+      this.check(candidate, throwInvalidError, []);
+      return candidate;
+    }
+
+    throwInvalidError([], value, this);
+  }
+
   public override createResolver(writerType: Type): Resolver {
     if (writerType instanceof IntType) {
       // Long can promote from int (32-bit to 64-bit)

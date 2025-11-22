@@ -51,7 +51,7 @@ export abstract class Type<T = unknown> {
    * @param opts Optional cloning options.
    * @returns The cloned value.
    */
-  public abstract clone(value: T, opts?: CloneOptions): T;
+  public abstract clone(value: unknown, opts?: CloneOptions): T;
 
   /**
    * Creates a resolver for schema evolution from a writer type to this reader type.

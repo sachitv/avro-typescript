@@ -48,9 +48,9 @@ export class FloatType extends FixedSizeBaseType<number> {
     return 4; // 4 bytes
   }
 
-  public override clone(value: number): number {
+  public override clone(value: unknown): number {
     this.check(value, throwInvalidError, []);
-    return value;
+    return value as number;
   }
 
   public compare(val1: number, val2: number): number {

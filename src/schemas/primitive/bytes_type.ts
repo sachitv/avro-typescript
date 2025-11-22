@@ -92,9 +92,17 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     return len1 < len2 ? -1 : len1 > len2 ? 1 : 0;
   }
 
-  public override clone(value: Uint8Array): Uint8Array {
-    this.check(value, throwInvalidError, []);
-    return new Uint8Array(value);
+  public override clone(value: unknown): Uint8Array {
+    let bytes: Uint8Array;
+    if (value instanceof Uint8Array) {
+      bytes = value;
+    } else if (typeof value === "string") {
+      bytes = BytesType.#fromJsonString(value);
+    } else {
+      throwInvalidError([], value, this);
+    }
+    this.check(bytes, throwInvalidError, []);
+    return new Uint8Array(bytes);
   }
 
   public override random(): Uint8Array {
@@ -105,6 +113,14 @@ export class BytesType extends PrimitiveType<Uint8Array> {
       buf[i] = Math.floor(Math.random() * 256);
     }
     return buf;
+  }
+
+  static #fromJsonString(value: string): Uint8Array {
+    const bytes = new Uint8Array(value.length);
+    for (let i = 0; i < value.length; i++) {
+      bytes[i] = value.charCodeAt(i) & 0xff;
+    }
+    return bytes;
   }
 
   public override toJSON(): JSONType {

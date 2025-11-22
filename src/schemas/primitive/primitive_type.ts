@@ -8,9 +8,9 @@ export abstract class PrimitiveType<T = unknown> extends BaseType<T> {
   /**
    * Clones a primitive value (primitives are immutable).
    */
-  public override clone(value: T): T {
+  public override clone(value: unknown): T {
     this.check(value, throwInvalidError, []);
-    return value;
+    return value as T;
   }
 
   /**
