@@ -54,9 +54,9 @@ export { safeStringify } from "./schemas/json.ts";
 
 // Serialization
 export type {
+  AvroFileParserOptions,
   AvroHeader,
   ParsedAvroHeader,
-  AvroFileParserOptions,
 } from "./serialization/avro_file_parser.ts";
 export type { AvroWriterOptions } from "./serialization/avro_file_writer.ts";
 export { AvroFileParser } from "./serialization/avro_file_parser.ts";
@@ -69,9 +69,9 @@ export {
 
 // Buffers
 export type {
+  IReadableAndWritableBuffer,
   IReadableBuffer,
   IWritableBuffer,
-  IReadableAndWritableBuffer,
 } from "./serialization/buffers/buffer.ts";
 export { BlobReadableBuffer } from "./serialization/buffers/blob_readable_buffer.ts";
 export {
@@ -122,15 +122,15 @@ export {
 
 // RPC - Definitions
 export type {
-  ProtocolDefinition,
-  MessageDefinition,
-  ProtocolOptions,
-  MessageTransportOptions,
-  ProtocolHandlerContext,
   CallRequestEnvelopeOptions,
-  ResolverEntry,
-  ProtocolLike,
+  MessageDefinition,
+  MessageTransportOptions,
+  ProtocolDefinition,
+  ProtocolHandlerContext,
   ProtocolInfo,
+  ProtocolLike,
+  ProtocolOptions,
+  ResolverEntry,
 } from "./rpc/definitions/protocol_definitions.ts";
 export { Message } from "./rpc/definitions/message_definition.ts";
 
@@ -142,27 +142,27 @@ export type {
   HandshakeResponseMessage,
 } from "./rpc/protocol/wire_format/handshake.ts";
 export type {
+  CallRequestEnvelope,
   CallRequestInit,
   CallRequestMessage,
-  DecodeCallRequestOptions,
-  CallRequestEnvelope,
+  CallResponseEnvelope,
   CallResponseInit,
   CallResponseMessage,
+  DecodeCallRequestOptions,
   DecodeCallResponseOptions,
-  CallResponseEnvelope,
 } from "./rpc/protocol/wire_format/messages.ts";
 export type {
-  FrameMessageOptions,
   DecodeFramedMessageOptions,
   DecodeFramedMessageResult,
+  FrameMessageOptions,
 } from "./rpc/protocol/wire_format/framing.ts";
 
 // RPC - Transports
 export type {
-  BinaryReadable,
-  BinaryWritable,
   BinaryDuplex,
   BinaryDuplexLike,
+  BinaryReadable,
+  BinaryWritable,
   FetchTransportOptions,
   WebSocketTransportOptions,
 } from "./rpc/protocol/transports/transport_helpers.ts";

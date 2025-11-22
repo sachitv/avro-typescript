@@ -69,7 +69,8 @@ writer helpers, including how to plug in custom readable and writable buffers.
 
 ## Constructing Avro Types with `createType`
 
-The `createType` factory turns any valid Avro schema into a `Type` instance that is consumed throughout the reader and writer layers.
+The `createType` factory turns any valid Avro schema into a `Type` instance that
+is consumed throughout the reader and writer layers.
 
 - **Supported inputs**:
   - Primitive names: pass strings like `"int"`, `"string"`, or `"boolean"`.
@@ -106,7 +107,9 @@ custom tooling that needs schema-aware decoding/encoding.
 
 ## Reading Avro Files
 
-`AvroReader` exposes four factory helpers that cater to the most common data sources. All readers expose the same API for querying the header and iterating records:
+`AvroReader` exposes four factory helpers that cater to the most common data
+sources. All readers expose the same API for querying the header and iterating
+records:
 
 ```typescript ignore
 import { AvroReader } from "jsr:@sachitv/avro-typescript";
@@ -124,7 +127,8 @@ await reader.close();
 ### Buffer- or Blob-backed readers
 
 - `AvroReader.fromBuffer(buffer, options)` accepts any implementation of
-  `IReadableBuffer`. The `buffer` must implement `read(offset, size)` and is random-access friendly.
+  `IReadableBuffer`. The `buffer` must implement `read(offset, size)` and is
+  random-access friendly.
 - `AvroReader.fromBlob(blob, options)` wraps the blob with `BlobReadableBuffer`
   to provide random access without materializing the entire file.
 
@@ -406,7 +410,8 @@ flowchart TB
 
 ## Using the TypeScript RPC API
 
-All runtime helpers focus on the stateless binary structure of handshake frames, call requests, call responses, and framed messages.
+All runtime helpers focus on the stateless binary structure of handshake frames,
+call requests, call responses, and framed messages.
 
 ### Handshake helpers
 
@@ -645,7 +650,8 @@ flowchart TB
 
 ### EventTarget-based Protocol API
 
-The package builds on the primitives above to offer an EventTarget-driven RPC layer similar to the classic JavaScript implementation.
+The package builds on the primitives above to offer an EventTarget-driven RPC
+layer similar to the classic JavaScript implementation.
 
 #### Defining a protocol
 
