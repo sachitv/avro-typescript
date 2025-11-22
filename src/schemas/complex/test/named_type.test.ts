@@ -18,7 +18,7 @@ class DummyNamedType extends NamedType<string> {
     return new ArrayBuffer(0);
   }
 
-  public override clone(value: string): string {
+  public override cloneFromValue(value: string): string {
     return value;
   }
 

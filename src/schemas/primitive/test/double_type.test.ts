@@ -266,19 +266,19 @@ describe("DoubleType", () => {
 
   describe("inheritance from PrimitiveType and BaseType", () => {
     it("should clone number values", () => {
-      assertEquals(type.clone(42.5), 42.5);
-      assertEquals(type.clone(-42.5), -42.5);
+      assertEquals(type.cloneFromValue(42.5), 42.5);
+      assertEquals(type.cloneFromValue(-42.5), -42.5);
     });
 
     it("should clone IEEE-754 special values", () => {
-      const nanClone = type.clone(Number.NaN);
+      const nanClone = type.cloneFromValue(Number.NaN);
       assert(Number.isNaN(nanClone));
       assertEquals(
-        type.clone(Number.POSITIVE_INFINITY),
+        type.cloneFromValue(Number.POSITIVE_INFINITY),
         Number.POSITIVE_INFINITY,
       );
       assertEquals(
-        type.clone(Number.NEGATIVE_INFINITY),
+        type.cloneFromValue(Number.NEGATIVE_INFINITY),
         Number.NEGATIVE_INFINITY,
       );
     });
@@ -286,7 +286,7 @@ describe("DoubleType", () => {
     it("should throw ValidationError for invalid clone", () => {
       assertThrows(() => {
         // deno-lint-ignore no-explicit-any
-        (type as any).clone("invalid");
+        (type as any).cloneFromValue("invalid");
       }, ValidationError);
     });
 

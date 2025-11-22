@@ -242,15 +242,19 @@ describe("BytesType", () => {
   describe("inheritance from PrimitiveType and BaseType", () => {
     it("should clone Uint8Array values", () => {
       const original = new Uint8Array([1, 2, 3]);
-      const cloned = type.clone(original);
+      const cloned = type.cloneFromValue(original);
       assertEquals(cloned, original);
       assert(cloned !== original); // Different instances
     });
 
+    it("should clone JSON string defaults", () => {
+      const cloned = type.cloneFromValue("\u0001\u0002\u00ff");
+      assertEquals([...cloned], [1, 2, 255]);
+    });
+
     it("should throw ValidationError for invalid clone", () => {
       assertThrows(() => {
-        // deno-lint-ignore no-explicit-any
-        (type as any).clone("invalid");
+        type.cloneFromValue(123 as unknown);
       }, ValidationError);
     });
 

@@ -134,14 +134,14 @@ describe("PrimitiveType", () => {
   describe("clone", () => {
     it("should clone a valid number value", () => {
       const value = 42;
-      const cloned = type.clone(value);
+      const cloned = type.cloneFromValue(value);
       assertEquals(cloned, value);
       assert(cloned !== value || typeof value !== "object"); // Primitives are immutable
     });
 
     it("should throw ValidationError for invalid values", () => {
       assertThrows(() => {
-        type.clone(150); // Invalid since > 100
+        type.cloneFromValue(150); // Invalid since > 100
       }, ValidationError);
     });
   });

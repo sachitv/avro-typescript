@@ -114,9 +114,17 @@ export class FixedType extends NamedType<Uint8Array> {
     return compareUint8Arrays(val1, val2);
   }
 
-  public override clone(value: Uint8Array): Uint8Array {
-    this.check(value, throwInvalidError, []);
-    return new Uint8Array(value);
+  public override cloneFromValue(value: unknown): Uint8Array {
+    let bytes: Uint8Array;
+    if (value instanceof Uint8Array) {
+      bytes = value;
+    } else if (typeof value === "string") {
+      bytes = FixedType.#fromJsonString(value);
+    } else {
+      throwInvalidError([], value, this);
+    }
+    this.check(bytes, throwInvalidError, []);
+    return new Uint8Array(bytes);
   }
 
   public override random(): Uint8Array {
@@ -168,6 +176,14 @@ export class FixedType extends NamedType<Uint8Array> {
 
     // If sizes match and names are compatible, we can use the reader's read method directly
     return new FixedResolver(this);
+  }
+
+  static #fromJsonString(value: string): Uint8Array {
+    const bytes = new Uint8Array(value.length);
+    for (let i = 0; i < value.length; i++) {
+      bytes[i] = value.charCodeAt(i) & 0xff;
+    }
+    return bytes;
   }
 }
 

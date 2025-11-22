@@ -44,9 +44,9 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     return 1; // 1 byte
   }
 
-  public clone(value: boolean): boolean {
+  public override cloneFromValue(value: unknown): boolean {
     this.check(value, throwInvalidError, []);
-    return value;
+    return value as boolean;
   }
 
   public compare(val1: boolean, val2: boolean): number {

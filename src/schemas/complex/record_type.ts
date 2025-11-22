@@ -69,7 +69,7 @@ class RecordField {
 
     this.#hasDefault = Object.prototype.hasOwnProperty.call(params, "default");
     if (this.#hasDefault) {
-      this.#defaultValue = this.#type.clone(params.default as unknown);
+      this.#defaultValue = this.#type.cloneFromValue(params.default as unknown);
     }
   }
 
@@ -93,11 +93,11 @@ class RecordField {
     return this.#hasDefault;
   }
 
-  public getDefault(opts?: Record<string, unknown>): unknown {
+  public getDefault(): unknown {
     if (!this.#hasDefault) {
       throw new Error(`Field '${this.#name}' has no default.`);
     }
-    return this.#type.clone(this.#defaultValue as unknown, opts);
+    return this.#type.cloneFromValue(this.#defaultValue as unknown);
   }
 
   public nameMatches(name: string): boolean {
@@ -235,18 +235,16 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     return combined.buffer;
   }
 
-  public override clone(
-    value: Record<string, unknown>,
-    opts?: Record<string, unknown>,
-  ): Record<string, unknown> {
+  public override cloneFromValue(value: unknown): Record<string, unknown> {
     this.#ensureFields();
     if (!this.#isRecord(value)) {
       throw new Error("Cannot clone non-record value.");
     }
 
+    const recordValue = value as Record<string, unknown>;
     const result: Record<string, unknown> = {};
     for (const field of this.#fields) {
-      this.#cloneField(field, value, result, opts);
+      this.#cloneField(field, recordValue, result);
     }
     return result;
   }
@@ -534,7 +532,6 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     field: RecordField,
     record: Record<string, unknown>,
     result: Record<string, unknown>,
-    opts?: Record<string, unknown>,
   ): void {
     const { hasValue, fieldValue } = this.#extractFieldValue(record, field);
     if (!hasValue) {
@@ -543,10 +540,10 @@ export class RecordType extends NamedType<Record<string, unknown>> {
           `Missing value for record field ${field.getName()} with no default.`,
         );
       }
-      result[field.getName()] = field.getDefault(opts);
+      result[field.getName()] = field.getDefault();
       return;
     }
-    result[field.getName()] = field.getType().clone(fieldValue, opts);
+    result[field.getName()] = field.getType().cloneFromValue(fieldValue);
   }
 
   #getComparableValue(

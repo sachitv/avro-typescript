@@ -81,9 +81,12 @@ export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
     return this.underlyingType.check(underlying, errorHook, path);
   }
 
-  public override clone(value: TValue): TValue {
-    this.ensureValid(value, []);
-    const cloned = this.underlyingType.clone(this.toUnderlying(value));
+  public override cloneFromValue(value: unknown): TValue {
+    this.check(value, throwInvalidError, []);
+    const typedValue = value as TValue;
+    const cloned = this.underlyingType.cloneFromValue(
+      this.toUnderlying(typedValue),
+    );
     return this.fromUnderlying(cloned);
   }
 

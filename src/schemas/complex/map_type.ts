@@ -195,19 +195,25 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     return buffer;
   }
 
-  public override clone(
-    value: Map<string, T>,
-    opts?: Record<string, unknown>,
-  ): Map<string, T> {
-    if (!(value instanceof Map)) {
+  public override cloneFromValue(value: unknown): Map<string, T> {
+    const copy = new Map<string, T>();
+
+    if (value instanceof Map) {
+      for (const [key, entry] of value.entries()) {
+        if (typeof key !== "string") {
+          throw new Error("Map keys must be strings to clone.");
+        }
+        copy.set(key, this.#valuesType.cloneFromValue(entry));
+      }
+      return copy;
+    }
+
+    if (!isPlainObject(value)) {
       throw new Error("Cannot clone non-map value.");
     }
-    const copy = new Map<string, T>();
-    for (const [key, entry] of value.entries()) {
-      if (typeof key !== "string") {
-        throw new Error("Map keys must be strings to clone.");
-      }
-      copy.set(key, this.#valuesType.clone(entry, opts));
+
+    for (const [key, entry] of Object.entries(value)) {
+      copy.set(key, this.#valuesType.cloneFromValue(entry));
     }
     return copy;
   }
@@ -256,6 +262,10 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
 
     return new MapResolver(this, valueResolver);
   }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 class MapResolver<T> extends Resolver<Map<string, T>> {

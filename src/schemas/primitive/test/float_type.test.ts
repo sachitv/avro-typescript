@@ -219,14 +219,14 @@ describe("FloatType", () => {
 
   describe("inheritance from PrimitiveType and BaseType", () => {
     it("should clone number values", () => {
-      assertEquals(type.clone(42.5), 42.5);
-      assertEquals(type.clone(-42.5), -42.5);
+      assertEquals(type.cloneFromValue(42.5), 42.5);
+      assertEquals(type.cloneFromValue(-42.5), -42.5);
     });
 
     it("should throw ValidationError for invalid clone", () => {
       assertThrows(() => {
         // deno-lint-ignore no-explicit-any
-        (type as any).clone("invalid");
+        (type as any).cloneFromValue("invalid");
       }, ValidationError);
     });
 

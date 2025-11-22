@@ -262,10 +262,10 @@ describe("MapType", () => {
     });
   });
 
-  describe("clone()", () => {
+  describe("cloneFromValue()", () => {
     it("clones maps deeply", () => {
       const original = new Map([["a", 9], ["b", 10]]);
-      const cloned = intMap.clone(original);
+      const cloned = intMap.cloneFromValue(original);
       assertEquals(cloned, original);
       cloned.set("a", 99);
       assertEquals(original.get("a"), 9);
@@ -276,15 +276,22 @@ describe("MapType", () => {
       const original = new Map([
         ["outer", new Map([["inner", 1]])],
       ]);
-      const cloned = nestedMap.clone(original);
+      const cloned = nestedMap.cloneFromValue(original);
       assertEquals(cloned, original);
       cloned.get("outer")!.set("inner", 999);
       assertEquals(original.get("outer")!.get("inner"), 1);
     });
 
+    it("clones plain object defaults into a map", () => {
+      const values = { a: 1, b: 2 };
+      const cloned = intMap.cloneFromValue(values);
+      assertEquals(cloned, new Map([["a", 1], ["b", 2]]));
+    });
+
     it("throws error in clone when value is not map", () => {
       assertThrows(
-        () => intMap.clone("not a map" as unknown as Map<string, number>),
+        () =>
+          intMap.cloneFromValue("not a map" as unknown as Map<string, number>),
         Error,
         "Cannot clone non-map value.",
       );
@@ -293,7 +300,7 @@ describe("MapType", () => {
     it("throws error in clone when key is not string", () => {
       const map = new Map([[1 as unknown as string, 1]]);
       assertThrows(
-        () => intMap.clone(map),
+        () => intMap.cloneFromValue(map),
         Error,
         "Map keys must be strings to clone.",
       );
@@ -383,7 +390,7 @@ describe("MapType", () => {
       assert(!intMapOfInts.check(new Map([["a", 1]]))); // inner values must be maps
 
       // Test cloning
-      const cloned = intMapOfInts.clone(nestedData);
+      const cloned = intMapOfInts.cloneFromValue(nestedData);
       assertEquals(cloned, nestedData);
       cloned.get("outer1")!.set("inner1", 99);
       assertEquals(nestedData.get("outer1")!.get("inner1"), 1); // deep clone

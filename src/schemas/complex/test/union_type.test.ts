@@ -50,12 +50,12 @@ describe("UnionType", () => {
 
     describe("clone", () => {
       it("handles null", () => {
-        const cloned = unionType.clone(null);
+        const cloned = unionType.cloneFromValue(null);
         assertEquals(cloned, null);
       });
 
       it("handles null branch with undefined value", () => {
-        const cloned = unionType.clone({ null: undefined });
+        const cloned = unionType.cloneFromValue({ null: undefined });
         assertEquals(cloned, null);
       });
     });
@@ -313,14 +313,14 @@ describe("UnionType", () => {
     describe("clone", () => {
       it("deep clones union values", () => {
         const original = { string: "test" };
-        const cloned = unionType.clone(original);
+        const cloned = unionType.cloneFromValue(original);
         assertEquals(cloned, original);
         assertEquals(cloned === original, false); // different objects
       });
 
       it("throws for null in union without null", () => {
         assertThrows(
-          () => unionType.clone(null),
+          () => unionType.cloneFromValue(null),
           Error,
           "Cannot clone null for a union without null branch.",
         );
@@ -871,7 +871,7 @@ describe("UnionType", () => {
         isValid() {
           return true;
         }
-        clone() {
+        cloneFromValue() {
           return "";
         }
         createResolver() {

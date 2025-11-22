@@ -164,7 +164,7 @@ export class UnionType extends BaseType<UnionValue> {
     tap: WritableTapLike,
     value: UnionValue,
   ): Promise<void> {
-    const { index, branchValue } = this.#resolveBranch(value);
+    const { index, branchValue } = this.#resolveBranch(value as UnionValue);
     await tap.writeLong(BigInt(index));
     if (branchValue !== undefined) {
       await this.#branches[index].type.write(tap, branchValue);
@@ -210,10 +210,7 @@ export class UnionType extends BaseType<UnionValue> {
     return buffer;
   }
 
-  public override clone(
-    value: UnionValue,
-    opts?: Record<string, unknown>,
-  ): UnionValue {
+  public override cloneFromValue(value: unknown): UnionValue {
     if (value === null) {
       if (!this.#indices.has("null")) {
         throw new Error("Cannot clone null for a union without null branch.");
@@ -226,7 +223,7 @@ export class UnionType extends BaseType<UnionValue> {
       return null;
     }
 
-    const cloned = this.#branches[index].type.clone(branchValue, opts);
+    const cloned = this.#branches[index].type.cloneFromValue(branchValue);
     return { [this.#branches[index].name]: cloned };
   }
 
@@ -299,7 +296,7 @@ export class UnionType extends BaseType<UnionValue> {
   }
 
   #resolveBranch(
-    value: UnionValue,
+    value: unknown,
   ): { index: number; branchValue: unknown | undefined } {
     if (value === null) {
       const index = this.#indices.get("null");

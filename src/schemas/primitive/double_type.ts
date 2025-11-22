@@ -52,9 +52,9 @@ export class DoubleType extends FixedSizeBaseType<number> {
     return 8; // 8 bytes
   }
 
-  public override clone(value: number): number {
+  public override cloneFromValue(value: unknown): number {
     this.check(value, throwInvalidError, []);
-    return value;
+    return value as number;
   }
 
   public override compare(val1: number, val2: number): number {
