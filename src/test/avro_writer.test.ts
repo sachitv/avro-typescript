@@ -5,6 +5,8 @@ import { AvroReader } from "../avro_reader.ts";
 import type { IWritableBuffer } from "../serialization/buffers/buffer.ts";
 import { InMemoryReadableBuffer } from "../serialization/buffers/in_memory_buffer.ts";
 import { concatUint8Arrays } from "../internal/collections/array_utils.ts";
+import { BLOCK_TYPE } from "../serialization/avro_constants.ts";
+import { WritableTap } from "../serialization/tap.ts";
 
 const SIMPLE_SCHEMA = {
   type: "record",
@@ -132,6 +134,53 @@ describe("AvroWriter", () => {
     }
     await writer.close();
     await writer.close(); // Should not error
+
+    const bufferData = buffer.toArrayBuffer();
+    const records = await readAllRecords(bufferData);
+    assertEquals(records, SAMPLE_RECORDS);
+  });
+
+  it("handles files with empty blocks", async () => {
+    // This test verifies that the Avro writer and reader can handle files containing empty blocks.
+    // Empty blocks can occur in Avro files and should be skipped by readers without issues.
+    // The test writes some records, manually inserts empty blocks, writes more records, and ensures all records are read back correctly.
+    // Use a fixed sync marker for testing
+    const syncMarker = new Uint8Array(16);
+    for (let i = 0; i < 16; i++) {
+      syncMarker[i] = i;
+    }
+
+    const buffer = new CollectingWritableBuffer();
+    const writer = AvroWriter.toBuffer(buffer, {
+      schema: SIMPLE_SCHEMA,
+      syncMarker,
+    });
+
+    // Write first record
+    await writer.append(SAMPLE_RECORDS[0]);
+    await writer.flushBlock();
+
+    // Manually write an empty block
+    const tap = new WritableTap(buffer);
+    const emptyBlock = {
+      count: 0n,
+      data: new Uint8Array(0),
+      sync: syncMarker,
+    };
+    await BLOCK_TYPE.write(tap, emptyBlock);
+
+    // Write second record
+    await writer.append(SAMPLE_RECORDS[1]);
+    await writer.flushBlock();
+
+    // Manually write another empty block
+    await BLOCK_TYPE.write(tap, emptyBlock);
+
+    // Write remaining records
+    for (let i = 2; i < SAMPLE_RECORDS.length; i++) {
+      await writer.append(SAMPLE_RECORDS[i]);
+    }
+    await writer.close();
 
     const bufferData = buffer.toArrayBuffer();
     const records = await readAllRecords(bufferData);

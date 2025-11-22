@@ -27,11 +27,7 @@ export class DoubleType extends FixedSizeBaseType<number> {
   }
 
   public override async read(tap: ReadableTapLike): Promise<number> {
-    const val = await tap.readDouble();
-    if (val === undefined) {
-      throw new Error("Insufficient data for double");
-    }
-    return val;
+    return await tap.readDouble();
   }
 
   public override async write(
@@ -87,9 +83,6 @@ export class DoubleType extends FixedSizeBaseType<number> {
       return new class extends Resolver {
         public override async read(tap: ReadableTapLike): Promise<number> {
           const floatValue = await tap.readFloat();
-          if (floatValue === undefined) {
-            throw new Error("Insufficient data for float");
-          }
           return floatValue;
         }
       }(this);

@@ -26,11 +26,7 @@ export class BytesType extends PrimitiveType<Uint8Array> {
   }
 
   public override async read(tap: ReadableTapLike): Promise<Uint8Array> {
-    const val = await tap.readBytes();
-    if (val === undefined) {
-      throw new Error("Insufficient data for bytes");
-    }
-    return val;
+    return await tap.readBytes();
   }
 
   public override async write(
@@ -67,9 +63,6 @@ export class BytesType extends PrimitiveType<Uint8Array> {
           tap: ReadableTapLike,
         ): Promise<Uint8Array> {
           const str = await tap.readString();
-          if (str === undefined) {
-            throw new Error("Insufficient data for string");
-          }
           // Convert string to bytes (assuming UTF-8)
           const encoder = new TextEncoder();
           return encoder.encode(str);

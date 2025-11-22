@@ -32,9 +32,6 @@ export async function readMapInto<T>(
     const count = bigIntToSafeNumber(rawCount, "Map block length");
     for (let i = 0; i < count; i++) {
       const key = await tap.readString();
-      if (key === undefined) {
-        throw new Error("Insufficient data for map key");
-      }
       const value = await readValue(tap);
       collect(key, value);
     }

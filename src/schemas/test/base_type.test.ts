@@ -27,8 +27,7 @@ class TestType extends BaseType<string> {
   }
 
   public override async read(tap: Tap): Promise<string> {
-    const val = await tap.readString();
-    return val ?? "";
+    return await tap.readString();
   }
 
   public override async skip(tap: Tap): Promise<void> {
@@ -88,11 +87,7 @@ class OtherType extends FixedSizeBaseType<number> {
   }
 
   public override async read(tap: Tap): Promise<number> {
-    const val = await tap.readDouble();
-    if (val === undefined) {
-      throw new Error("Insufficient data");
-    }
-    return val;
+    return await tap.readDouble();
   }
 
   public override async skip(tap: Tap): Promise<void> {

@@ -59,7 +59,8 @@ describe("DoubleType", () => {
       );
     });
 
-    it("should throw when tap.readDouble returns undefined", async () => {
+    // This test checks that double type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
+    it("should throw when read fails", async () => {
       const mockBuffer = {
         read: (_offset: number, _size: number) => Promise.resolve(undefined),
       };
@@ -68,8 +69,8 @@ describe("DoubleType", () => {
         async () => {
           await type.read(tap);
         },
-        Error,
-        "Insufficient data for double",
+        RangeError,
+        "Attempt to read beyond buffer bounds.",
       );
     });
   });
@@ -204,7 +205,8 @@ describe("DoubleType", () => {
       );
     });
 
-    it("should throw when tap.readFloat returns undefined in FloatType resolver", async () => {
+    // This test checks that double type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
+    it("should throw when read fails in FloatType resolver", async () => {
       const floatType = new FloatType();
       const resolver = type.createResolver(floatType);
       const mockBuffer = {
@@ -215,8 +217,8 @@ describe("DoubleType", () => {
         async () => {
           await resolver.read(tap);
         },
-        Error,
-        "Insufficient data for float",
+        RangeError,
+        "Attempt to read beyond buffer bounds.",
       );
     });
 

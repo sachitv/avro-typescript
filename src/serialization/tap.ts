@@ -18,15 +18,15 @@ export interface ReadableTapLike {
   readLong(): Promise<bigint>;
   skipInt(): Promise<void>;
   skipLong(): Promise<void>;
-  readFloat(): Promise<number | undefined>;
+  readFloat(): Promise<number>;
   skipFloat(): void;
-  readDouble(): Promise<number | undefined>;
+  readDouble(): Promise<number>;
   skipDouble(): void;
-  readFixed(len: number): Promise<Uint8Array | undefined>;
+  readFixed(len: number): Promise<Uint8Array>;
   skipFixed(len: number): void;
-  readBytes(): Promise<Uint8Array | undefined>;
+  readBytes(): Promise<Uint8Array>;
   skipBytes(): Promise<void>;
-  readString(): Promise<string | undefined>;
+  readString(): Promise<string>;
   skipString(): Promise<void>;
   matchBoolean(tap: ReadableTapLike): Promise<number>;
   matchInt(tap: ReadableTapLike): Promise<number>;
@@ -168,7 +168,10 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
 
   private async getByteAt(position: number): Promise<number> {
     const bytes = await this.buffer.read(position, 1);
-    return bytes ? bytes[0] : 0;
+    if (!bytes) {
+      throw new RangeError("Attempt to read beyond buffer bounds.");
+    }
+    return bytes[0];
   }
 
   /**
@@ -239,13 +242,15 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
 
   /**
    * Reads a 32-bit little-endian floating point number.
-   * @returns The float value or `undefined` if the read would exceed the buffer.
+   * @throws RangeError if the read would exceed the buffer.
    */
-  async readFloat(): Promise<number | undefined> {
+  async readFloat(): Promise<number> {
     const pos = this.pos;
     this.pos += 4;
     const bytes = await this.buffer.read(pos, 4);
-    if (!bytes) return undefined;
+    if (!bytes) {
+      throw new RangeError("Attempt to read beyond buffer bounds.");
+    }
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return view.getFloat32(0, true);
   }
@@ -259,13 +264,15 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
 
   /**
    * Reads a 64-bit little-endian floating point number.
-   * @returns The double value or `undefined` if the read would exceed the buffer.
+   * @throws RangeError if the read would exceed the buffer.
    */
-  async readDouble(): Promise<number | undefined> {
+  async readDouble(): Promise<number> {
     const pos = this.pos;
     this.pos += 8;
     const bytes = await this.buffer.read(pos, 8);
-    if (!bytes) return undefined;
+    if (!bytes) {
+      throw new RangeError("Attempt to read beyond buffer bounds.");
+    }
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return view.getFloat64(0, true);
   }
@@ -280,12 +287,16 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
   /**
    * Reads a fixed-length byte sequence into a new buffer.
    * @param len Number of bytes to read.
-   * @returns The bytes read or `undefined` if the read exceeds the buffer.
+   * @throws RangeError if the read exceeds the buffer.
    */
-  async readFixed(len: number): Promise<Uint8Array | undefined> {
+  async readFixed(len: number): Promise<Uint8Array> {
     const pos = this.pos;
     this.pos += len;
-    return await this.buffer.read(pos, len);
+    const bytes = await this.buffer.read(pos, len);
+    if (!bytes) {
+      throw new RangeError("Attempt to read beyond buffer bounds.");
+    }
+    return bytes;
   }
 
   /**
@@ -298,9 +309,9 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
 
   /**
    * Reads a length-prefixed byte sequence.
-   * @returns The bytes read or `undefined` if insufficient data remains.
+   * @throws RangeError if insufficient data remains.
    */
-  async readBytes(): Promise<Uint8Array | undefined> {
+  async readBytes(): Promise<Uint8Array> {
     const length = bigIntToSafeNumber(
       await this.readLong(),
       "readBytes length",
@@ -326,14 +337,11 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
 
   /**
    * Reads a length-prefixed UTF-8 string.
-   * @returns The decoded string or `undefined` when the buffer is exhausted prematurely.
+   * @throws RangeError when the buffer is exhausted prematurely.
    */
-  async readString(): Promise<string | undefined> {
+  async readString(): Promise<string> {
     const len = bigIntToSafeNumber(await this.readLong(), "readString length");
     const bytes = await this.readFixed(len);
-    if (!bytes) {
-      return undefined;
-    }
     return decode(bytes);
   }
 
@@ -342,19 +350,17 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
    * @param tap Tap to compare against; both cursors advance.
    * @returns 0 when equal, negative when this tap's value is false and the other true, positive otherwise.
    */
-  async matchBoolean(tap: ReadableTap): Promise<number> {
-    const diff = (await this.getByteAt(this.pos)) -
-      (await tap.getByteAt(tap.pos));
-    this.pos += 1;
-    tap.pos += 1;
-    return diff;
+  async matchBoolean(tap: ReadableTapLike): Promise<number> {
+    const val1 = await this.readBoolean();
+    const val2 = await tap.readBoolean();
+    return Number(val1) - Number(val2);
   }
 
   /**
    * Compares the next zig-zag encoded 32-bit integer with another tap.
    * @returns Comparison result using -1/0/1 semantics.
    */
-  async matchInt(tap: ReadableTap): Promise<number> {
+  async matchInt(tap: ReadableTapLike): Promise<number> {
     return await this.matchLong(tap);
   }
 
@@ -362,7 +368,7 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
    * Compares the next zig-zag encoded 64-bit integer with another tap.
    * @returns Comparison result using -1/0/1 semantics.
    */
-  async matchLong(tap: ReadableTap): Promise<number> {
+  async matchLong(tap: ReadableTapLike): Promise<number> {
     const n1 = await this.readLong();
     const n2 = await tap.readLong();
     return n1 === n2 ? 0 : (n1 < n2 ? -1 : 1);
@@ -370,27 +376,21 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
 
   /**
    * Compares the next 32-bit float value with another tap.
-   * @returns Comparison result using -1/0/1 semantics, or 0 when either side runs out of data.
+   * @returns Comparison result using -1/0/1 semantics.
    */
-  async matchFloat(tap: ReadableTap): Promise<number> {
+  async matchFloat(tap: ReadableTapLike): Promise<number> {
     const n1 = await this.readFloat();
     const n2 = await tap.readFloat();
-    if (n1 === undefined || n2 === undefined) {
-      return 0;
-    }
     return n1 === n2 ? 0 : (n1 < n2 ? -1 : 1);
   }
 
   /**
    * Compares the next 64-bit float value with another tap.
-   * @returns Comparison result using -1/0/1 semantics, or 0 when either side runs out of data.
+   * @returns Comparison result using -1/0/1 semantics.
    */
-  async matchDouble(tap: ReadableTap): Promise<number> {
+  async matchDouble(tap: ReadableTapLike): Promise<number> {
     const n1 = await this.readDouble();
     const n2 = await tap.readDouble();
-    if (n1 === undefined || n2 === undefined) {
-      return 0;
-    }
     return n1 === n2 ? 0 : (n1 < n2 ? -1 : 1);
   }
 
@@ -398,14 +398,11 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
    * Compares fixed-length byte sequences from this tap and another tap.
    * @param tap Tap to compare against; both cursors advance by `len`.
    * @param len Number of bytes to compare.
-   * @returns Comparison result using -1/0/1 semantics, or 0 if either sequence is unavailable.
+   * @returns Comparison result using -1/0/1 semantics.
    */
-  async matchFixed(tap: ReadableTap, len: number): Promise<number> {
+  async matchFixed(tap: ReadableTapLike, len: number): Promise<number> {
     const fixed1 = await this.readFixed(len);
     const fixed2 = await tap.readFixed(len);
-    if (!fixed1 || !fixed2) {
-      return 0;
-    }
     return compareUint8Arrays(fixed1, fixed2);
   }
 
@@ -413,7 +410,7 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
    * Compares length-prefixed byte sequences from this tap and another tap.
    * @returns Comparison result using -1/0/1 semantics.
    */
-  async matchBytes(tap: ReadableTap): Promise<number> {
+  async matchBytes(tap: ReadableTapLike): Promise<number> {
     return await this.matchString(tap);
   }
 
@@ -421,22 +418,17 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
    * Compares length-prefixed UTF-8 strings read from this tap and another tap.
    * @returns Comparison result using -1/0/1 semantics.
    */
-  async matchString(tap: ReadableTap): Promise<number> {
+  async matchString(tap: ReadableTapLike): Promise<number> {
     const l1 = bigIntToSafeNumber(
       await this.readLong(),
       "matchString length this",
     );
-    const p1 = this.pos;
-    this.pos += l1;
+    const bytes1 = await this.readFixed(l1);
     const l2 = bigIntToSafeNumber(
       await tap.readLong(),
       "matchString length tap",
     );
-    const p2 = tap.pos;
-    tap.pos += l2;
-    const bytes1 = await this.buffer.read(p1, l1);
-    const bytes2 = await tap.buffer.read(p2, l2);
-    if (!bytes1 || !bytes2) return 0;
+    const bytes2 = await tap.readFixed(l2);
     return compareUint8Arrays(bytes1, bytes2);
   }
 

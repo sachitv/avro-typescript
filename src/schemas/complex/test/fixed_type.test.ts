@@ -153,7 +153,8 @@ describe("FixedType", () => {
     );
   });
 
-  it("should throw when tap.readFixed returns undefined", async () => {
+  // This test checks that fixed type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
+  it("should throw when read fails", async () => {
     const fixedType = createFixedType("Test", 4);
     const mockBuffer = {
       read: (_offset: number, _size: number) => Promise.resolve(undefined),
@@ -163,8 +164,8 @@ describe("FixedType", () => {
       async () => {
         await fixedType.read(tap);
       },
-      Error,
-      "Insufficient data for fixed type",
+      RangeError,
+      "Attempt to read beyond buffer bounds.",
     );
   });
 
