@@ -133,6 +133,7 @@ export class AvroFileParser {
    * Asynchronously iterates over all records in the Avro file.
    *
    * @returns AsyncIterableIterator that yields each record.
+   * @throws Error if the file contains invalid data or is corrupted.
    */
   public async *iterRecords(): AsyncIterableIterator<unknown> {
     const header = await this.#parseHeader();
@@ -174,9 +175,14 @@ export class AvroFileParser {
             : await schemaType.read(recordTap);
           yield record;
         }
-      } catch (_error) {
-        // No more blocks or invalid data
-        break;
+      } catch (error) {
+        // If at end of buffer (RangeError), quit gracefully; otherwise throw
+        // The tap should still be valid since it will not be past the range 
+        // of the buffer if we attempt to read 0 bytes.
+        if (await tap.isValid() && error instanceof RangeError) {
+          break;
+        }
+        throw error;
       }
     }
   }
