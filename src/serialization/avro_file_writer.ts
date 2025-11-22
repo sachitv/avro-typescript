@@ -16,16 +16,41 @@ const DEFAULT_BLOCK_SIZE_BYTES = 64000;
 const SYNC_MARKER_SIZE = 16;
 const RESERVED_METADATA_KEYS = new Set(["avro.schema", "avro.codec"]);
 
+/**
+ * Type for initializing metadata in an Avro file header.
+ * Can be a Map of string keys to Uint8Array values, or a plain object with string or Uint8Array values.
+ */
 export type MetadataInit =
   | Map<string, Uint8Array>
   | Record<string, string | Uint8Array>;
 
+/**
+ * Options for configuring an AvroFileWriter.
+ */
 export interface AvroWriterOptions {
+  /**
+   * The Avro schema defining the structure of records to be written.
+   */
   schema: SchemaLike;
+  /**
+   * The compression codec to use for data blocks. Defaults to "null" (no compression).
+   */
   codec?: string;
+  /**
+   * The maximum size in bytes for data blocks. Defaults to 64000 bytes.
+   */
   blockSize?: number;
+  /**
+   * A 16-byte sync marker used to delineate blocks. If not provided, a random one is generated.
+   */
   syncMarker?: Uint8Array;
+  /**
+   * Additional metadata to include in the Avro file header.
+   */
   metadata?: MetadataInit;
+  /**
+   * Custom encoders for compression codecs not built into the library.
+   */
   encoders?: EncoderRegistry;
 }
 
@@ -53,6 +78,11 @@ export class AvroFileWriter {
   #builtInEncoders: EncoderRegistry;
   #customEncoders: EncoderRegistry;
 
+  /**
+   * Creates a new AvroFileWriter.
+   * @param buffer The writable buffer to write to.
+   * @param options Configuration options including schema and codec.
+   */
   constructor(buffer: IWritableBuffer, options: AvroWriterOptions) {
     if (!options || !options.schema) {
       throw new Error("Avro writer requires a schema.");

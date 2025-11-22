@@ -1,14 +1,17 @@
 import type { ReadableTapLike, WritableTapLike } from "../serialization/tap.ts";
 import type { Resolver } from "./resolver.ts";
+import type { ErrorHook } from "./error.ts";
 
-type ErrorHook = (
-  path: string[],
-  invalidValue: unknown,
-  schemaType: Type,
-) => void;
-type IsValidOptions = { errorHook?: ErrorHook };
+/**
+ * Options for validation, including an optional error hook.
+ */
+export type IsValidOptions = { errorHook?: ErrorHook };
 
 type InnerJSONType = (string | Record<string, unknown>)[];
+
+/**
+ * Represents a JSON value used in Avro schema definitions.
+ */
 export type JSONType =
   | string
   | number

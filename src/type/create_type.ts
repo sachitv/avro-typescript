@@ -48,24 +48,45 @@ type PrimitiveTypeName =
   | "bytes"
   | "string";
 
+/**
+ * Represents an Avro schema definition.
+ * Can be a pre-constructed Type, a type name (string), a schema object,
+ * or an array representing a union.
+ */
 export type SchemaLike =
   | Type
   | string
   | SchemaObject
   | SchemaLike[];
 
-interface SchemaObject {
+/**
+ * Represents an Avro schema object, which defines the structure of data in Avro format.
+ * It can represent primitive types, complex types like records and arrays, or named types.
+ */
+export interface SchemaObject {
+  /** The type of the Avro schema, such as "record", "array", "enum", "fixed", or a primitive type like "string". */
   type: unknown;
+  /** The name of the schema for named types like records, enums, and fixed types. */
   name?: unknown;
+  /** The namespace for the schema, used to qualify named types and avoid naming conflicts. */
   namespace?: unknown;
+  /** Alternative names (aliases) for the schema, allowing backward compatibility or multiple references. */
   aliases?: unknown;
+  /** The fields of a record schema, an array of field definitions each specifying name, type, and optional default. */
   fields?: unknown;
+  /** The symbols for an enum schema, an array of string values representing the possible enumeration values. */
   symbols?: unknown;
+  /** The size in bytes for a fixed schema, specifying the exact length of the fixed-size data. */
   size?: unknown;
+  /** The type of items in an array schema, defining the schema for each element in the array. */
   items?: unknown;
+  /** The type of values in a map schema, defining the schema for the values associated with string keys. */
   values?: unknown;
+  /** The default value for a field in a record or for an enum, used when the field is missing in the data. */
   default?: unknown;
+  /** The logical type annotation, such as "date", "decimal", or "uuid", providing semantic meaning to the underlying type. */
   logicalType?: unknown;
+  /** Allows additional arbitrary properties in the schema object for extensibility. */
   [key: string]: unknown;
 }
 
@@ -74,8 +95,17 @@ interface CreateTypeContext {
   registry: Map<string, Type>;
 }
 
+/**
+ * Options for creating an Avro type from a schema.
+ */
 export interface CreateTypeOptions {
+  /**
+   * Default namespace to use for named types.
+   */
   namespace?: string;
+  /**
+   * Registry of shared named types.
+   */
   registry?: Map<string, Type>;
 }
 

@@ -12,6 +12,7 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
  * Int type (32-bit).
  */
 export class IntType extends PrimitiveType<number> {
+  /** Checks if the value is a valid 32-bit integer. */
   public override check(
     value: unknown,
     errorHook?: ErrorHook,
@@ -25,10 +26,12 @@ export class IntType extends PrimitiveType<number> {
     return isValid;
   }
 
+  /** Reads a 32-bit integer from the tap. */
   public override async read(tap: ReadableTapLike): Promise<number> {
     return await tap.readInt();
   }
 
+  /** Writes a 32-bit integer to the tap. */
   public override async write(
     tap: WritableTapLike,
     value: number,
@@ -39,10 +42,12 @@ export class IntType extends PrimitiveType<number> {
     await tap.writeInt(value);
   }
 
+  /** Skips a 32-bit integer in the tap. */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipInt();
   }
 
+  /** Converts a 32-bit integer to its buffer representation. */
   public override async toBuffer(value: number): Promise<ArrayBuffer> {
     this.check(value, throwInvalidError, []);
     // For int, allocate exact size based on value
@@ -53,18 +58,26 @@ export class IntType extends PrimitiveType<number> {
     return buf;
   }
 
+  /**
+   * Compares two int values.
+   */
   public override compare(val1: number, val2: number): number {
     return val1 < val2 ? -1 : val1 > val2 ? 1 : 0;
   }
 
+  /**
+   * Generates a random int value.
+   */
   public override random(): number {
     return Math.floor(Math.random() * 1000);
   }
 
+  /** Returns the JSON schema representation for int type. */
   public override toJSON(): JSONType {
     return "int";
   }
 
+  /** Matches two 32-bit integers in the taps. */
   public override async match(
     tap1: ReadableTapLike,
     tap2: ReadableTapLike,

@@ -9,11 +9,19 @@ interface DecimalParams {
   scale?: number;
 }
 
+/**
+ * Decimal logical type.
+ */
 export class DecimalLogicalType extends LogicalType<bigint, Uint8Array> {
   readonly #precision: number;
   readonly #scale: number;
   readonly #fixedSize?: number;
 
+  /**
+   * Creates a new DecimalLogicalType.
+   * @param underlying The underlying bytes or fixed type.
+   * @param params The precision and scale parameters.
+   */
   constructor(underlying: BytesType | FixedType, params: DecimalParams) {
     super(underlying);
 
@@ -48,14 +56,23 @@ export class DecimalLogicalType extends LogicalType<bigint, Uint8Array> {
     this.#scale = scale;
   }
 
+  /**
+   * Gets the precision of the decimal.
+   */
   public getPrecision(): number {
     return this.#precision;
   }
 
+  /**
+   * Gets the scale of the decimal.
+   */
   public getScale(): number {
     return this.#scale;
   }
 
+  /**
+   * Checks if a writer schema can be read by this logical type.
+   */
   protected override canReadFromLogical(
     writer: LogicalType<unknown, unknown>,
   ): boolean {
@@ -64,10 +81,16 @@ export class DecimalLogicalType extends LogicalType<bigint, Uint8Array> {
       writer.#scale === this.#scale;
   }
 
+  /**
+   * Checks if the given value is a bigint representing a decimal.
+   */
   protected override isInstance(value: unknown): value is bigint {
     return typeof value === "bigint";
   }
 
+  /**
+   * Converts a bigint decimal value to its underlying byte representation.
+   */
   protected override toUnderlying(value: bigint): Uint8Array {
     const digits = value < 0n
       ? (-value).toString().length
@@ -86,10 +109,16 @@ export class DecimalLogicalType extends LogicalType<bigint, Uint8Array> {
     return encodeBigInt(value, byteLength);
   }
 
+  /**
+   * Converts an underlying byte array to a bigint decimal value.
+   */
   protected override fromUnderlying(value: Uint8Array): bigint {
     return decodeBigInt(value);
   }
 
+  /**
+   * Returns the JSON representation of this decimal logical type.
+   */
   public override toJSON(): JSONType {
     const extras: Record<string, unknown> = {
       precision: this.#precision,

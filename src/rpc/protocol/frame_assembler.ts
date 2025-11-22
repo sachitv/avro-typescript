@@ -8,6 +8,7 @@ export class FrameAssembler {
   #buffer = new Uint8Array(0);
   #frames: Uint8Array[] = [];
 
+  /** Pushes a chunk and returns complete frames */
   push(chunk: Uint8Array): Uint8Array[] {
     if (!chunk.length) {
       return [];
@@ -50,6 +51,7 @@ export class FrameAssembler {
     return output;
   }
 
+  /** Resets the assembler */
   reset(): void {
     this.#buffer = new Uint8Array(0);
     this.#frames = [];

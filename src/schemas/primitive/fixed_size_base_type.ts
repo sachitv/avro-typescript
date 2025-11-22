@@ -6,6 +6,10 @@ import { throwInvalidError } from "../error.ts";
  * Base class for fixed-size Avro types.
  * Provides optimized serialization for types with known fixed byte sizes.
  */
+/**
+ * Base class for fixed-size Avro types.
+ * Provides optimized serialization for types with known fixed byte sizes.
+ */
 export abstract class FixedSizeBaseType<T = unknown> extends BaseType<T> {
   /**
    * Returns the fixed size in bytes for this type.

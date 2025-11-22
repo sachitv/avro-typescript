@@ -29,10 +29,22 @@ import type {
 import { FrameAssembler } from "../protocol/frame_assembler.ts";
 import type { Message } from "../definitions/message_definition.ts";
 
+/**
+ * Abstract base class for message listeners.
+ * Listens for incoming RPC requests and dispatches them to handlers.
+ */
 export abstract class MessageListener extends MessageEndpoint {
+  /**
+   * Destroys the listener, stopping it from accepting new requests.
+   * @param noWait If true, does not wait for pending requests to complete (if applicable).
+   */
   abstract destroy(noWait?: boolean): void;
 }
 
+/**
+ * Stateless implementation of MessageListener.
+ * Handles one request per connection, common in HTTP-based transports.
+ */
 export class StatelessListener extends MessageListener {
   #transport: BinaryDuplexLike;
   #destroyed = false;
@@ -43,6 +55,13 @@ export class StatelessListener extends MessageListener {
   #maxRequestSize: number;
   #requestTimeout: number;
 
+  /**
+   * Creates a new StatelessListener.
+   * @param protocol The protocol definition.
+   * @param transport The binary transport to read from/write to.
+   * @param opts Configuration options.
+   * @param protocolFactory Factory for creating protocol instances from schema.
+   */
   constructor(
     protocol: ProtocolLike,
     transport: BinaryDuplexLike,
@@ -61,6 +80,9 @@ export class StatelessListener extends MessageListener {
     this.#runPromise = this.#run();
   }
 
+  /**
+   * Destroys the listener.
+   */
   destroy(): void {
     if (!this.#destroyed) {
       this.#destroyed = true;
@@ -68,6 +90,9 @@ export class StatelessListener extends MessageListener {
     }
   }
 
+  /**
+   * Waits for the listener's main loop to exit.
+   */
   waitForClose(): Promise<void> {
     return this.#runPromise;
   }

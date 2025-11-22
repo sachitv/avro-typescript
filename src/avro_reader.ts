@@ -12,7 +12,10 @@ import {
 // Re-export for test utilities
 export type { DecoderRegistry, ParsedAvroHeader };
 
-interface ReaderSchemaOptions {
+/**
+ * Options for reading Avro data, including schema resolution, custom decoders, and close hooks.
+ */
+export interface ReaderSchemaOptions {
   /** Optional reader schema used to resolve records written with a different schema. */
   readerSchema?: unknown;
   /** Custom codec decoders. Cannot include "null" or "deflate" as they are built-in. */

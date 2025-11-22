@@ -6,16 +6,37 @@ import {
 const DEFAULT_FRAME_SIZE = 8 * 1024;
 const FRAME_HEADER_SIZE = 4;
 
+/**
+ * Options for framing a message, specifying the frame size.
+ */
 export interface FrameMessageOptions {
+  /**
+   * The maximum size in bytes for each frame. Defaults to 8192.
+   */
   frameSize?: number;
 }
 
+/**
+ * Options for decoding a framed message, specifying the starting offset.
+ */
 export interface DecodeFramedMessageOptions {
+  /**
+   * The byte offset in the buffer to start decoding from. Defaults to 0.
+   */
   offset?: number;
 }
 
+/**
+ * Result of decoding a framed message, containing the payload and next offset.
+ */
 export interface DecodeFramedMessageResult {
+  /**
+   * The reassembled message payload as a Uint8Array.
+   */
   payload: Uint8Array;
+  /**
+   * The byte offset in the buffer after the decoded message.
+   */
   nextOffset: number;
 }
 
@@ -29,6 +50,11 @@ function normalizeFrameSize(frameSize: number | undefined): number {
   return frameSize;
 }
 
+/**
+ * Frames a message payload into a sequence of frames with size headers and a terminator frame.
+ * Splits the payload into frames of up to the specified frameSize bytes, each prefixed with a 4-byte
+ * big-endian length header, and appends a zero-length terminator frame.
+ */
 export function frameMessage(
   payload: ArrayBuffer | Uint8Array,
   options?: FrameMessageOptions,
@@ -53,6 +79,12 @@ export function frameMessage(
   return frames.length === 1 ? frames[0] : concatUint8Arrays(frames);
 }
 
+/**
+ * Decodes a framed message from a buffer, reassembling the payload from frames.
+ * Reads frames starting from the specified offset, each consisting of a 4-byte big-endian length
+ * header followed by the frame data, until a zero-length frame (terminator) is encountered.
+ * Concatenates the frame data into the payload.
+ */
 export function decodeFramedMessage(
   buffer: ArrayBuffer,
   options: DecodeFramedMessageOptions = {},

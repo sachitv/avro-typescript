@@ -1,5 +1,10 @@
 const NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+/**
+ * Checks if the given name is a valid Avro identifier.
+ * @param name - The name to validate.
+ * @returns True if the name is valid, false otherwise.
+ */
 export function isValidName(name: string): boolean {
   return NAME_PATTERN.test(name);
 }
@@ -15,18 +20,33 @@ const PRIMITIVE_TYPE_NAMES = new Set([
   "string",
 ]);
 
+/**
+ * Parameters for resolving Avro names, including namespace qualification and aliases.
+ */
 export interface ResolveNamesParams {
+  /** The base name of the type. */
   name: string;
+  /** Optional namespace to qualify the name. */
   namespace?: string;
+  /** Optional list of aliases for the type. */
   aliases?: string[];
 }
 
+/**
+ * Represents the resolved names for an Avro type, including its full name, aliases, and namespace.
+ */
 export interface ResolvedNames {
+  /** The fully qualified name of the type. */
   fullName: string;
+  /** The resolved aliases for the type. */
   aliases: string[];
+  /** The namespace of the type. */
   namespace: string;
 }
 
+/**
+ * Resolves the full name, aliases, and namespace for an Avro type based on the provided parameters.
+ */
 export function resolveNames(
   { name, namespace, aliases = [] }: ResolveNamesParams,
 ): ResolvedNames {

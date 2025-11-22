@@ -17,6 +17,7 @@ const MAX_LONG = (1n << 63n) - 1n;
  * Long type (64-bit).
  */
 export class LongType extends PrimitiveType<bigint> {
+  /** Checks if the value is a valid long. */
   public override check(
     value: unknown,
     errorHook?: ErrorHook,
@@ -30,10 +31,12 @@ export class LongType extends PrimitiveType<bigint> {
     return isValid;
   }
 
+  /** Reads a long value from the tap. */
   public override async read(tap: ReadableTapLike): Promise<bigint> {
     return await tap.readLong();
   }
 
+  /** Writes a long value to the tap. */
   public override async write(
     tap: WritableTapLike,
     value: bigint,
@@ -44,10 +47,12 @@ export class LongType extends PrimitiveType<bigint> {
     await tap.writeLong(value);
   }
 
+  /** Skips a long value in the tap. */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipLong();
   }
 
+  /** Converts a bigint value to its buffer representation. */
   public override async toBuffer(value: bigint): Promise<ArrayBuffer> {
     this.check(value, throwInvalidError, []);
     // For long, allocate exact size based on value
@@ -58,14 +63,21 @@ export class LongType extends PrimitiveType<bigint> {
     return buf;
   }
 
+  /**
+   * Compares two long values.
+   */
   public override compare(val1: bigint, val2: bigint): number {
     return val1 < val2 ? -1 : val1 > val2 ? 1 : 0;
   }
 
+  /**
+   * Generates a random long value.
+   */
   public override random(): bigint {
     return BigInt(Math.floor(Math.random() * 1000));
   }
 
+  /** Clones and validates a value as a bigint. */
   public override cloneFromValue(value: unknown): bigint {
     if (typeof value === "bigint") {
       this.check(value, throwInvalidError, []);
@@ -81,6 +93,7 @@ export class LongType extends PrimitiveType<bigint> {
     throwInvalidError([], value, this);
   }
 
+  /** Creates a resolver for reading from the writer type. */
   public override createResolver(writerType: Type): Resolver {
     if (writerType instanceof IntType) {
       // Long can promote from int (32-bit to 64-bit)
@@ -95,10 +108,12 @@ export class LongType extends PrimitiveType<bigint> {
     }
   }
 
+  /** Returns the JSON representation of the type. */
   public override toJSON(): JSONType {
     return "long";
   }
 
+  /** Compares two taps for long equality. */
   public override async match(
     tap1: ReadableTapLike,
     tap2: ReadableTapLike,

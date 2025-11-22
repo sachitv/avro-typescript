@@ -4,6 +4,13 @@ import type {
 } from "./transport_helpers.ts";
 import { extractBinary } from "./transport_helpers.ts";
 
+/**
+ * Creates a stateless transport factory using WebSockets.
+ *
+ * @param endpoint The WebSocket URL to connect to.
+ * @param options Configuration options for the WebSocket transport.
+ * @returns A factory function that creates a new transport for each request.
+ */
 export function createWebSocketTransport(
   endpoint: string | URL,
   options: WebSocketTransportOptions = {},

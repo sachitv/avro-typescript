@@ -19,7 +19,8 @@
     "coverage:check": "deno task coverage && deno run -A jsr:@ashishkujoy/deno-coverage-checker",
     "coverage": "deno task test --coverage",
     "serve:coverage": "deno run --allow-net --allow-read --allow-sys https://deno.land/std@0.224.0/http/file_server.ts --port 8080 ./coverage/html",
-    "get-version": "deno run --allow-read scripts/get_version.ts"
+    "get-version": "deno run --allow-read scripts/get_version.ts",
+    "jsdoc:lint": "find . -name \"*.ts\" | grep -v \"/test/\" | grep -v \"/scripts/\" | grep -v \"/examples/\" | xargs deno doc --lint"
   },
   "license": "MIT"
 }

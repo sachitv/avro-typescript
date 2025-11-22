@@ -8,10 +8,18 @@ import type { JSONType, Type } from "../type.ts";
 const UUID_REGEX =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 
+/**
+ * Logical type for UUID.
+ * Represents a universally unique identifier.
+ */
 export class UuidLogicalType extends LogicalType<string, string | Uint8Array> {
   readonly #underlying: StringType | FixedType;
   readonly #named?: NamedType<Uint8Array>;
 
+  /**
+   * Creates a UUID logical type backed by the given underlying type.
+   * @param underlying The underlying StringType or FixedType.
+   */
   constructor(underlying: StringType | FixedType) {
     super(underlying as unknown as Type<string | Uint8Array>);
     this.#underlying = underlying;
@@ -24,16 +32,31 @@ export class UuidLogicalType extends LogicalType<string, string | Uint8Array> {
     }
   }
 
+  /**
+   * Checks if this UUID logical type can read from the given writer logical type.
+   * @param writer The writer logical type.
+   * @returns True if compatible, false otherwise.
+   */
   protected override canReadFromLogical(
     writer: LogicalType<unknown, unknown>,
   ): boolean {
     return writer instanceof UuidLogicalType;
   }
 
+  /**
+   * Determines if the given value is a valid UUID string.
+   * @param value The value to check.
+   * @returns True if the value is a valid UUID string.
+   */
   protected override isInstance(value: unknown): value is string {
     return typeof value === "string" && UUID_REGEX.test(value);
   }
 
+  /**
+   * Converts a UUID string to the underlying type's representation.
+   * @param value The UUID string.
+   * @returns The underlying representation.
+   */
   protected override toUnderlying(value: string): string | Uint8Array {
     if (this.#underlying instanceof StringType) {
       return value;
@@ -41,6 +64,11 @@ export class UuidLogicalType extends LogicalType<string, string | Uint8Array> {
     return uuidToBytes(value);
   }
 
+  /**
+   * Converts from the underlying type's representation to a UUID string.
+   * @param value The underlying value.
+   * @returns The UUID string.
+   */
   protected override fromUnderlying(value: string | Uint8Array): string {
     if (typeof value === "string") {
       return value;
@@ -48,6 +76,9 @@ export class UuidLogicalType extends LogicalType<string, string | Uint8Array> {
     return bytesToUuid(value);
   }
 
+  /**
+   * Generates a random UUID string.
+   */
   public override random(): string {
     if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
       return crypto.randomUUID();
@@ -62,10 +93,17 @@ export class UuidLogicalType extends LogicalType<string, string | Uint8Array> {
     return bytesToUuid(bytes);
   }
 
+  /**
+   * Returns the JSON schema representation of this logical type.
+   */
   public override toJSON(): JSONType {
     return withLogicalTypeJSON(this.#underlying.toJSON(), "uuid");
   }
 
+  /**
+   * Returns the full name of the named type backing this UUID.
+   * Throws if backed by a primitive string type.
+   */
   public getFullName(): string {
     if (!this.#named) {
       throw new Error("UUID logical type backed by string has no name.");
@@ -73,6 +111,10 @@ export class UuidLogicalType extends LogicalType<string, string | Uint8Array> {
     return this.#named.getFullName();
   }
 
+  /**
+   * Returns the namespace of the named type backing this UUID.
+   * Throws if backed by a primitive string type.
+   */
   public getNamespace(): string {
     if (!this.#named) {
       throw new Error("UUID logical type backed by string has no namespace.");
@@ -80,6 +122,10 @@ export class UuidLogicalType extends LogicalType<string, string | Uint8Array> {
     return this.#named.getNamespace();
   }
 
+  /**
+   * Returns the aliases of the named type backing this UUID.
+   * Throws if backed by a primitive string type.
+   */
   public getAliases(): string[] {
     if (!this.#named) {
       throw new Error("UUID logical type backed by string has no aliases.");

@@ -3,12 +3,23 @@ import { Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
 import { safeStringify } from "./json.ts";
 
-type ErrorHook = (
+/**
+ * A callback function invoked when a validation error occurs.
+ * @param path - The path to the invalid value in the schema.
+ * @param invalidValue - The value that failed validation.
+ * @param schemaType - The schema type that the value was validated against.
+ */
+export type ErrorHook = (
   path: string[],
   invalidValue: unknown,
   schemaType: Type,
 ) => void;
-type IsValidOptions = { errorHook?: ErrorHook };
+
+/**
+ * Options for the `isValid` method.
+ * @property {ErrorHook} [errorHook] - Optional callback to handle validation errors.
+ */
+export type IsValidOptions = { errorHook?: ErrorHook };
 
 /**
  * Base implementation of Type<T> providing common serialization operations.

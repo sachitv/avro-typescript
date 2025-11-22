@@ -8,16 +8,30 @@ import { type JSONType, Type } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
 import { isValidName, type ResolvedNames } from "./resolve_names.ts";
 
-type RecordFieldOrder = "ascending" | "descending" | "ignore";
+/**
+ * Specifies the sort order for record fields.
+ */
+export type RecordFieldOrder = "ascending" | "descending" | "ignore";
 
+/**
+ * Parameters for defining a record field.
+ */
 export interface RecordFieldParams {
+  /** The name of the field. */
   name: string;
+  /** The type of the field. */
   type: Type;
+  /** Optional aliases for the field. */
   aliases?: string[];
+  /** Optional ordering for the field. */
   order?: RecordFieldOrder;
+  /** Optional default value for the field. */
   default?: unknown;
 }
 
+/**
+ * Parameters for creating a RecordType.
+ */
 export interface RecordTypeParams extends ResolvedNames {
   /**
    * Fields can be provided eagerly as an array or lazily via a thunk (a
@@ -28,7 +42,10 @@ export interface RecordTypeParams extends ResolvedNames {
   fields: RecordFieldParams[] | (() => RecordFieldParams[]);
 }
 
-class RecordField {
+/**
+ * Represents a field in an Avro record type.
+ */
+export class RecordField {
   #name: string;
   #type: Type;
   #aliases: string[];
@@ -36,6 +53,9 @@ class RecordField {
   #hasDefault: boolean;
   #defaultValue?: unknown;
 
+  /**
+   * Constructs a new RecordField instance.
+   */
   constructor(params: RecordFieldParams) {
     const { name, type, aliases = [], order = "ascending" } = params;
 
@@ -73,26 +93,46 @@ class RecordField {
     }
   }
 
+  /**
+   * Gets the name of the field.
+   */
   public getName(): string {
     return this.#name;
   }
 
+  /**
+   * Gets the type of the field.
+   */
   public getType(): Type {
     return this.#type;
   }
 
+  /**
+   * Gets the aliases of the field.
+   */
   public getAliases(): string[] {
     return this.#aliases.slice();
   }
 
+  /**
+   * Gets the order of the field.
+   */
   public getOrder(): RecordFieldOrder {
     return this.#order;
   }
 
+  /**
+   * Returns true if the field has a default value.
+   */
   public hasDefault(): boolean {
     return this.#hasDefault;
   }
 
+  /**
+   * Gets the default value for the field.
+   * @returns The default value.
+   * @throws Error if the field has no default.
+   */
   public getDefault(): unknown {
     if (!this.#hasDefault) {
       throw new Error(`Field '${this.#name}' has no default.`);
@@ -100,6 +140,11 @@ class RecordField {
     return this.#type.cloneFromValue(this.#defaultValue as unknown);
   }
 
+  /**
+   * Checks if the given name matches the field name or any of its aliases.
+   * @param name The name to check.
+   * @returns True if the name matches, false otherwise.
+   */
   public nameMatches(name: string): boolean {
     return name === this.#name || this.#aliases.includes(name);
   }
@@ -124,6 +169,10 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   #fieldNameToIndex: Map<string, number>;
   #fieldsThunk?: () => RecordFieldParams[];
 
+  /**
+   * Creates a new RecordType.
+   * @param params The record type parameters.
+   */
   constructor(params: RecordTypeParams) {
     const { fields, ...names } = params;
     super(names);
@@ -141,11 +190,17 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     }
   }
 
+  /**
+   * Gets the fields of the record.
+   */
   public getFields(): ReadonlyArray<RecordField> {
     this.#ensureFields();
     return this.#fields.slice();
   }
 
+  /**
+   * Gets a specific field by name.
+   */
   public getField(name: string): RecordField | undefined {
     this.#ensureFields();
     const index = this.#fieldNameToIndex.get(name);
@@ -155,6 +210,13 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     return this.#fields[index];
   }
 
+  /**
+   * Checks if the given value conforms to this record type.
+   * @param value The value to check.
+   * @param errorHook Optional error hook for validation errors.
+   * @param path The current path in the schema for error reporting.
+   * @returns True if the value is valid, false otherwise.
+   */
   public override check(
     value: unknown,
     errorHook?: ErrorHook,
@@ -179,6 +241,11 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     return true;
   }
 
+  /**
+   * Writes the given record value to the tap.
+   * @param tap The writable tap to write to.
+   * @param value The record value to write.
+   */
   public override async write(
     tap: WritableTapLike,
     value: Record<string, unknown>,
@@ -193,6 +260,11 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     }
   }
 
+  /**
+   * Reads a record value from the tap.
+   * @param tap The readable tap to read from.
+   * @returns The read record value.
+   */
   public override async read(
     tap: ReadableTapLike,
   ): Promise<Record<string, unknown>> {
@@ -204,6 +276,10 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     return result;
   }
 
+  /**
+   * Skips a record value in the tap.
+   * @param tap The readable tap to skip in.
+   */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     this.#ensureFields();
     for (const field of this.#fields) {
@@ -211,6 +287,11 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     }
   }
 
+  /**
+   * Converts the given record value to a buffer.
+   * @param value The record value to convert.
+   * @returns The buffer representation of the value.
+   */
   public override async toBuffer(
     value: Record<string, unknown>,
   ): Promise<ArrayBuffer> {
@@ -235,6 +316,11 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     return combined.buffer;
   }
 
+  /**
+   * Clones a record value, ensuring it conforms to the schema.
+   * @param value The value to clone.
+   * @returns The cloned record value.
+   */
   public override cloneFromValue(value: unknown): Record<string, unknown> {
     this.#ensureFields();
     if (!this.#isRecord(value)) {
@@ -249,6 +335,12 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     return result;
   }
 
+  /**
+   * Compares two record values for ordering.
+   * @param val1 The first record value.
+   * @param val2 The second record value.
+   * @returns A negative number if val1 < val2, zero if equal, positive if val1 > val2.
+   */
   public override compare(
     val1: Record<string, unknown>,
     val2: Record<string, unknown>,
@@ -278,6 +370,10 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     return 0;
   }
 
+  /**
+   * Generates a random record value conforming to this schema.
+   * @returns A random record value.
+   */
   public override random(): Record<string, unknown> {
     this.#ensureFields();
     const result: Record<string, unknown> = {};
@@ -287,6 +383,10 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     return result;
   }
 
+  /**
+   * Converts this record type to its JSON schema representation.
+   * @returns The JSON representation of the record type.
+   */
   public override toJSON(): JSONType {
     this.#ensureFields();
     const fieldsJson = this.#fields.map((field) => {
@@ -314,6 +414,12 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     };
   }
 
+  /**
+   * Matches two record values from the taps for comparison.
+   * @param tap1 The first readable tap.
+   * @param tap2 The second readable tap.
+   * @returns A comparison result.
+   */
   public override async match(
     tap1: ReadableTapLike,
     tap2: ReadableTapLike,
@@ -375,6 +481,11 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     }
   }
 
+  /**
+   * Creates a resolver for schema evolution from the writer type to this reader type.
+   * @param writerType The writer type to resolve from.
+   * @returns A resolver for reading writer data with this schema.
+   */
   public override createResolver(writerType: Type): Resolver {
     this.#ensureFields();
     if (!(writerType instanceof RecordType)) {

@@ -1,6 +1,9 @@
 import type { Type } from "./type.ts";
 import { safeStringify } from "./json.ts";
 
+/**
+ * Hook function for handling validation errors.
+ */
 export type ErrorHook<T = unknown> = (
   path: string[],
   invalidValue: unknown,
@@ -11,10 +14,19 @@ export type ErrorHook<T = unknown> = (
  * Custom error class for Avro schema validation failures.
  */
 export class ValidationError<T = unknown> extends Error {
+  /** The path to the invalid value within the schema/data. */
   public readonly path: string[];
+  /** The value that failed validation. */
   public readonly value: unknown;
+  /** The schema type that rejected the value. */
   public readonly type: Type<T>;
 
+  /**
+   * Creates a new ValidationError.
+   * @param path The path to the invalid value.
+   * @param invalidValue The invalid value.
+   * @param schemaType The schema type.
+   */
   constructor(path: string[], invalidValue: unknown, schemaType: Type<T>) {
     const serializedValue = safeStringify(invalidValue);
     const serializedJSON = safeStringify(schemaType.toJSON());
@@ -31,6 +43,9 @@ export class ValidationError<T = unknown> extends Error {
   }
 }
 
+/**
+ * Throws a ValidationError for invalid values.
+ */
 export function throwInvalidError<T = unknown>(
   path: string[],
   invalidValue: unknown,
@@ -39,6 +54,9 @@ export function throwInvalidError<T = unknown>(
   throw new ValidationError(path, invalidValue, schemaType);
 }
 
+/**
+ * Renders a path array as a formatted tree string.
+ */
 export function renderPathAsTree(path: string[]): string {
   if (path.length === 0) return "";
   let result = path[0];

@@ -10,6 +10,12 @@ import type { JSONType, Type } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
 import { calculateVarintSize } from "../../internal/varint.ts";
 
+/**
+ * Helper function to read an array from a tap.
+ * @param tap The tap to read from.
+ * @param readElement Function to read a single element.
+ * @param collect Function to collect each read element.
+ */
 export async function readArrayInto<T>(
   tap: ReadableTapLike,
   readElement: (tap: ReadableTapLike) => Promise<T>,
@@ -33,7 +39,11 @@ export async function readArrayInto<T>(
   }
 }
 
+/**
+ * Parameters for creating an ArrayType.
+ */
 export interface ArrayTypeParams<T> {
+  /** The type of items in the array. */
   items: Type<T>;
 }
 
@@ -43,6 +53,10 @@ export interface ArrayTypeParams<T> {
 export class ArrayType<T = unknown> extends BaseType<T[]> {
   readonly #itemsType: Type<T>;
 
+  /**
+   * Creates a new ArrayType.
+   * @param params The array type parameters.
+   */
   constructor(params: ArrayTypeParams<T>) {
     super();
     if (!params.items) {
@@ -51,10 +65,20 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     this.#itemsType = params.items;
   }
 
+  /**
+   * Gets the type of items in the array.
+   */
   public getItemsType(): Type<T> {
     return this.#itemsType;
   }
 
+  /**
+   * Overrides the base check method to validate array values.
+   * @param value The value to check.
+   * @param errorHook Optional error hook for validation errors.
+   * @param path The current path in the schema.
+   * @returns True if the value is a valid array of items, false otherwise.
+   */
   public override check(
     value: unknown,
     errorHook?: ErrorHook,
@@ -86,6 +110,11 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     return isValid;
   }
 
+  /**
+   * Overrides the base write method to serialize an array.
+   * @param tap The tap to write to.
+   * @param value The array to write.
+   */
   public override async write(
     tap: WritableTapLike,
     value: T[],
@@ -103,6 +132,10 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     await tap.writeLong(0n);
   }
 
+  /**
+   * Overrides the base skip method to skip over an array in the tap.
+   * @param tap The tap to skip from.
+   */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     // Skip blocks until terminator.
     while (true) {
@@ -128,6 +161,11 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     }
   }
 
+  /**
+   * Overrides the base read method to deserialize an array.
+   * @param tap The tap to read from.
+   * @returns The deserialized array.
+   */
   public override async read(tap: ReadableTapLike): Promise<T[]> {
     const result: T[] = [];
     await readArrayInto(
@@ -140,6 +178,11 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     return result;
   }
 
+  /**
+   * Overrides the base toBuffer method to serialize an array to a buffer.
+   * @param value The array to serialize.
+   * @returns The serialized buffer.
+   */
   public override async toBuffer(value: T[]): Promise<ArrayBuffer> {
     if (!Array.isArray(value)) {
       throwInvalidError([], value, this);
@@ -173,6 +216,11 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     return buffer;
   }
 
+  /**
+   * Overrides the base cloneFromValue method to clone an array.
+   * @param value The value to clone.
+   * @returns The cloned array.
+   */
   public override cloneFromValue(value: unknown): T[] {
     if (!Array.isArray(value)) {
       throw new Error("Cannot clone non-array value.");
@@ -180,6 +228,12 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     return value.map((element) => this.#itemsType.cloneFromValue(element));
   }
 
+  /**
+   * Overrides the base compare method to compare two arrays.
+   * @param val1 The first array.
+   * @param val2 The second array.
+   * @returns Negative if val1 < val2, 0 if equal, positive if val1 > val2.
+   */
   public override compare(val1: T[], val2: T[]): number {
     const len = Math.min(val1.length, val2.length);
     for (let i = 0; i < len; i++) {
@@ -194,6 +248,10 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     return val1.length < val2.length ? -1 : 1;
   }
 
+  /**
+   * Overrides the base random method to generate a random array.
+   * @returns A randomly generated array.
+   */
   public override random(): T[] {
     // There should be at least one element.
     const length = Math.ceil(Math.random() * 10);
@@ -204,6 +262,9 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     return result;
   }
 
+  /**
+   * Returns the JSON schema representation of this array type.
+   */
   public override toJSON(): JSONType {
     return {
       type: "array",
@@ -211,6 +272,12 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     };
   }
 
+  /**
+   * Compares two serialized arrays for ordering.
+   * @param tap1 The first tap to compare.
+   * @param tap2 The second tap to compare.
+   * @returns A negative number if tap1 < tap2, zero if equal, positive if tap1 > tap2.
+   */
   public override async match(
     tap1: ReadableTapLike,
     tap2: ReadableTapLike,
@@ -248,6 +315,11 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     return n;
   }
 
+  /**
+   * Creates a resolver for schema evolution between array types.
+   * @param writerType The writer's array type.
+   * @returns A resolver for reading data written with the writer type.
+   */
   public override createResolver(writerType: Type): Resolver {
     if (!(writerType instanceof ArrayType)) {
       return super.createResolver(writerType);

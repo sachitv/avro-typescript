@@ -13,6 +13,11 @@ export function _safeJSONStringify(obj: unknown, indent = 2): string {
   return retVal;
 }
 
+/**
+ * Safely stringifies a value to JSON, handling BigInts and circular references.
+ * @param value The value to stringify.
+ * @returns The string representation.
+ */
 export function safeStringify(value: unknown): string {
   // Converts supported primitive values and complex objects into stable JSON
   // while handling circular references and bigint values.

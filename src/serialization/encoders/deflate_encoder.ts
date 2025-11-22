@@ -7,6 +7,11 @@ import type { Encoder } from "./encoder.ts";
  * in the Avro specification (no zlib header or checksum).
  */
 export class DeflateEncoder implements Encoder {
+  /**
+   * Encodes data using the deflate algorithm.
+   * @param uncompressedData The data to compress.
+   * @returns The compressed data.
+   */
   async encode(uncompressedData: Uint8Array): Promise<Uint8Array> {
     if (typeof CompressionStream === "undefined") {
       throw new Error(

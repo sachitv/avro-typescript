@@ -1,3 +1,6 @@
+/**
+ * Reads an unsigned little-endian integer from a buffer at a specified offset and byte length.
+ */
 export function readUIntLE(
   view: DataView,
   offset: number,

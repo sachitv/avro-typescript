@@ -14,8 +14,17 @@ import type {
  * Extends EventTarget to dispatch events like errors, handshakes, and end-of-transmission.
  */
 export abstract class MessageEndpoint extends EventTarget {
+  /**
+   * The Avro protocol definition that this endpoint adheres to.
+   */
   readonly protocol: ProtocolLike;
+  /**
+   * The size of the internal buffer used for reading and writing messages.
+   */
   protected readonly bufferSize: number;
+  /**
+   * The maximum size of individual frames in the message transport protocol.
+   */
   protected readonly frameSize: number;
 
   /**

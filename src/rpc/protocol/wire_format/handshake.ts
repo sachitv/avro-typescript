@@ -75,6 +75,12 @@ const STRING_BRANCH = "string";
 const MAP_BRANCH = "map";
 const MD5_BRANCH = "org.apache.avro.ipc.MD5";
 
+/**
+ * Represents the match status between client and server protocols in the Avro RPC handshake.
+ * - "BOTH": Both client and server protocols match.
+ * - "CLIENT": Only the client protocol is compatible.
+ * - "NONE": Neither protocol matches.
+ */
 export type HandshakeMatch = "BOTH" | "CLIENT" | "NONE";
 
 interface HandshakeRequestRecord {
@@ -91,31 +97,63 @@ interface HandshakeResponseRecord {
   meta: null | Record<string, MetadataMap>;
 }
 
+/**
+ * Initialization interface for a handshake request in the Avro RPC protocol.
+ * Used to construct the initial handshake message sent by the client.
+ */
 export interface HandshakeRequestInit {
+  /** MD5 hash of the client's Avro protocol schema. */
   clientHash: Uint8Array;
+  /** Optional string representation of the client's Avro protocol schema. */
   clientProtocol?: string | null;
+  /** MD5 hash of the server's Avro protocol schema that the client expects. */
   serverHash: Uint8Array;
+  /** Optional metadata map for additional handshake information. */
   meta?: MetadataInit | null;
 }
 
+/**
+ * The processed handshake request message in the Avro RPC protocol.
+ * Contains the resolved fields after decoding or reading from a stream.
+ */
 export interface HandshakeRequestMessage {
+  /** MD5 hash of the client's Avro protocol schema. */
   clientHash: Uint8Array;
+  /** String representation of the client's Avro protocol schema, or null if not provided. */
   clientProtocol: string | null;
+  /** MD5 hash of the server's Avro protocol schema that the client expects. */
   serverHash: Uint8Array;
+  /** Metadata map for additional handshake information, or null if not provided. */
   meta: MetadataMap | null;
 }
 
+/**
+ * Initialization interface for a handshake response in the Avro RPC protocol.
+ * Used to construct the response message sent by the server.
+ */
 export interface HandshakeResponseInit {
+  /** The match status indicating compatibility between client and server protocols. */
   match: HandshakeMatch;
+  /** Optional string representation of the server's Avro protocol schema. */
   serverProtocol?: string | null;
+  /** Optional MD5 hash of the server's Avro protocol schema. */
   serverHash?: Uint8Array | null;
+  /** Optional metadata map for additional handshake information. */
   meta?: MetadataInit | null;
 }
 
+/**
+ * The processed handshake response message in the Avro RPC protocol.
+ * Contains the resolved fields after decoding or reading from a stream.
+ */
 export interface HandshakeResponseMessage {
+  /** The match status indicating compatibility between client and server protocols. */
   match: HandshakeMatch;
+  /** String representation of the server's Avro protocol schema, or null if not provided. */
   serverProtocol: string | null;
+  /** MD5 hash of the server's Avro protocol schema, or null if not provided. */
   serverHash: Uint8Array | null;
+  /** Metadata map for additional handshake information, or null if not provided. */
   meta: MetadataMap | null;
 }
 
@@ -197,6 +235,10 @@ function _createHandshakeResponseRecord(
   };
 }
 
+/**
+ * Extracts an optional string value from an Avro union type in handshake messages.
+ * Handles the union of null and string, returning the string if present or null.
+ */
 export function _extractOptionalString(
   unionValue: null | Record<string, string>,
 ): string | null {
@@ -209,6 +251,10 @@ export function _extractOptionalString(
   throw new Error("Unexpected union value for string branch.");
 }
 
+/**
+ * Extracts an optional metadata map from an Avro union type in handshake messages.
+ * Handles the union of null and map, returning a cloned metadata map if present or null.
+ */
 export function _extractOptionalMetadata(
   unionValue: null | Record<string, MetadataMap>,
 ): MetadataMap | null {
@@ -222,6 +268,10 @@ export function _extractOptionalMetadata(
   return cloneMetadataMap(map);
 }
 
+/**
+ * Extracts an optional MD5 hash from an Avro union type in handshake messages.
+ * Handles the union of null and MD5 fixed type, returning cloned bytes if present or null.
+ */
 export function _extractOptionalMd5(
   unionValue: null | Record<string, Uint8Array>,
 ): Uint8Array | null {
@@ -259,6 +309,10 @@ function _toHandshakeResponseMessage(
   };
 }
 
+/**
+ * Encodes a handshake request message into a byte buffer for transmission in the Avro RPC protocol.
+ * Serializes the request using the predefined Avro schema for handshake requests.
+ */
 export async function encodeHandshakeRequest(
   message: HandshakeRequestInit,
 ): Promise<Uint8Array> {
@@ -266,6 +320,10 @@ export async function encodeHandshakeRequest(
   return new Uint8Array(await HANDSHAKE_REQUEST_TYPE.toBuffer(record));
 }
 
+/**
+ * Decodes a byte buffer into a handshake request message in the Avro RPC protocol.
+ * Deserializes the buffer using the predefined Avro schema for handshake requests.
+ */
 export async function decodeHandshakeRequest(
   buffer: ArrayBuffer,
 ): Promise<HandshakeRequestMessage> {
@@ -275,6 +333,10 @@ export async function decodeHandshakeRequest(
   return _toHandshakeRequestMessage(record);
 }
 
+/**
+ * Reads a handshake request message from a readable tap stream in the Avro RPC protocol.
+ * Deserializes the data from the stream using the predefined Avro schema for handshake requests.
+ */
 export async function readHandshakeRequestFromTap(
   tap: ReadableTap,
 ): Promise<HandshakeRequestMessage> {
@@ -284,6 +346,10 @@ export async function readHandshakeRequestFromTap(
   return _toHandshakeRequestMessage(record);
 }
 
+/**
+ * Encodes a handshake response message into a byte buffer for transmission in the Avro RPC protocol.
+ * Serializes the response using the predefined Avro schema for handshake responses.
+ */
 export async function encodeHandshakeResponse(
   message: HandshakeResponseInit,
 ): Promise<Uint8Array> {
@@ -291,6 +357,10 @@ export async function encodeHandshakeResponse(
   return new Uint8Array(await HANDSHAKE_RESPONSE_TYPE.toBuffer(record));
 }
 
+/**
+ * Decodes a byte buffer into a handshake response message in the Avro RPC protocol.
+ * Deserializes the buffer using the predefined Avro schema for handshake responses.
+ */
 export async function decodeHandshakeResponse(
   buffer: ArrayBuffer,
 ): Promise<HandshakeResponseMessage> {
@@ -300,6 +370,10 @@ export async function decodeHandshakeResponse(
   return _toHandshakeResponseMessage(record);
 }
 
+/**
+ * Reads a handshake response message from a readable tap stream in the Avro RPC protocol.
+ * Deserializes the data from the stream using the predefined Avro schema for handshake responses.
+ */
 export async function readHandshakeResponseFromTap(
   tap: ReadableTap,
 ): Promise<HandshakeResponseMessage> {
