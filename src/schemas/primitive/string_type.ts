@@ -37,11 +37,7 @@ export class StringType extends PrimitiveType<string> {
   }
 
   public override async read(tap: ReadableTapLike): Promise<string> {
-    const val = await tap.readString();
-    if (val === undefined) {
-      throw new Error("Insufficient data for string");
-    }
-    return val;
+    return await tap.readString();
   }
 
   public override async write(
@@ -73,9 +69,6 @@ export class StringType extends PrimitiveType<string> {
       return new class extends Resolver {
         public override async read(tap: ReadableTapLike): Promise<string> {
           const bytes = await tap.readBytes();
-          if (bytes === undefined) {
-            throw new Error("Insufficient data for bytes");
-          }
           // Convert bytes to string (assuming UTF-8)
           return decode(bytes);
         }

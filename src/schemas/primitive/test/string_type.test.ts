@@ -83,7 +83,8 @@ describe("StringType", () => {
     );
   });
 
-  it("should throw when tap.readString returns undefined", async () => {
+  // This test ensures string type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
+  it("should throw when read fails", async () => {
     const mockBuffer = {
       read: (_offset: number, _size: number) => Promise.resolve(undefined),
     };
@@ -92,8 +93,8 @@ describe("StringType", () => {
       async () => {
         await type.read(tap);
       },
-      Error,
-      "Insufficient data for string",
+      RangeError,
+      "Attempt to read beyond buffer bounds.",
     );
   });
 
@@ -165,7 +166,8 @@ describe("StringType", () => {
       );
     });
 
-    it("should throw when tap.readBytes returns undefined in resolver", async () => {
+    // This test ensures string type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
+    it("should throw when read fails in resolver", async () => {
       const bytesType = new BytesType();
       const resolver = type.createResolver(bytesType);
       const mockBuffer = {
@@ -173,11 +175,9 @@ describe("StringType", () => {
       };
       const tap = new ReadableTap(mockBuffer);
       await assertRejects(
-        async () => {
-          await resolver.read(tap);
-        },
-        Error,
-        "Insufficient data for bytes",
+        () => resolver.read(tap),
+        RangeError,
+        "Attempt to read beyond buffer bounds.",
       );
     });
   });

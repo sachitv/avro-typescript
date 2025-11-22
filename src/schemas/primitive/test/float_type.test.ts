@@ -72,7 +72,8 @@ describe("FloatType", () => {
       );
     });
 
-    it("should throw when tap.readFloat returns undefined", async () => {
+    // This test verifies that float type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
+    it("should throw when read fails", async () => {
       const mockBuffer = {
         read: (_offset: number, _size: number) => Promise.resolve(undefined),
       };
@@ -81,8 +82,8 @@ describe("FloatType", () => {
         async () => {
           await type.read(tap);
         },
-        Error,
-        "Insufficient data for float",
+        RangeError,
+        "Attempt to read beyond buffer bounds.",
       );
     });
   });

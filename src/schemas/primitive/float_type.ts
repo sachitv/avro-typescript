@@ -26,11 +26,7 @@ export class FloatType extends FixedSizeBaseType<number> {
   }
 
   public async read(tap: ReadableTapLike): Promise<number> {
-    const val = await tap.readFloat();
-    if (val === undefined) {
-      throw new Error("Insufficient data for float");
-    }
-    return val;
+    return await tap.readFloat();
   }
 
   public async write(tap: WritableTapLike, value: number): Promise<void> {

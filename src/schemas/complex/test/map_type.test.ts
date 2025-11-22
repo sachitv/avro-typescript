@@ -613,7 +613,8 @@ describe("readMapInto", () => {
     );
   });
 
-  it("throws when tap.readString returns undefined for map key", async () => {
+  // This test verifies that map key read failures throw RangeError, using simplified code since the tap throws on read failures instead of returning undefined.
+  it("throws when readString fails for map key", async () => {
     let callCount = 0;
     const mockBuffer = {
       read: (_offset: number, _size: number) => {
@@ -630,14 +631,10 @@ describe("readMapInto", () => {
     const tap = new ReadableTap(mockBuffer);
     await assertRejects(
       async () => {
-        await readMapInto(
-          tap,
-          async (t) => await t.readLong(),
-          () => {},
-        );
+        await intMap.read(tap);
       },
-      Error,
-      "Insufficient data for map key",
+      RangeError,
+      "Attempt to read beyond buffer bounds.",
     );
   });
 

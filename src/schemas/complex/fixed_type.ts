@@ -78,11 +78,7 @@ export class FixedType extends NamedType<Uint8Array> {
   }
 
   public override async read(tap: ReadableTapLike): Promise<Uint8Array> {
-    const result = await tap.readFixed(this.#size);
-    if (result === undefined) {
-      throw new Error("Insufficient data for fixed type");
-    }
-    return result;
+    return await tap.readFixed(this.#size);
   }
 
   public override async write(

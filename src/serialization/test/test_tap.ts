@@ -109,7 +109,7 @@ export class TestTap implements ReadableTapLike, WritableTapLike {
     this.#syncPos(tap);
   }
 
-  async readFloat(): Promise<number | undefined> {
+  async readFloat(): Promise<number> {
     const tap = this.#reader();
     const value = await tap.readFloat();
     this.#syncPos(tap);
@@ -128,7 +128,7 @@ export class TestTap implements ReadableTapLike, WritableTapLike {
     this.#syncPos(tap);
   }
 
-  async readDouble(): Promise<number | undefined> {
+  async readDouble(): Promise<number> {
     const tap = this.#reader();
     const value = await tap.readDouble();
     this.#syncPos(tap);
@@ -147,7 +147,7 @@ export class TestTap implements ReadableTapLike, WritableTapLike {
     this.#syncPos(tap);
   }
 
-  async readFixed(len: number): Promise<Uint8Array | undefined> {
+  async readFixed(len: number): Promise<Uint8Array> {
     const tap = this.#reader();
     const value = await tap.readFixed(len);
     this.#syncPos(tap);
@@ -166,7 +166,7 @@ export class TestTap implements ReadableTapLike, WritableTapLike {
     this.#syncPos(tap);
   }
 
-  async readBytes(): Promise<Uint8Array | undefined> {
+  async readBytes(): Promise<Uint8Array> {
     const tap = this.#reader();
     const value = await tap.readBytes();
     this.#syncPos(tap);
@@ -179,7 +179,7 @@ export class TestTap implements ReadableTapLike, WritableTapLike {
     this.#syncPos(tap);
   }
 
-  async readString(): Promise<string | undefined> {
+  async readString(): Promise<string> {
     const tap = this.#reader();
     const value = await tap.readString();
     this.#syncPos(tap);
@@ -210,75 +210,75 @@ export class TestTap implements ReadableTapLike, WritableTapLike {
     this.#syncPos(tap);
   }
 
-  async matchBoolean(tap: TestTap): Promise<number> {
+  async matchBoolean(tap: ReadableTapLike): Promise<number> {
     const thisReader = this.#reader();
-    const otherReader = tap.#reader();
+    const otherReader = (tap as TestTap).#reader();
     const result = await thisReader.matchBoolean(otherReader);
     this.#syncPos(thisReader);
-    tap.#syncPos(otherReader);
+    (tap as TestTap).#syncPos(otherReader);
     return result;
   }
 
-  async matchInt(tap: TestTap): Promise<number> {
+  async matchInt(tap: ReadableTapLike): Promise<number> {
     const thisReader = this.#reader();
-    const otherReader = tap.#reader();
+    const otherReader = (tap as TestTap).#reader();
     const result = await thisReader.matchInt(otherReader);
     this.#syncPos(thisReader);
-    tap.#syncPos(otherReader);
+    (tap as TestTap).#syncPos(otherReader);
     return result;
   }
 
-  async matchLong(tap: TestTap): Promise<number> {
+  async matchLong(tap: ReadableTapLike): Promise<number> {
     const thisReader = this.#reader();
-    const otherReader = tap.#reader();
+    const otherReader = (tap as TestTap).#reader();
     const result = await thisReader.matchLong(otherReader);
     this.#syncPos(thisReader);
-    tap.#syncPos(otherReader);
+    (tap as TestTap).#syncPos(otherReader);
     return result;
   }
 
-  async matchFloat(tap: TestTap): Promise<number> {
+  async matchFloat(tap: ReadableTapLike): Promise<number> {
     const thisReader = this.#reader();
-    const otherReader = tap.#reader();
+    const otherReader = (tap as TestTap).#reader();
     const result = await thisReader.matchFloat(otherReader);
     this.#syncPos(thisReader);
-    tap.#syncPos(otherReader);
+    (tap as TestTap).#syncPos(otherReader);
     return result;
   }
 
-  async matchDouble(tap: TestTap): Promise<number> {
+  async matchDouble(tap: ReadableTapLike): Promise<number> {
     const thisReader = this.#reader();
-    const otherReader = tap.#reader();
+    const otherReader = (tap as TestTap).#reader();
     const result = await thisReader.matchDouble(otherReader);
     this.#syncPos(thisReader);
-    tap.#syncPos(otherReader);
+    (tap as TestTap).#syncPos(otherReader);
     return result;
   }
 
-  async matchFixed(tap: TestTap, len: number): Promise<number> {
+  async matchFixed(tap: ReadableTapLike, len: number): Promise<number> {
     const thisReader = this.#reader();
-    const otherReader = tap.#reader();
+    const otherReader = (tap as TestTap).#reader();
     const result = await thisReader.matchFixed(otherReader, len);
     this.#syncPos(thisReader);
-    tap.#syncPos(otherReader);
+    (tap as TestTap).#syncPos(otherReader);
     return result;
   }
 
-  async matchBytes(tap: TestTap): Promise<number> {
+  async matchBytes(tap: ReadableTapLike): Promise<number> {
     const thisReader = this.#reader();
-    const otherReader = tap.#reader();
+    const otherReader = (tap as TestTap).#reader();
     const result = await thisReader.matchBytes(otherReader);
     this.#syncPos(thisReader);
-    tap.#syncPos(otherReader);
+    (tap as TestTap).#syncPos(otherReader);
     return result;
   }
 
-  async matchString(tap: TestTap): Promise<number> {
+  async matchString(tap: ReadableTapLike): Promise<number> {
     const thisReader = this.#reader();
-    const otherReader = tap.#reader();
+    const otherReader = (tap as TestTap).#reader();
     const result = await thisReader.matchString(otherReader);
     this.#syncPos(thisReader);
-    tap.#syncPos(otherReader);
+    (tap as TestTap).#syncPos(otherReader);
     return result;
   }
 
