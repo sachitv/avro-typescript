@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       draft:
-        description: 'Create draft release'
+        description: "Create draft release"
         required: false
         default: false
         type: boolean
       publish:
-        description: 'Publish to JSR'
+        description: "Publish to JSR"
         required: false
         default: true
         type: boolean
@@ -17,7 +17,6 @@ on:
 jobs:
   release:
     runs-on: ubuntu-24.04-arm
-    if: github.ref == 'refs/heads/main'
     permissions:
       contents: write
       id-token: write
