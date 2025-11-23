@@ -105,6 +105,16 @@ export class FixedSizeStreamReadableBufferAdapter implements IReadableBuffer {
   }
 
   /**
+   * Checks if more data can be read starting at the given offset.
+   * @param offset The byte offset to check.
+   * @returns True if at least one byte can be read from the offset.
+   */
+  public async canReadMore(offset: number): Promise<boolean> {
+    const result = await this.read(offset, 1);
+    return result !== undefined;
+  }
+
+  /**
    * Extracts a contiguous range of bytes from the circular buffer.
    */
   #extractFromBuffer(offset: number, size: number): Uint8Array | undefined {

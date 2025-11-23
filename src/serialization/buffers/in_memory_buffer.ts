@@ -81,6 +81,21 @@ export class InMemoryReadableBuffer extends InMemoryBufferBase
     this.checkBounds(offset, size);
     return this.view.slice(offset, offset + size);
   }
+
+  /**
+   * Checks if more data can be read starting at the given offset.
+   * @param offset The byte offset to check.
+   * @returns True if at least one byte can be read from the offset.
+   */
+  // deno-lint-ignore require-await
+  public async canReadMore(offset: number): Promise<boolean> {
+    try {
+      this.checkBounds(offset, 1);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 /**
@@ -163,6 +178,15 @@ export class InMemoryWritableBuffer extends InMemoryBufferBase
   // deno-lint-ignore require-await
   public async isValid(): Promise<boolean> {
     return true; // Always valid since we throw on overflow instead of marking as invalid
+  }
+
+  /**
+   * Checks if the buffer can accept appending the given number of bytes.
+   * @param size The number of bytes to check.
+   * @returns True if the buffer can accept the append.
+   */
+  public async canAppendMore(_size: number): Promise<boolean> {
+    return await this.isValid();
   }
 
   /**

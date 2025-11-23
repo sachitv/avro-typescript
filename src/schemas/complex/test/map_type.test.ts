@@ -627,6 +627,8 @@ describe("readMapInto", () => {
           return Promise.resolve(undefined);
         }
       },
+      // This is unused here.
+      canReadMore: (_offset: number) => Promise.resolve(true),
     };
     const tap = new ReadableTap(mockBuffer);
     await assertRejects(

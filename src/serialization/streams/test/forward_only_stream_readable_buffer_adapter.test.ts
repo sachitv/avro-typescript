@@ -214,4 +214,114 @@ describe("ForwardOnlyStreamReadableBufferAdapter", () => {
       assertEquals(result, undefined);
     });
   });
+
+  describe("canReadMore", () => {
+    it("throws error for reading backwards", async () => {
+      const chunks = [new Uint8Array([1, 2, 3, 4, 5])];
+      let chunkIndex = 0;
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => {
+          if (chunkIndex < chunks.length) {
+            return chunks[chunkIndex++];
+          }
+          return undefined;
+        },
+        close: async () => {},
+      };
+      const adapter = new ForwardOnlyStreamReadableBufferAdapter(mockStream);
+
+      // First read to advance position
+      await adapter.read(0, 2);
+
+      // Try to check backwards
+      await assertRejects(
+        async () => await adapter.canReadMore(0),
+        Error,
+        "Cannot read backwards from current position",
+      );
+    });
+
+    it("throws error for seeking forward", async () => {
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => undefined,
+        close: async () => {},
+      };
+      const adapter = new ForwardOnlyStreamReadableBufferAdapter(mockStream);
+
+      // Try to check forward
+      await assertRejects(
+        async () => await adapter.canReadMore(2),
+        Error,
+        "Cannot seek forward; reads must be sequential",
+      );
+    });
+
+    it("returns true when data is available at current position", async () => {
+      const chunks = [new Uint8Array([1, 2, 3])];
+      let chunkIndex = 0;
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => {
+          if (chunkIndex < chunks.length) {
+            return chunks[chunkIndex++];
+          }
+          return undefined;
+        },
+        close: async () => {},
+      };
+      const adapter = new ForwardOnlyStreamReadableBufferAdapter(mockStream);
+
+      let position = 0;
+      let readCount = 0;
+      while (await adapter.canReadMore(position)) {
+        const byte = await adapter.read(position, 1);
+        assert(byte !== undefined);
+        assertEquals(byte.length, 1);
+        position += 1;
+        readCount += 1;
+      }
+
+      // Should have read 3 bytes
+      assertEquals(readCount, 3);
+
+      // After reading all, canReadMore should return false
+      assertEquals(await adapter.canReadMore(position), false);
+    });
+
+    it("returns false when at EOF", async () => {
+      const chunks = [new Uint8Array([1, 2, 3])];
+      let chunkIndex = 0;
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => {
+          if (chunkIndex < chunks.length) {
+            return chunks[chunkIndex++];
+          }
+          return undefined;
+        },
+        close: async () => {},
+      };
+      const adapter = new ForwardOnlyStreamReadableBufferAdapter(mockStream);
+
+      // Read all
+      await adapter.read(0, 3);
+
+      const result = await adapter.canReadMore(3);
+      assertEquals(result, false);
+    });
+
+    it("returns false for empty stream", async () => {
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => undefined,
+        close: async () => {},
+      };
+      const adapter = new ForwardOnlyStreamReadableBufferAdapter(mockStream);
+
+      const result = await adapter.canReadMore(0);
+      assertEquals(result, false);
+    });
+  });
 });

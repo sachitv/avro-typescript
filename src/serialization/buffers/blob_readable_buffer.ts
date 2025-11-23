@@ -63,4 +63,14 @@ export class BlobReadableBuffer implements IReadableBuffer {
     const arrayBuffer = await sliced.arrayBuffer();
     return new Uint8Array(arrayBuffer);
   }
+
+  /**
+   * Checks if more data can be read starting at the given offset.
+   * @param offset The byte offset to check.
+   * @returns True if at least one byte can be read from the offset.
+   */
+  public async canReadMore(offset: number): Promise<boolean> {
+    const result = await this.read(offset, 1);
+    return result !== undefined;
+  }
 }

@@ -71,6 +71,11 @@ class ErrorBuffer implements IReadableBuffer {
   async read(): Promise<Uint8Array | undefined> {
     throw this.error;
   }
+
+  // deno-lint-ignore require-await
+  async canReadMore(): Promise<boolean> {
+    throw this.error;
+  }
 }
 
 class UndefinedReadBuffer implements IReadableBuffer {
@@ -82,6 +87,11 @@ class UndefinedReadBuffer implements IReadableBuffer {
       return undefined;
     }
     return new Uint8Array(size);
+  }
+
+  // deno-lint-ignore require-await
+  async canReadMore(offset: number): Promise<boolean> {
+    return offset < this.limit;
   }
 }
 
@@ -458,6 +468,7 @@ describe("Tap comparator helpers", () => {
   it("matchFixed throws when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
       read: () => Promise.resolve(undefined),
+      canReadMore: () => Promise.resolve(false),
     };
     const tap1 = new ReadableTap(mockBuffer);
     const tap2 = new ReadableTap(mockBuffer);
@@ -638,6 +649,7 @@ describe("Construction & buffer compatibility", () => {
         if (offset + size > total) return Promise.resolve(undefined);
         return Promise.resolve(new Uint8Array(size).fill(42));
       },
+      canReadMore: (offset: number) => Promise.resolve(offset < total),
     };
     const tap = new ReadableTap(mockBuffer);
     expect(await tap.isValid()).toBe(true);
@@ -655,6 +667,8 @@ describe("Construction & buffer compatibility", () => {
       },
       // deno-lint-ignore require-await
       isValid: async () => true,
+      // deno-lint-ignore require-await
+      canAppendMore: async (_size: number) => true,
     };
     const tap = new WritableTap(mockBuffer);
     await tap.writeBoolean(true);
@@ -673,6 +687,8 @@ describe("Construction & buffer compatibility", () => {
       },
       // deno-lint-ignore require-await
       isValid: async () => allowWrites,
+      // deno-lint-ignore require-await
+      canAppendMore: async (_size: number) => allowWrites,
     };
     const tap = new WritableTap(mockBuffer);
     expect(await tap.isValid()).toBe(true);
@@ -688,6 +704,8 @@ describe("Construction & buffer compatibility", () => {
       },
       // deno-lint-ignore require-await
       isValid: async () => true,
+      // deno-lint-ignore require-await
+      canAppendMore: async (_size: number) => true,
     };
     const tap = new WritableTap(mockBuffer);
     const initialPos = tap.getPos();
@@ -710,11 +728,22 @@ describe("Construction & buffer compatibility", () => {
     );
   });
 
+  it("constructor rejects readable buffers missing canReadMore", () => {
+    const mockBuffer = {
+      // deno-lint-ignore require-await
+      read: async (_offset: number, _size: number) => new Uint8Array(0),
+    };
+    expect(
+      () => new ReadableTap(mockBuffer as unknown as IReadableBuffer),
+    ).toThrow(TypeError);
+  });
+
   it("isValid returns false when buffer.read throws RangeError", async () => {
     const mockBuffer: IReadableBuffer = {
       read: () => {
         throw new RangeError("some range error");
       },
+      canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
     const result = await tap.isValid();
@@ -753,6 +782,7 @@ describe("ReadableTap buffer exposure", () => {
   it("_testOnlyBuf returns empty array when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
       read: () => Promise.resolve(undefined),
+      canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
     const buf = await tap._testOnlyBuf();
@@ -762,6 +792,7 @@ describe("ReadableTap buffer exposure", () => {
   it("_testOnlyBuf returns empty array when bytes is undefined", async () => {
     const mockBuffer: IReadableBuffer = {
       read: () => Promise.resolve(undefined),
+      canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
     // Manually set position to ensure readLength > 0 so we don't hit early return
@@ -792,6 +823,7 @@ describe("ReadableTap fallbacks", () => {
   it("readFloat throws when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
       read: () => Promise.resolve(undefined),
+      canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
     await assertRejects(async () => await tap.readFloat(), RangeError);
@@ -800,6 +832,7 @@ describe("ReadableTap fallbacks", () => {
   it("readDouble throws when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
       read: () => Promise.resolve(undefined),
+      canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
     await assertRejects(async () => await tap.readDouble(), RangeError);
@@ -815,6 +848,7 @@ describe("ReadableTap fallbacks", () => {
         }
         return Promise.resolve(undefined); // Fail content read
       },
+      canReadMore: () => Promise.resolve(true),
     };
     const tap1 = new ReadableTap(mockBuffer);
     const tap2 = new ReadableTap(mockBuffer);
@@ -824,6 +858,7 @@ describe("ReadableTap fallbacks", () => {
   it("readString throws when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
       read: () => Promise.resolve(undefined),
+      canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
     await assertRejects(async () => await tap.readString(), RangeError);
@@ -832,6 +867,7 @@ describe("ReadableTap fallbacks", () => {
   it("readBytes throws when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
       read: () => Promise.resolve(undefined),
+      canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
     await assertRejects(async () => await tap.readBytes(), RangeError);
@@ -840,6 +876,7 @@ describe("ReadableTap fallbacks", () => {
   it("readFixed throws when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
       read: () => Promise.resolve(undefined),
+      canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
     await assertRejects(async () => await tap.readFixed(1), RangeError);
@@ -880,6 +917,65 @@ describe("Long decoding edge cases", () => {
     ];
     const tap = tapFromBytes(bytes);
     expect(await tap.readLong()).toBe(0n);
+  });
+});
+
+describe("canReadMore", () => {
+  it("returns true when data is available at current position", async () => {
+    const tap = tapFromBytes([1, 2, 3]);
+    expect(await tap.canReadMore()).toBe(true);
+  });
+
+  it("returns false when at end of buffer", async () => {
+    const tap = tapFromBytes([1, 2, 3]);
+    tap._testOnlyResetPos();
+    await tap.readFixed(3); // Read all data
+    expect(await tap.canReadMore()).toBe(false);
+  });
+
+  it("returns false for empty buffer", async () => {
+    const tap = new Tap(new ArrayBuffer(0));
+    expect(await tap.canReadMore()).toBe(false);
+  });
+
+  it("does not advance cursor position", async () => {
+    const tap = tapFromBytes([1, 2, 3]);
+    const initialPos = tap.getPos();
+    await tap.canReadMore();
+    expect(tap.getPos()).toBe(initialPos);
+  });
+
+  it("returns true when buffer has data beyond current position", async () => {
+    const tap = tapFromBytes([1, 2, 3, 4, 5]);
+    await tap.readFixed(2); // Read first 2 bytes
+    expect(await tap.canReadMore()).toBe(true);
+  });
+
+  it("works with mock buffer that returns undefined", async () => {
+    const mockBuffer: IReadableBuffer = {
+      read: () => Promise.resolve(undefined),
+      canReadMore: () => Promise.resolve(false),
+    };
+    const tap = new ReadableTap(mockBuffer);
+    expect(await tap.canReadMore()).toBe(false);
+  });
+
+  it("works with mock buffer that returns empty Uint8Array", async () => {
+    const mockBuffer: IReadableBuffer = {
+      read: () => Promise.resolve(new Uint8Array(0)),
+      canReadMore: () => Promise.resolve(true),
+    };
+    const tap = new ReadableTap(mockBuffer);
+    expect(await tap.canReadMore()).toBe(true);
+  });
+
+  it("handles buffer read errors gracefully", async () => {
+    const mockBuffer: IReadableBuffer = {
+      read: () => Promise.reject(new Error("read error")),
+      canReadMore: () => Promise.reject(new Error("read error")),
+    };
+    const tap = new ReadableTap(mockBuffer);
+    await assertRejects(async () => await tap.canReadMore(), Error);
   });
 });
 

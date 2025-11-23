@@ -1,4 +1,5 @@
 import type { IStreamReadableBuffer } from "./streams.ts";
+import type { IReadableBuffer } from "../buffers/buffer.ts";
 
 /**
  * Adapter that wraps an IStreamReadableBuffer to provide forward-only reading.
@@ -6,7 +7,7 @@ import type { IStreamReadableBuffer } from "./streams.ts";
  * or seek forward will throw an error. The buffer grows as needed and shrinks
  * by discarding consumed data to save memory.
  */
-export class ForwardOnlyStreamReadableBufferAdapter {
+export class ForwardOnlyStreamReadableBufferAdapter implements IReadableBuffer {
   #bufferedData: Uint8Array | null = null;
   #streamBuffer: IStreamReadableBuffer;
   #eof: boolean = false;
@@ -65,6 +66,29 @@ export class ForwardOnlyStreamReadableBufferAdapter {
     this.#bufferedData = this.#bufferedData.slice(size);
 
     return result;
+  }
+
+  /**
+   * Checks if more data can be read at the specified offset.
+   * Only allows reading at the current position; throws errors for backward or forward seeking.
+   * @param offset - The offset to check for readability
+   * @returns Promise resolving to true if data is available at the current position, false otherwise
+   */
+  public async canReadMore(offset: number): Promise<boolean> {
+    if (offset < this.#currentPosition) {
+      throw new Error("Cannot read backwards from current position");
+    }
+
+    if (offset > this.#currentPosition) {
+      throw new Error("Cannot seek forward; reads must be sequential");
+    }
+
+    await this.#ensureBufferedUpTo(this.#currentPosition + 1);
+
+    if (this.#bufferedData === null) {
+      return false;
+    }
+    return this.#bufferedData.length > 0;
   }
 
   /**

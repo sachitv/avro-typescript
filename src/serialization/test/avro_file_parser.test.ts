@@ -395,7 +395,7 @@ it("should use custom decoders for zstandard codec", async () => {
   );
 });
 
-it("should handle truncated file gracefully in iterRecords", async () => {
+it("should throw error for truncated file in iterRecords", async () => {
   const fullData = await loadWeatherAvroFile();
   // Truncate the file after the header (use enough bytes for header but not full file)
   const truncatedData = fullData.slice(0, 300);
@@ -408,12 +408,15 @@ it("should handle truncated file gracefully in iterRecords", async () => {
   const header = await parser.getHeader();
   assertWeatherHeader(header);
 
-  // iterRecords should handle the truncation gracefully (no records yielded)
-  const records = [];
-  for await (const record of parser.iterRecords()) {
-    records.push(record);
-  }
-  assertEquals(records.length, 0);
+  // iterRecords should throw an error for truncated files
+  await assertRejects(
+    async () => {
+      for await (const _record of parser.iterRecords()) {
+        // Should not reach here
+      }
+    },
+    RangeError,
+  );
 });
 
 it("should reject custom decoders that override built-in decoders", async () => {
@@ -434,7 +437,7 @@ it("should reject custom decoders that override built-in decoders", async () => 
  * @param includeEmptyCodec If true, sets avro.codec to empty Uint8Array; if false, omits avro.codec
  */
 async function createTestBuffer(
-  includeEmptyCodec: boolean,
+  codec?: string,
 ): Promise<InMemoryReadableBuffer> {
   const arrayBuffer = new ArrayBuffer(1024);
   const writableBuffer = new InMemoryWritableBuffer(arrayBuffer);
@@ -448,8 +451,8 @@ async function createTestBuffer(
   // Create metadata with boolean schema
   const meta = new Map<string, Uint8Array>();
   meta.set("avro.schema", new TextEncoder().encode('"boolean"'));
-  if (includeEmptyCodec) {
-    meta.set("avro.codec", new Uint8Array(0)); // Empty codec
+  if (codec !== undefined) {
+    meta.set("avro.codec", new TextEncoder().encode(codec));
   }
 
   // Write header using HEADER_TYPE
@@ -475,19 +478,140 @@ async function createTestBuffer(
   };
   await BLOCK_TYPE.write(writeTap, block);
 
-  return new InMemoryReadableBuffer(arrayBuffer);
+  return new InMemoryReadableBuffer(
+    arrayBuffer.slice(0, writeTap.getPos()),
+  );
+}
+
+/**
+ * Helper function to create a test buffer with zero records.
+ */
+async function createTestBufferZeroRecords(): Promise<InMemoryReadableBuffer> {
+  const arrayBuffer = new ArrayBuffer(1024);
+  const writableBuffer = new InMemoryWritableBuffer(arrayBuffer);
+  const writeTap = new WritableTap(writableBuffer);
+
+  // Constants
+  const magicBytes = new Uint8Array([0x4F, 0x62, 0x6A, 0x01]); // 'Obj\x01'
+  const syncBytes = new Uint8Array(16);
+  syncBytes.fill(0x42); // Fill with pattern for easy identification
+
+  // Create metadata with boolean schema
+  const meta = new Map<string, Uint8Array>();
+  meta.set("avro.schema", new TextEncoder().encode('"boolean"'));
+
+  // Write header using HEADER_TYPE
+  const header = {
+    magic: magicBytes,
+    meta: meta,
+    sync: syncBytes,
+  };
+  await HEADER_TYPE.write(writeTap, header);
+
+  // Write block with zero records
+  const block = {
+    count: 0n, // 0 records
+    data: new Uint8Array(0),
+    sync: syncBytes,
+  };
+  await BLOCK_TYPE.write(writeTap, block);
+
+  return new InMemoryReadableBuffer(
+    arrayBuffer.slice(0, writeTap.getPos()),
+  );
+}
+
+/**
+ * Helper function to create a test buffer with multiple blocks.
+ */
+async function createTestBufferMultiBlock(): Promise<InMemoryReadableBuffer> {
+  const arrayBuffer = new ArrayBuffer(2048);
+  const writableBuffer = new InMemoryWritableBuffer(arrayBuffer);
+  const writeTap = new WritableTap(writableBuffer);
+
+  // Constants
+  const magicBytes = new Uint8Array([0x4F, 0x62, 0x6A, 0x01]); // 'Obj\x01'
+  const syncBytes = new Uint8Array(16);
+  syncBytes.fill(0x42); // Fill with pattern for easy identification
+
+  // Create metadata with boolean schema
+  const meta = new Map<string, Uint8Array>();
+  meta.set("avro.schema", new TextEncoder().encode('"boolean"'));
+
+  // Write header using HEADER_TYPE
+  const header = {
+    magic: magicBytes,
+    meta: meta,
+    sync: syncBytes,
+  };
+  await HEADER_TYPE.write(writeTap, header);
+
+  // Create boolean data (true = 1 byte)
+  const booleanType = createType("boolean");
+
+  // First block: 1 record
+  const dataBuffer1 = new ArrayBuffer(1);
+  const dataWriteTap1 = new WritableTap(dataBuffer1);
+  await booleanType.write(dataWriteTap1, true);
+  const booleanData1 = new Uint8Array(dataBuffer1);
+
+  const block1 = {
+    count: 1n,
+    data: booleanData1,
+    sync: syncBytes,
+  };
+  await BLOCK_TYPE.write(writeTap, block1);
+
+  // Second block: 1 record (false)
+  const dataBuffer2 = new ArrayBuffer(1);
+  const dataWriteTap2 = new WritableTap(dataBuffer2);
+  await booleanType.write(dataWriteTap2, false);
+  const booleanData2 = new Uint8Array(dataBuffer2);
+
+  const block2 = {
+    count: 1n,
+    data: booleanData2,
+    sync: syncBytes,
+  };
+  await BLOCK_TYPE.write(writeTap, block2);
+
+  return new InMemoryReadableBuffer(
+    arrayBuffer.slice(0, writeTap.getPos()),
+  );
 }
 
 it("should handle empty avro.codec in meta", async () => {
-  const buffer = await createTestBuffer(true);
+  const buffer = await createTestBuffer("");
   const parser = new AvroFileParser(buffer);
 
   // Verify header
   const parsedHeader = await parser.getHeader();
   assertEquals(parsedHeader.magic.length, 4);
   assertEquals(parsedHeader.sync.length, 16);
-  const codecJson = parsedHeader.meta.get("avro.codec");
-  assertEquals(codecJson, new Uint8Array(0));
+  const codec = parsedHeader.meta.get("avro.codec");
+  assertEquals(new TextDecoder().decode(codec), "");
+
+  // Verify records
+  const records = [];
+  for await (const record of parser.iterRecords()) {
+    records.push(record);
+  }
+  assertEquals(records.length, 1);
+  assertEquals(records[0], true);
+});
+
+it("should handle null avro.codec in meta", async () => {
+  const buffer = await createTestBuffer("null");
+  const parser = new AvroFileParser(buffer);
+
+  // Verify header
+  const parsedHeader = await parser.getHeader();
+  assertEquals(
+    new TextDecoder().decode(parsedHeader.meta.get("avro.codec")),
+    "null",
+  );
+  assertEquals(parsedHeader.magic.length, 4);
+  assertEquals(parsedHeader.sync.length, 16);
 
   // Verify records
   const records = [];
@@ -499,7 +623,7 @@ it("should handle empty avro.codec in meta", async () => {
 });
 
 it("should handle missing avro.codec in meta", async () => {
-  const buffer = await createTestBuffer(false);
+  const buffer = await createTestBuffer();
   const parser = new AvroFileParser(buffer);
 
   // Verify header
@@ -514,4 +638,152 @@ it("should handle missing avro.codec in meta", async () => {
   }
   assertEquals(records.length, 1);
   assertEquals(records[0], true);
+});
+
+it("should throw error for garbage data appended to valid buffer", async () => {
+  const buffer = await createTestBuffer();
+  const length = await buffer.length();
+  const originalData = await buffer.read(0, length);
+
+  // Append fixed garbage string
+  const garbage = new TextEncoder().encode("this is some random garbage");
+  const extendedLength = originalData.length + garbage.length;
+  const extendedArray = new Uint8Array(extendedLength);
+  extendedArray.set(originalData, 0);
+  extendedArray.set(garbage, originalData.length);
+
+  const extendedBuffer = new InMemoryReadableBuffer(extendedArray.buffer);
+  const parser = new AvroFileParser(extendedBuffer);
+
+  // Should be able to get header
+  const header = await parser.getHeader();
+  assertEquals(header.magic.length, 4);
+
+  // iterRecords should throw an error due to garbage data
+  await assertRejects(
+    async () => {
+      for await (const _record of parser.iterRecords()) {
+        // Should not reach here
+      }
+    },
+    Error,
+  );
+});
+
+it("should throw error when reading boolean data as string", async () => {
+  const buffer = await createTestBuffer();
+  const parser = new AvroFileParser(buffer, { readerSchema: "string" });
+
+  await assertRejects(
+    async () => {
+      for await (const _record of parser.iterRecords()) {
+        // Should not reach here
+      }
+    },
+    Error,
+    "Schema evolution not supported",
+  );
+});
+
+it("should handle file with zero records", async () => {
+  const buffer = await createTestBufferZeroRecords();
+  const parser = new AvroFileParser(buffer);
+
+  // Verify header
+  const header = await parser.getHeader();
+  assertEquals(header.magic.length, 4);
+  assertEquals(header.sync.length, 16);
+
+  // Verify no records
+  const records = [];
+  for await (const record of parser.iterRecords()) {
+    records.push(record);
+  }
+  assertEquals(records.length, 0);
+});
+
+it("should throw error for invalid JSON in avro.schema", async () => {
+  // Create a buffer with invalid JSON in schema
+  const arrayBuffer = new ArrayBuffer(1024);
+  const writableBuffer = new InMemoryWritableBuffer(arrayBuffer);
+  const writeTap = new WritableTap(writableBuffer);
+
+  const magicBytes = new Uint8Array([0x4F, 0x62, 0x6A, 0x01]);
+  const syncBytes = new Uint8Array(16);
+  syncBytes.fill(0x42);
+
+  const meta = new Map<string, Uint8Array>();
+  meta.set("avro.schema", new TextEncoder().encode('{"invalid": json')); // Invalid JSON
+
+  const header = {
+    magic: magicBytes,
+    meta: meta,
+    sync: syncBytes,
+  };
+  await HEADER_TYPE.write(writeTap, header);
+
+  const buffer = new InMemoryReadableBuffer(
+    arrayBuffer.slice(0, writeTap.getPos() + 1),
+  );
+  const parser = new AvroFileParser(buffer);
+
+  await assertRejects(
+    async () => {
+      await parser.getHeader();
+    },
+    Error,
+  );
+});
+
+it("should handle file with multiple data blocks", async () => {
+  const buffer = await createTestBufferMultiBlock();
+  const parser = new AvroFileParser(buffer);
+
+  // Verify header
+  const header = await parser.getHeader();
+  assertEquals(header.magic.length, 4);
+  assertEquals(header.sync.length, 16);
+
+  // Verify records: true, false
+  const records = [];
+  for await (const record of parser.iterRecords()) {
+    records.push(record);
+  }
+  assertEquals(records.length, 2);
+  assertEquals(records[0], true);
+  assertEquals(records[1], false);
+});
+
+it("should throw error for invalid reader schema type", async () => {
+  const buffer = await createTestBuffer();
+  const parser = new AvroFileParser(buffer, { readerSchema: 123 }); // Invalid type
+
+  await assertRejects(
+    async () => {
+      for await (const _record of parser.iterRecords()) {
+        // Should not reach here
+      }
+    },
+    Error,
+  );
+});
+
+it("should cache header on concurrent calls", async () => {
+  const buffer = await createTestBuffer();
+  const parser = new AvroFileParser(buffer);
+
+  // Call getHeader concurrently
+  const [header1, header2, header3] = await Promise.all([
+    parser.getHeader(),
+    parser.getHeader(),
+    parser.getHeader(),
+  ]);
+
+  // All should be the same object
+  assertEquals(header1, header2);
+  assertEquals(header2, header3);
+  // Verify basic structure
+  assertEquals(typeof header1, "object");
+  assertEquals(header1.magic.length, 4);
+  assertEquals(header1.sync.length, 16);
 });

@@ -40,6 +40,11 @@ class CollectingWritableBuffer implements IWritableBuffer {
     return true;
   }
 
+  // deno-lint-ignore require-await
+  async canAppendMore(_size: number): Promise<boolean> {
+    return true;
+  }
+
   toArrayBuffer(): ArrayBuffer {
     const total = this.#chunks.reduce((sum, chunk) => sum + chunk.length, 0);
     const combined = new Uint8Array(total);

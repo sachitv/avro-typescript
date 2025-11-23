@@ -87,6 +87,8 @@ describe("StringType", () => {
   it("should throw when read fails", async () => {
     const mockBuffer = {
       read: (_offset: number, _size: number) => Promise.resolve(undefined),
+      // This is unused here.
+      canReadMore: (_offset: number) => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
     await assertRejects(
@@ -172,6 +174,8 @@ describe("StringType", () => {
       const resolver = type.createResolver(bytesType);
       const mockBuffer = {
         read: (_offset: number, _size: number) => Promise.resolve(undefined),
+        // This is unused here.
+        canReadMore: (_offset: number) => Promise.resolve(false),
       };
       const tap = new ReadableTap(mockBuffer);
       await assertRejects(

@@ -158,6 +158,8 @@ describe("FixedType", () => {
     const fixedType = createFixedType("Test", 4);
     const mockBuffer = {
       read: (_offset: number, _size: number) => Promise.resolve(undefined),
+      // This is unused here.
+      canReadMore: (_offset: number) => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
     await assertRejects(

@@ -133,6 +133,7 @@ export class AvroFileParser {
    * Asynchronously iterates over all records in the Avro file.
    *
    * @returns AsyncIterableIterator that yields each record.
+   * @throws Error if the file contains invalid data or is corrupted.
    */
   public async *iterRecords(): AsyncIterableIterator<unknown> {
     const header = await this.#parseHeader();
@@ -153,30 +154,25 @@ export class AvroFileParser {
     // Use the tap that's positioned after the header
     const tap = this.#headerTap!;
 
-    while (true) {
-      try {
-        const block = await BLOCK_TYPE.read(tap) as {
-          count: bigint;
-          data: Uint8Array;
-          sync: Uint8Array;
-        };
+    while (await tap.canReadMore()) {
+      const block = await BLOCK_TYPE.read(tap) as {
+        count: bigint;
+        data: Uint8Array;
+        sync: Uint8Array;
+      };
 
-        // Decompress block data if needed
-        const decompressedData = await decoder.decode(block.data);
-        const arrayBuffer = new ArrayBuffer(decompressedData.length);
-        new Uint8Array(arrayBuffer).set(decompressedData);
-        const recordTap = new ReadableTap(arrayBuffer);
+      // Decompress block data if needed
+      const decompressedData = await decoder.decode(block.data);
+      const arrayBuffer = new ArrayBuffer(decompressedData.length);
+      new Uint8Array(arrayBuffer).set(decompressedData);
+      const recordTap = new ReadableTap(arrayBuffer);
 
-        // Yield each record in the block
-        for (let i = 0n; i < block.count; i += 1n) {
-          const record = resolver
-            ? await resolver.read(recordTap)
-            : await schemaType.read(recordTap);
-          yield record;
-        }
-      } catch (_error) {
-        // No more blocks or invalid data
-        break;
+      // Yield each record in the block
+      for (let i = 0n; i < block.count; i += 1n) {
+        const record = resolver
+          ? await resolver.read(recordTap)
+          : await schemaType.read(recordTap);
+        yield record;
       }
     }
   }
