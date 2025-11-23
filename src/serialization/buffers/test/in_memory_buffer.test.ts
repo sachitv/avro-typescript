@@ -501,6 +501,71 @@ describe("InMemoryWritableBuffer", () => {
       );
     });
   });
+
+  describe("getBufferCopy", () => {
+    it("returns empty buffer when no data written", () => {
+      const buffer = new ArrayBuffer(10);
+      const writable = new InMemoryWritableBuffer(buffer);
+
+      const result = writable.getBufferCopy();
+      assertEquals(result.byteLength, 0);
+    });
+
+    it("returns buffer with written data", async () => {
+      const buffer = new ArrayBuffer(10);
+      const writable = new InMemoryWritableBuffer(buffer);
+      const data = new Uint8Array([1, 2, 3, 4, 5]);
+
+      await writable.appendBytes(data);
+      const result = writable.getBufferCopy();
+
+      assertEquals(result.byteLength, 5);
+      assertEquals(new Uint8Array(result), data);
+    });
+
+    it("returns buffer with partial data when not full", async () => {
+      const buffer = new ArrayBuffer(10);
+      const writable = new InMemoryWritableBuffer(buffer);
+      const data1 = new Uint8Array([1, 2, 3]);
+      const data2 = new Uint8Array([4, 5]);
+
+      await writable.appendBytes(data1);
+      await writable.appendBytes(data2);
+      const result = writable.getBufferCopy();
+
+      assertEquals(result.byteLength, 5);
+      assertEquals(new Uint8Array(result), new Uint8Array([1, 2, 3, 4, 5]));
+    });
+
+    it("returns buffer with data written at offset", async () => {
+      const buffer = new ArrayBuffer(10);
+      const writable = new InMemoryWritableBuffer(buffer, 3);
+      const data = new Uint8Array([1, 2, 3]);
+
+      await writable.appendBytes(data);
+      const result = writable.getBufferCopy();
+
+      assertEquals(result.byteLength, 3);
+      assertEquals(new Uint8Array(result), new Uint8Array([1, 2, 3]));
+    });
+
+    it("buffer reflects current write offset", async () => {
+      const buffer = new ArrayBuffer(10);
+      const writable = new InMemoryWritableBuffer(buffer);
+      const data1 = new Uint8Array([1, 2]);
+      const data2 = new Uint8Array([3, 4]);
+
+      await writable.appendBytes(data1);
+      const result1 = writable.getBufferCopy();
+      assertEquals(result1.byteLength, 2);
+      assertEquals(new Uint8Array(result1), new Uint8Array([1, 2]));
+
+      await writable.appendBytes(data2);
+      const result2 = writable.getBufferCopy();
+      assertEquals(result2.byteLength, 4);
+      assertEquals(new Uint8Array(result2), new Uint8Array([1, 2, 3, 4]));
+    });
+  });
 });
 
 describe("Strict bounds checking methods", () => {

@@ -123,6 +123,7 @@ export class InMemoryReadableBuffer extends InMemoryBufferBase
 export class InMemoryWritableBuffer extends InMemoryBufferBase
   implements IWritableBuffer {
   #offset: number;
+  #initialOffset: number;
 
   /**
    * Creates a new writable buffer with the specified ArrayBuffer and initial offset.
@@ -136,6 +137,7 @@ export class InMemoryWritableBuffer extends InMemoryBufferBase
         `Initial offset must be within buffer bounds. Got offset=${offset}, bufferLength=${this.view.length}`,
       );
     }
+    this.#initialOffset = offset;
     this.#offset = offset;
   }
 
@@ -201,5 +203,17 @@ export class InMemoryWritableBuffer extends InMemoryBufferBase
    */
   public _testOnlyRemaining(): number {
     return this.view.length - this.#offset;
+  }
+
+  /**
+   * Gets a copy of the buffer containing only the bytes written to the buffer.
+   * @returns An ArrayBuffer containing only the written data.
+   */
+  public getBufferCopy(): ArrayBuffer {
+    const sliced = this.view.slice(this.#initialOffset, this.#offset);
+    return sliced.buffer.slice(
+      sliced.byteOffset,
+      sliced.byteOffset + sliced.length,
+    );
   }
 }
