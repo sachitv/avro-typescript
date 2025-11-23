@@ -2,8 +2,10 @@ import { assert, assertEquals } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { AvroWriter } from "../avro_writer.ts";
 import { AvroReader } from "../avro_reader.ts";
-import type { IWritableBuffer } from "../serialization/buffers/buffer.ts";
-import { InMemoryReadableBuffer } from "../serialization/buffers/in_memory_buffer.ts";
+import {
+  InMemoryReadableBuffer,
+  InMemoryWritableBuffer,
+} from "../serialization/buffers/in_memory_buffer.ts";
 import { concatUint8Arrays } from "../internal/collections/array_utils.ts";
 import { BLOCK_TYPE } from "../serialization/avro_constants.ts";
 import { WritableTap } from "../serialization/tap.ts";
@@ -23,42 +25,6 @@ const SAMPLE_RECORDS = [
   { id: 3, name: "gamma" },
 ];
 
-class CollectingWritableBuffer implements IWritableBuffer {
-  #chunks: Uint8Array[] = [];
-
-  // deno-lint-ignore require-await
-  async appendBytes(data: Uint8Array): Promise<void> {
-    if (data.length === 0) {
-      return;
-    }
-    this.#chunks.push(data.slice());
-  }
-
-  // deno-lint-ignore require-await
-  async isValid(): Promise<boolean> {
-    return true;
-  }
-
-  // deno-lint-ignore require-await
-  async canAppendMore(_size: number): Promise<boolean> {
-    return true;
-  }
-
-  toArrayBuffer(): ArrayBuffer {
-    const total = this.#chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-    const combined = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of this.#chunks) {
-      combined.set(chunk, offset);
-      offset += chunk.length;
-    }
-    return combined.buffer.slice(
-      combined.byteOffset,
-      combined.byteOffset + combined.byteLength,
-    );
-  }
-}
-
 async function readAllRecords(
   buffer: ArrayBuffer | ArrayBufferLike,
 ): Promise<unknown[]> {
@@ -74,14 +40,15 @@ async function readAllRecords(
 
 describe("AvroWriter", () => {
   it("writes records to a writable buffer", async () => {
-    const buffer = new CollectingWritableBuffer();
+    const arrayBuffer = new ArrayBuffer(1024);
+    const buffer = new InMemoryWritableBuffer(arrayBuffer);
     const writer = AvroWriter.toBuffer(buffer, { schema: SIMPLE_SCHEMA });
     for (const record of SAMPLE_RECORDS) {
       await writer.append(record);
     }
     await writer.close();
 
-    const bufferData = buffer.toArrayBuffer() as ArrayBuffer;
+    const bufferData = buffer.getBufferCopy();
     const records = await readAllRecords(bufferData);
     assertEquals(records, SAMPLE_RECORDS);
   });
@@ -111,7 +78,8 @@ describe("AvroWriter", () => {
   });
 
   it("supports manual flushBlock calls", async () => {
-    const buffer = new CollectingWritableBuffer();
+    const arrayBuffer = new ArrayBuffer(1024);
+    const buffer = new InMemoryWritableBuffer(arrayBuffer);
     const writer = AvroWriter.toBuffer(buffer, {
       schema: SIMPLE_SCHEMA,
       blockSize: 1,
@@ -125,13 +93,14 @@ describe("AvroWriter", () => {
     await writer.append(SAMPLE_RECORDS[2]);
     await writer.close();
 
-    const bufferData = buffer.toArrayBuffer();
+    const bufferData = buffer.getBufferCopy();
     const records = await readAllRecords(bufferData);
     assertEquals(records, SAMPLE_RECORDS);
   });
 
   it("handles double close gracefully", async () => {
-    const buffer = new CollectingWritableBuffer();
+    const arrayBuffer = new ArrayBuffer(1024);
+    const buffer = new InMemoryWritableBuffer(arrayBuffer);
     const writer = AvroWriter.toBuffer(buffer, { schema: SIMPLE_SCHEMA });
 
     for (const record of SAMPLE_RECORDS) {
@@ -140,7 +109,7 @@ describe("AvroWriter", () => {
     await writer.close();
     await writer.close(); // Should not error
 
-    const bufferData = buffer.toArrayBuffer();
+    const bufferData = buffer.getBufferCopy();
     const records = await readAllRecords(bufferData);
     assertEquals(records, SAMPLE_RECORDS);
   });
@@ -155,7 +124,8 @@ describe("AvroWriter", () => {
       syncMarker[i] = i;
     }
 
-    const buffer = new CollectingWritableBuffer();
+    const arrayBuffer = new ArrayBuffer(2048);
+    const buffer = new InMemoryWritableBuffer(arrayBuffer);
     const writer = AvroWriter.toBuffer(buffer, {
       schema: SIMPLE_SCHEMA,
       syncMarker,
@@ -187,7 +157,7 @@ describe("AvroWriter", () => {
     }
     await writer.close();
 
-    const bufferData = buffer.toArrayBuffer();
+    const bufferData = buffer.getBufferCopy();
     const records = await readAllRecords(bufferData);
     assertEquals(records, SAMPLE_RECORDS);
   });
