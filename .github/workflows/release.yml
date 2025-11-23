@@ -44,6 +44,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ steps.version.outputs.version }}
           old-version: ${{ steps.previoustag.outputs.tag }}
+          tag-prefix: ""
           skip-commit: true
           skip-tag: true
           git-push: false
