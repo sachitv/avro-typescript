@@ -2,6 +2,17 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      draft:
+        description: 'Create draft release'
+        required: false
+        default: false
+        type: boolean
+      publish:
+        description: 'Publish to JSR'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   release:
@@ -22,12 +33,18 @@ jobs:
         run: |
           VERSION=$(deno task get-version)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Get previous tag
+        id: previoustag
+        run: |
+          tag=$(git describe --tags --abbrev=0 2>/dev/null) || tag=''
+          echo "tag=$tag" >> $GITHUB_OUTPUT
       - name: Generate release notes
         id: release_notes
         uses: TriPSs/conventional-changelog-action@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ steps.version.outputs.version }}
+          old-version: ${{ steps.previoustag.outputs.tag }}
           skip-commit: true
           skip-tag: true
           git-push: false
@@ -46,7 +63,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.version }}
-          name: Release ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
           body: ${{ steps.release_notes.outputs.clean_changelog }}
+          draft: ${{ inputs.draft }}
       - name: Publish package
+        if: ${{ inputs.publish }}
         run: deno publish
