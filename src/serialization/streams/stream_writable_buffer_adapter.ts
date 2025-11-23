@@ -39,6 +39,15 @@ export class StreamWritableBufferAdapter implements IWritableBuffer {
   }
 
   /**
+   * Checks if the buffer can accept appending the given number of bytes.
+   * @param size The number of bytes to check.
+   * @returns True if the buffer can accept the append.
+   */
+  public async canAppendMore(_size: number): Promise<boolean> {
+    return await this.isValid();
+  }
+
+  /**
    * Closes the underlying stream buffer.
    * After calling this, further writes will be ignored.
    */

@@ -451,7 +451,7 @@ async function createTestBuffer(
   // Create metadata with boolean schema
   const meta = new Map<string, Uint8Array>();
   meta.set("avro.schema", new TextEncoder().encode('"boolean"'));
-  if(codec !== undefined) {
+  if (codec !== undefined) {
     meta.set("avro.codec", new TextEncoder().encode(codec));
   }
 
@@ -478,7 +478,9 @@ async function createTestBuffer(
   };
   await BLOCK_TYPE.write(writeTap, block);
 
-  return new InMemoryReadableBuffer(arrayBuffer.slice(0, writeTap.getPos() + 1));
+  return new InMemoryReadableBuffer(
+    arrayBuffer.slice(0, writeTap.getPos()),
+  );
 }
 
 /**
@@ -514,7 +516,9 @@ async function createTestBufferZeroRecords(): Promise<InMemoryReadableBuffer> {
   };
   await BLOCK_TYPE.write(writeTap, block);
 
-  return new InMemoryReadableBuffer(arrayBuffer.slice(0, writeTap.getPos() + 1));
+  return new InMemoryReadableBuffer(
+    arrayBuffer.slice(0, writeTap.getPos()),
+  );
 }
 
 /**
@@ -571,7 +575,9 @@ async function createTestBufferMultiBlock(): Promise<InMemoryReadableBuffer> {
   };
   await BLOCK_TYPE.write(writeTap, block2);
 
-  return new InMemoryReadableBuffer(arrayBuffer.slice(0, writeTap.getPos() + 1));
+  return new InMemoryReadableBuffer(
+    arrayBuffer.slice(0, writeTap.getPos()),
+  );
 }
 
 it("should handle empty avro.codec in meta", async () => {
@@ -600,7 +606,10 @@ it("should handle null avro.codec in meta", async () => {
 
   // Verify header
   const parsedHeader = await parser.getHeader();
-  assertEquals(new TextDecoder().decode(parsedHeader.meta.get("avro.codec")), "null");
+  assertEquals(
+    new TextDecoder().decode(parsedHeader.meta.get("avro.codec")),
+    "null",
+  );
   assertEquals(parsedHeader.magic.length, 4);
   assertEquals(parsedHeader.sync.length, 16);
 
@@ -713,7 +722,9 @@ it("should throw error for invalid JSON in avro.schema", async () => {
   };
   await HEADER_TYPE.write(writeTap, header);
 
-  const buffer = new InMemoryReadableBuffer(arrayBuffer.slice(0, writeTap.getPos() + 1));
+  const buffer = new InMemoryReadableBuffer(
+    arrayBuffer.slice(0, writeTap.getPos() + 1),
+  );
   const parser = new AvroFileParser(buffer);
 
   await assertRejects(

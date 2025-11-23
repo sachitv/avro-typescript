@@ -247,4 +247,84 @@ describe("StreamReadableBufferAdapter", () => {
       assertEquals(result, new Uint8Array(0));
     });
   });
+
+  describe("canReadMore", () => {
+    it("returns true for valid offset within buffered data", async () => {
+      const chunks = [new Uint8Array([1, 2, 3, 4, 5])];
+      let chunkIndex = 0;
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => {
+          if (chunkIndex < chunks.length) {
+            return chunks[chunkIndex++];
+          }
+          return undefined;
+        },
+        close: async () => {},
+      };
+      const adapter = new StreamReadableBufferAdapter(mockStream);
+
+      assertEquals(await adapter.canReadMore(0), true);
+      assertEquals(await adapter.canReadMore(2), true);
+      assertEquals(await adapter.canReadMore(4), true);
+    });
+
+    it("returns false for offset at EOF", async () => {
+      const chunks = [new Uint8Array([1, 2, 3])];
+      let chunkIndex = 0;
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => {
+          if (chunkIndex < chunks.length) {
+            return chunks[chunkIndex++];
+          }
+          return undefined;
+        },
+        close: async () => {},
+      };
+      const adapter = new StreamReadableBufferAdapter(mockStream);
+
+      assertEquals(await adapter.canReadMore(3), false);
+    });
+
+    it("returns false for offset beyond EOF", async () => {
+      const chunks = [new Uint8Array([1, 2, 3])];
+      let chunkIndex = 0;
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => {
+          if (chunkIndex < chunks.length) {
+            return chunks[chunkIndex++];
+          }
+          return undefined;
+        },
+        close: async () => {},
+      };
+      const adapter = new StreamReadableBufferAdapter(mockStream);
+
+      assertEquals(await adapter.canReadMore(5), false);
+    });
+
+    it("returns false for negative offset", async () => {
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => undefined,
+        close: async () => {},
+      };
+      const adapter = new StreamReadableBufferAdapter(mockStream);
+
+      assertEquals(await adapter.canReadMore(-1), false);
+    });
+
+    it("handles empty stream", async () => {
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => undefined,
+        close: async () => {},
+      };
+      const adapter = new StreamReadableBufferAdapter(mockStream);
+
+      assertEquals(await adapter.canReadMore(0), false);
+    });
+  });
 });

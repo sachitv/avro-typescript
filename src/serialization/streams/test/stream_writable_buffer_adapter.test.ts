@@ -75,6 +75,30 @@ describe("StreamWritableBufferAdapter", () => {
     });
   });
 
+  describe("canAppendMore", () => {
+    it("returns true when open", async () => {
+      const mockStream = {
+        writeBytes: async () => {},
+        close: async () => {},
+      };
+      const adapter = new StreamWritableBufferAdapter(mockStream);
+
+      assertEquals(await adapter.canAppendMore(1), true);
+      assertEquals(await adapter.canAppendMore(100), true);
+    });
+
+    it("returns false after close", async () => {
+      const mockStream = {
+        writeBytes: async () => {},
+        close: async () => {},
+      };
+      const adapter = new StreamWritableBufferAdapter(mockStream);
+
+      await adapter.close();
+      assertEquals(await adapter.canAppendMore(1), false);
+    });
+  });
+
   describe("close", () => {
     it("closes the stream buffer", async () => {
       let closed = false;
@@ -89,6 +113,24 @@ describe("StreamWritableBufferAdapter", () => {
 
       await adapter.close();
       assert(closed);
+    });
+
+    it("only closes once when called multiple times", async () => {
+      let closeCount = 0;
+      const mockStream = {
+        writeBytes: async () => {},
+        // deno-lint-ignore require-await
+        close: async () => {
+          closeCount++;
+        },
+      };
+      const adapter = new StreamWritableBufferAdapter(mockStream);
+
+      await adapter.close();
+      await adapter.close();
+      await adapter.close();
+
+      assertEquals(closeCount, 1);
     });
   });
 });

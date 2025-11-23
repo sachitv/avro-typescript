@@ -18,6 +18,10 @@ export interface ReadableTapLike {
    */
   isValid(): Promise<boolean>;
   /**
+   * Returns whether more data can be read from the current position without advancing the cursor.
+   */
+  canReadMore(): Promise<boolean>;
+  /**
    * Returns the buffer contents from the start up to the current cursor.
    * @throws RangeError if the cursor has advanced past the buffer length.
    */
@@ -212,7 +216,8 @@ function assertValidPosition(pos: number): void {
 
 function isIReadableBuffer(value: unknown): value is IReadableBuffer {
   return typeof value === "object" && value !== null &&
-    typeof (value as IReadableBuffer).read === "function";
+    typeof (value as IReadableBuffer).read === "function" &&
+    typeof (value as IReadableBuffer).canReadMore === "function";
 }
 
 function isIWritable(value: unknown): value is IWritableBuffer {
@@ -287,6 +292,13 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
       }
       throw err;
     }
+  }
+
+  /**
+   * Returns whether more data can be read from the current position without advancing the cursor.
+   */
+  async canReadMore(): Promise<boolean> {
+    return await this.buffer.canReadMore(this.pos);
   }
 
   /**

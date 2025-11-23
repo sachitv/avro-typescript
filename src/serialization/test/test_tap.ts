@@ -48,6 +48,10 @@ export class TestTap implements ReadableTapLike, WritableTapLike {
     return await this.#reader().isValid();
   }
 
+  async canReadMore(): Promise<boolean> {
+    return await this.#reader().canReadMore();
+  }
+
   async getValue(): Promise<Uint8Array> {
     return await this.#reader().getValue();
   }

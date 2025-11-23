@@ -245,6 +245,41 @@ describe("InMemoryBufferBase (via implementations)", () => {
       );
     });
   });
+
+  describe("canReadMore", () => {
+    it("returns true for valid offset within buffer", async () => {
+      const buffer = new ArrayBuffer(10);
+      const readable = new InMemoryReadableBuffer(buffer);
+      assertEquals(await readable.canReadMore(0), true);
+      assertEquals(await readable.canReadMore(5), true);
+      assertEquals(await readable.canReadMore(9), true);
+    });
+
+    it("returns false for offset at buffer end", async () => {
+      const buffer = new ArrayBuffer(10);
+      const readable = new InMemoryReadableBuffer(buffer);
+      assertEquals(await readable.canReadMore(10), false);
+    });
+
+    it("returns false for offset beyond buffer", async () => {
+      const buffer = new ArrayBuffer(10);
+      const readable = new InMemoryReadableBuffer(buffer);
+      assertEquals(await readable.canReadMore(11), false);
+      assertEquals(await readable.canReadMore(20), false);
+    });
+
+    it("returns false for negative offset", async () => {
+      const buffer = new ArrayBuffer(10);
+      const readable = new InMemoryReadableBuffer(buffer);
+      assertEquals(await readable.canReadMore(-1), false);
+    });
+
+    it("handles zero-length buffer", async () => {
+      const buffer = new ArrayBuffer(0);
+      const readable = new InMemoryReadableBuffer(buffer);
+      assertEquals(await readable.canReadMore(0), false);
+    });
+  });
 });
 
 describe("InMemoryWritableBuffer", () => {
@@ -403,6 +438,19 @@ describe("InMemoryWritableBuffer", () => {
 
       await writable.appendBytes(new Uint8Array([1, 2, 3]));
       assertEquals(await writable.isValid(), true);
+    });
+  });
+
+  describe("canAppendMore", () => {
+    it("always returns true", async () => {
+      const buffer = new ArrayBuffer(10);
+      const writable = new InMemoryWritableBuffer(buffer);
+      assertEquals(await writable.canAppendMore(1), true);
+      assertEquals(await writable.canAppendMore(10), true);
+      assertEquals(await writable.canAppendMore(100), true);
+
+      await writable.appendBytes(new Uint8Array([1, 2, 3]));
+      assertEquals(await writable.canAppendMore(1), true);
     });
   });
 

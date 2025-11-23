@@ -154,35 +154,25 @@ export class AvroFileParser {
     // Use the tap that's positioned after the header
     const tap = this.#headerTap!;
 
-    while (true) {
-      try {
-        const block = await BLOCK_TYPE.read(tap) as {
-          count: bigint;
-          data: Uint8Array;
-          sync: Uint8Array;
-        };
+    while (await tap.canReadMore()) {
+      const block = await BLOCK_TYPE.read(tap) as {
+        count: bigint;
+        data: Uint8Array;
+        sync: Uint8Array;
+      };
 
-        // Decompress block data if needed
-        const decompressedData = await decoder.decode(block.data);
-        const arrayBuffer = new ArrayBuffer(decompressedData.length);
-        new Uint8Array(arrayBuffer).set(decompressedData);
-        const recordTap = new ReadableTap(arrayBuffer);
+      // Decompress block data if needed
+      const decompressedData = await decoder.decode(block.data);
+      const arrayBuffer = new ArrayBuffer(decompressedData.length);
+      new Uint8Array(arrayBuffer).set(decompressedData);
+      const recordTap = new ReadableTap(arrayBuffer);
 
-        // Yield each record in the block
-        for (let i = 0n; i < block.count; i += 1n) {
-          const record = resolver
-            ? await resolver.read(recordTap)
-            : await schemaType.read(recordTap);
-          yield record;
-        }
-      } catch (error) {
-        // If at end of buffer (RangeError), quit gracefully; otherwise throw
-        // The tap should still be valid since it will not be past the range 
-        // of the buffer if we attempt to read 0 bytes.
-        if (await tap.isValid() && error instanceof RangeError) {
-          break;
-        }
-        throw error;
+      // Yield each record in the block
+      for (let i = 0n; i < block.count; i += 1n) {
+        const record = resolver
+          ? await resolver.read(recordTap)
+          : await schemaType.read(recordTap);
+        yield record;
       }
     }
   }

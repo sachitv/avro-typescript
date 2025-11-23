@@ -6,6 +6,11 @@ export interface IReadableBuffer {
    * Reads a portion of the buffer starting at offset with the given size.
    */
   read(offset: number, size: number): Promise<Uint8Array | undefined>;
+
+  /**
+   * Checks if more data can be read starting at the given offset.
+   */
+  canReadMore(offset: number): Promise<boolean>;
 }
 
 /**
@@ -24,6 +29,11 @@ export interface IWritableBuffer {
    * can detect the overflow condition.
    */
   isValid(): Promise<boolean>;
+
+  /**
+   * Checks if the buffer can accept appending the given number of bytes.
+   */
+  canAppendMore(size: number): Promise<boolean>;
 }
 
 /**
