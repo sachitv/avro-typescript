@@ -68,6 +68,12 @@ export class ForwardOnlyStreamReadableBufferAdapter implements IReadableBuffer {
     return result;
   }
 
+  /**
+   * Checks if more data can be read at the specified offset.
+   * Only allows reading at the current position; throws errors for backward or forward seeking.
+   * @param offset - The offset to check for readability
+   * @returns Promise resolving to true if data is available at the current position, false otherwise
+   */
   public async canReadMore(offset: number): Promise<boolean> {
     if (offset < this.#currentPosition) {
       throw new Error("Cannot read backwards from current position");
