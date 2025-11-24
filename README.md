@@ -13,6 +13,7 @@ multiple JavaScript runtimes.
 ## Table of Contents
 
 - [Installation](#installation)
+- [Examples](#examples)
 - [Goals](#goals)
 - [Development](#development)
 - [Working with Avro Types and Streaming IO](#working-with-avro-types-and-streaming-io)
@@ -41,6 +42,14 @@ npx jsr add @sachitv/avro-typescript
 ```sh
 bunx jsr add @sachitv/avro-typescript
 ```
+
+## Examples
+
+To get started with avro-typescript, check out these example repositories for different runtimes. Each repository includes examples for both browser and runtime environments:
+
+- [Deno Example](https://github.com/sachitv/deno-example-avro-typescript)
+- [Node.js Example](https://github.com/sachitv/node-example-avro-typescript)
+- [Bun Example](https://github.com/sachitv/bun-example-avro-typescript)
 
 ## Goals
 
