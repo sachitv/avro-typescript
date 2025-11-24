@@ -45,7 +45,9 @@ bunx jsr add @sachitv/avro-typescript
 
 ## Examples
 
-To get started with avro-typescript, check out these example repositories for different runtimes. Each repository includes examples for both browser and runtime environments:
+To get started with avro-typescript, check out these example repositories for
+different runtimes. Each repository includes examples for both browser and
+runtime environments:
 
 - [Deno Example](https://github.com/sachitv/deno-example-avro-typescript)
 - [Node.js Example](https://github.com/sachitv/node-example-avro-typescript)
