@@ -1,5 +1,6 @@
 # Avro TypeScript
 
+[![JSR Version](https://img.shields.io/jsr/v/%40sachitv/avro-typescript?style=for-the-badge&logo=jsr&logoColor=jsr&label=)](https://jsr.io/@sachitv/avro-typescript)
 [![CI](https://github.com/sachitv/avro-typescript/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/sachitv/avro-typescript/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush)
 [![codecov](https://codecov.io/gh/sachitv/avro-typescript/branch/main/graph/badge.svg?token=0SWSYMKPT8)](https://codecov.io/gh/sachitv/avro-typescript)
 
