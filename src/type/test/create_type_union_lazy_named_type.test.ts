@@ -524,7 +524,9 @@ describe("createType nested named type materialization", () => {
         { foo: { id: Uint8Array } }
       >;
     };
-    const bytesResolved = await bytesResolver.read(bytesTap) as BytesForwardValue;
+    const bytesResolved = await bytesResolver.read(
+      bytesTap,
+    ) as BytesForwardValue;
     assertEquals(
       bytesResolved.unionField["example.multiple.BetaBranch"].foo.id,
       new Uint8Array([98, 101, 116, 97]),
