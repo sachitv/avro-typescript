@@ -825,6 +825,24 @@ describe("RecordType", () => {
   });
 
   describe("createResolver", () => {
+    it("short-circuits resolver creation for the same record instance", async () => {
+      const record = createRecord({
+        name: "example.Solo",
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "note", type: new StringType(), default: "same-instance" },
+        ],
+      });
+
+      const resolver = record.createResolver(record);
+      const buffer = await record.toBuffer({ id: 1 });
+      const tap = new Tap(buffer);
+      assertEquals(await resolver.read(tap), {
+        id: 1,
+        note: "same-instance",
+      });
+    });
+
     it("creates resolver that adds defaulted fields", async () => {
       const writer = createRecord({
         name: "example.Person",

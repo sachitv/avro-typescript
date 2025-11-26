@@ -548,7 +548,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
       const readerField = readerFields[readerIndex];
       const readerType = readerField.getType();
       const writerType = writerField.getType();
-      const resolver = readerType.constructor === writerType.constructor
+      const resolver = readerType === writerType
         ? undefined
         : readerType.createResolver(writerType);
 
