@@ -476,50 +476,59 @@ describe("createType nested named type materialization", () => {
     });
 
     // Compatible reader migrates Foo.id from string to bytes.
-    const bytesReader = createType({
-      type: "record",
-      name: "Envelope",
-      namespace: "example.multiple",
-      fields: [
-        {
-          name: "unionField",
-          type: [
-            {
-              type: "record",
-              name: "AlphaBranch",
-              fields: [{ name: "foo", type: "Foo" }],
-            },
-            {
-              type: "record",
-              name: "BetaBranch",
-              fields: [{ name: "foo", type: "Foo" }],
-            },
-            {
-              type: "record",
-              name: "DefinitionBranch",
-              fields: [
-                {
-                  name: "foo",
-                  type: {
-                    type: "record",
-                    name: "Foo",
-                    fields: [{ name: "id", type: "bytes" }],
+    const bytesReader = createType(
+      {
+        type: "record",
+        name: "Envelope",
+        namespace: "example.multiple",
+        fields: [
+          {
+            name: "unionField",
+            type: [
+              {
+                type: "record",
+                name: "AlphaBranch",
+                fields: [{ name: "foo", type: "Foo" }],
+              },
+              {
+                type: "record",
+                name: "BetaBranch",
+                fields: [{ name: "foo", type: "Foo" }],
+              },
+              {
+                type: "record",
+                name: "DefinitionBranch",
+                fields: [
+                  {
+                    name: "foo",
+                    type: {
+                      type: "record",
+                      name: "Foo",
+                      fields: [{ name: "id", type: "bytes" }],
+                    },
                   },
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    } as const);
+                ],
+              },
+            ],
+          },
+        ],
+      } as const,
+    );
     const bytesResolver = bytesReader.createResolver(type);
     const bytesTap = new Tap(new ArrayBuffer(128));
     await type.write(bytesTap, value);
     bytesTap._testOnlyResetPos();
-    const bytesResolved = await bytesResolver.read(bytesTap);
-    const bytesId =
-      (bytesResolved as any).unionField["example.multiple.BetaBranch"].foo.id;
-    assertEquals(bytesId, new Uint8Array([98, 101, 116, 97]));
+    type BytesForwardValue = {
+      unionField: Record<
+        string,
+        { foo: { id: Uint8Array } }
+      >;
+    };
+    const bytesResolved = await bytesResolver.read(bytesTap) as BytesForwardValue;
+    assertEquals(
+      bytesResolved.unionField["example.multiple.BetaBranch"].foo.id,
+      new Uint8Array([98, 101, 116, 97]),
+    );
   });
 
   it("supports forward references to enums defined later in a union", async () => {
