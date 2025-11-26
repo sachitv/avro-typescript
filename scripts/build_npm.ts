@@ -24,7 +24,7 @@ await build({
     license: "MIT",
     repository: {
       type: "git",
-      url: "https://github.com/sachitv/avro-typescript",
+      url: "git+https://github.com/sachitv/avro-typescript",
     },
     bugs: {
       url: "https://github.com/sachitv/avro-typescript/issues",
