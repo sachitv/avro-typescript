@@ -9,9 +9,9 @@ on:
         default: full
         type: choice
         options:
-        - skip
-        - draft
-        - full
+          - skip
+          - draft
+          - full
       publish_jsr:
         description: "Publish to JSR"
         required: false
