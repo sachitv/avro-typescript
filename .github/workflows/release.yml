@@ -87,22 +87,22 @@ jobs:
           tag_name: ${{ steps.version.outputs.version }}
           name: ${{ steps.version.outputs.version }}
           body: ${{ steps.release_notes.outputs.clean_changelog }}
-          draft: env.is_draft == 'true'
+          draft: ${{ env.is_draft == 'true' }}
       - name: Publish to JSR
-        if: inputs.publish_jsr
+        if: ${{ inputs.release_type != 'skip' && inputs.publish_jsr }}
         run: deno publish
       - name: Setup Node.js
-        if: inputs.publish_npm
+        if: ${{ inputs.release_type != 'skip' && inputs.publish_npm }}
         uses: actions/setup-node@v6
         with:
           node-version: "22"
           registry-url: https://registry.npmjs.org/
       - name: Check npm user
-        if: inputs.publish_npm
+        if: ${{ inputs.release_type != 'skip' && inputs.publish_npm }}
         run: npm whoami
       - name: Build npm package
-        if: inputs.publish_npm
+        if: ${{ inputs.release_type != 'skip' && inputs.publish_npm }}
         run: deno task npm:build
       - name: Publish to npm
-        if: inputs.publish_npm
+        if: ${{ inputs.release_type != 'skip' && inputs.publish_npm }}
         run: cd npm && npm publish
