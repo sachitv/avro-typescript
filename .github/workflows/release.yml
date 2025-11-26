@@ -8,8 +8,13 @@ on:
         required: false
         default: false
         type: boolean
-      publish:
+      publish_jsr:
         description: "Publish to JSR"
+        required: false
+        default: true
+        type: boolean
+      publish_npm:
+        description: "Publish to npm"
         required: false
         default: true
         type: boolean
@@ -66,6 +71,21 @@ jobs:
           name: ${{ steps.version.outputs.version }}
           body: ${{ steps.release_notes.outputs.clean_changelog }}
           draft: ${{ inputs.draft }}
-      - name: Publish package
-        if: ${{ inputs.publish }}
+      - name: Publish to JSR
+        if: ${{ inputs.publish_jsr }}
         run: deno publish
+
+      - name: Setup Node.js
+        if: ${{ inputs.publish_npm }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Build npm package
+        if: ${{ inputs.publish_npm }}
+        run: deno task npm:build
+
+      - name: Publish to npm
+        if: ${{ inputs.publish_npm }}
+        run: cd npm && npm publish --provenance
