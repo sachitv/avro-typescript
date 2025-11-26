@@ -88,4 +88,4 @@ jobs:
 
       - name: Publish to npm
         if: ${{ inputs.publish_npm }}
-        run: cd npm && npm publish --provenance
+        run: cd npm && npm publish
