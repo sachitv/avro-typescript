@@ -336,10 +336,18 @@ function createFromTypeName(
 
   const fullName = qualifyReference(name, context.namespace);
   const found = context.registry.get(fullName);
-  if (!found) {
-    throw new Error(`Undefined Avro type reference: ${name}`);
+  if (found) {
+    return found;
   }
-  return found;
+
+  materializeLazyRecordFields(context.registry);
+
+  const materialized = context.registry.get(fullName);
+  if (materialized) {
+    return materialized;
+  }
+
+  throw new Error(`Undefined Avro type reference: ${name}`);
 }
 
 function createRecordType(
@@ -564,6 +572,15 @@ function createUnionType(
 
 function isPrimitiveTypeName(value: unknown): value is PrimitiveTypeName {
   return typeof value === "string" && value in PRIMITIVE_FACTORIES;
+}
+
+function materializeLazyRecordFields(registry: Map<string, Type>): void {
+  for (const type of registry.values()) {
+    if (type instanceof RecordType) {
+      // Ensures nested named types defined inside record fields are registered.
+      type.getFields();
+    }
+  }
 }
 
 function isRecordTypeName(

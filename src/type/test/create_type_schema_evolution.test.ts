@@ -292,7 +292,7 @@ describe("Schema Evolution Tests", () => {
       assertEquals(readerResult.rootName, writerData.rootName);
       assertEquals(readerResult.nested.name, writerData.nested.name);
       assertEquals(readerResult.nested.value, writerData.nested.value);
-      assertEquals(readerResult.nested.data, undefined);
+      assertEquals(readerResult.nested.data, "");
     });
 
     it("should reject readers that remove nested required fields", () => {
