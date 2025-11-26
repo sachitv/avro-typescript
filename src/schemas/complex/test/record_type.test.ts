@@ -11,6 +11,7 @@ import type { Type } from "../../type.ts";
 import { ValidationError } from "../../error.ts";
 import { NullType } from "../../primitive/null_type.ts";
 import { UnionType } from "../union_type.ts";
+import { createType } from "../../../type/create_type.ts";
 
 interface FieldSpec {
   name: string;
@@ -556,6 +557,48 @@ describe("RecordType", () => {
       const tap = new Tap(buffer);
       await type.skip(tap);
       assertEquals(tap.getPos(), buffer.byteLength);
+    });
+  });
+
+  describe("maps with union values and defaults", () => {
+    const schema = {
+      type: "record",
+      name: "example.UnionMapRecord",
+      fields: [
+        {
+          name: "items",
+          type: { type: "map", values: ["null", "long", "double", "bytes"] },
+          default: {},
+        },
+      ],
+    } as const;
+
+    it("applies empty-map default and round-trips", async () => {
+      const type = createType(schema);
+
+      const buffer = await type.toBuffer({});
+      const decoded = await type.fromBuffer(buffer) as {
+        items: Map<string, unknown>;
+      };
+
+      assert(decoded.items instanceof Map);
+      assertEquals(decoded, { items: new Map() });
+    });
+
+    it("round-trips map entries for each union branch", async () => {
+      const type = createType(schema);
+      const value = {
+        items: new Map<string, unknown>([
+          ["nothing", null],
+          ["longVal", { long: 123n }],
+          ["doubleVal", { double: 1.5 }],
+          ["bytesVal", { bytes: new Uint8Array([1, 2, 3]) }],
+        ]),
+      };
+
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
+      assertEquals(decoded, value);
     });
   });
 
