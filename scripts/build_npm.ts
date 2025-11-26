@@ -13,42 +13,43 @@ await emptyDir("./npm");
 await build({
   typeCheck: false,
   test: false,
-  scriptModule: false, 
+  scriptModule: false,
   entryPoints: ["./src/mod.ts"],
-   outDir: "./npm",
-   package: {
-     name: "@sachitv/avro-typescript",
-     version: pkgVersion,
-     description: "Avro schema parsing, serialization, and RPC helpers for TypeScript runtimes.",
-     license: "MIT",
-     repository: {
-       type: "git",
-       url: "https://github.com/sachitv/avro-typescript",
-     },
-     bugs: {
-       url: "https://github.com/sachitv/avro-typescript/issues",
-     },
-     homepage: "https://github.com/sachitv/avro-typescript",
-     engines: {
-       node: ">=22",
-     },
-     sideEffects: false,
-     publishConfig: {
-       access: "public",
-     },
-     type: "module",
-     exports: {
-       ".": {
-         import: "./esm/mod.mjs",
-         types: "./esm/mod.d.ts",
-       },
-     },
-   },
-   packageManager: "npm",
-   shims: {
-     deno: "dev",
-   },
-   compilerOptions: {
-     lib: ["ESNext", "DOM"],
-   },
- });
+  outDir: "./npm",
+  package: {
+    name: "@sachitv/avro-typescript",
+    version: pkgVersion,
+    description:
+      "Avro schema parsing, serialization, and RPC helpers for TypeScript runtimes.",
+    license: "MIT",
+    repository: {
+      type: "git",
+      url: "https://github.com/sachitv/avro-typescript",
+    },
+    bugs: {
+      url: "https://github.com/sachitv/avro-typescript/issues",
+    },
+    homepage: "https://github.com/sachitv/avro-typescript",
+    engines: {
+      node: ">=22",
+    },
+    sideEffects: false,
+    publishConfig: {
+      access: "public",
+    },
+    type: "module",
+    exports: {
+      ".": {
+        import: "./esm/mod.mjs",
+        types: "./esm/mod.d.ts",
+      },
+    },
+  },
+  packageManager: "npm",
+  shims: {
+    deno: "dev",
+  },
+  compilerOptions: {
+    lib: ["ESNext", "DOM"],
+  },
+});
