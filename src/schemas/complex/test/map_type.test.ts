@@ -8,6 +8,9 @@ import { IntType } from "../../primitive/int_type.ts";
 import { LongType } from "../../primitive/long_type.ts";
 import { StringType } from "../../primitive/string_type.ts";
 import { BytesType } from "../../primitive/bytes_type.ts";
+import { NullType } from "../../primitive/null_type.ts";
+import { UnionType, type UnionValue } from "../union_type.ts";
+import { createType } from "../../../type/create_type.ts";
 import type { Type } from "../../type.ts";
 
 function createMap<T>(values: Type<T>): MapType<T> {
@@ -365,6 +368,41 @@ describe("MapType", () => {
         type: "map",
         values: intValues.toJSON(),
       });
+    });
+  });
+
+  describe("union values", () => {
+    const unionValues = new UnionType({
+      types: [new NullType(), new StringType(), new IntType()],
+    });
+    const mapWithUnion = createMap(unionValues);
+
+    it("round-trips maps that contain union branches", async () => {
+      const value: Map<string, UnionValue> = new Map([
+        ["none", null],
+        ["asString", { string: "hello" }],
+        ["asInt", { int: 7 }],
+      ]);
+
+      const buffer = await mapWithUnion.toBuffer(value);
+      const result = await mapWithUnion.fromBuffer(buffer);
+      assertEquals(result, value);
+    });
+
+    it("constructs map with union values from schema", async () => {
+      const schema = { type: "map", values: ["null", "string", "int"] };
+      const mapType = createType(schema);
+      assert(mapType instanceof MapType);
+      assert(mapType.getValuesType() instanceof UnionType);
+
+      const value: Map<string, UnionValue> = new Map([
+        ["nullable", null],
+        ["wrapped", { string: "value" }],
+      ]);
+
+      const buffer = await mapType.toBuffer(value);
+      const result = await mapType.fromBuffer(buffer);
+      assertEquals(result, value);
     });
   });
 
