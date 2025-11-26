@@ -40,7 +40,7 @@ await build({
     type: "module",
     exports: {
       ".": {
-        import: "./esm/mod.mjs",
+        import: "./esm/mod.js",
         types: "./esm/mod.d.ts",
       },
     },
