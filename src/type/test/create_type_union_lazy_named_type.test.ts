@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { createType } from "../create_type.ts";
@@ -258,5 +258,440 @@ describe("createType nested named type materialization", () => {
     const buffer = await deepType.toBuffer(value);
     const decoded = await deepType.fromBuffer(buffer);
     assertEquals(decoded, value);
+  });
+
+  it("resolves named types defined in another namespace branch", async () => {
+    const schema = {
+      type: "record",
+      name: "Envelope",
+      namespace: "example.crossns",
+      fields: [
+        {
+          name: "payload",
+          type: [
+            {
+              type: "record",
+              name: "RefBranch",
+              fields: [
+                { name: "foo", type: "otherpkg.Foo" },
+                { name: "label", type: "string" },
+              ],
+            },
+            {
+              type: "record",
+              name: "DefBranch",
+              namespace: "otherpkg",
+              fields: [
+                {
+                  name: "foo",
+                  type: {
+                    type: "record",
+                    name: "Foo",
+                    namespace: "otherpkg",
+                    fields: [
+                      { name: "id", type: "string" },
+                    ],
+                  },
+                },
+                { name: "label", type: "string" },
+              ],
+            },
+          ],
+        },
+      ],
+    } as const;
+
+    const type = createType(schema); // Writer uses original layout.
+    const value = {
+      payload: {
+        "example.crossns.RefBranch": {
+          foo: { id: "ns-1" },
+          label: "ref",
+        },
+      },
+    };
+
+    const buffer = await type.toBuffer(value); // Writer can serialize.
+    const decoded = await type.fromBuffer(buffer); // Writer can read back.
+    assertEquals(decoded, value);
+
+    // Compatible reader adds Foo.note defaulted to "".
+    const readerSchema = {
+      type: "record",
+      name: "Envelope",
+      namespace: "example.crossns",
+      fields: [
+        {
+          name: "payload",
+          type: [
+            {
+              type: "record",
+              name: "RefBranch",
+              fields: [
+                { name: "foo", type: "otherpkg.Foo" },
+                { name: "label", type: "string" },
+              ],
+            },
+            {
+              type: "record",
+              name: "DefBranch",
+              namespace: "otherpkg",
+              fields: [
+                {
+                  name: "foo",
+                  type: {
+                    type: "record",
+                    name: "Foo",
+                    namespace: "otherpkg",
+                    fields: [
+                      { name: "id", type: "string" },
+                      { name: "note", type: "string", default: "" },
+                    ],
+                  },
+                },
+                { name: "label", type: "string" },
+              ],
+            },
+          ],
+        },
+      ],
+    } as const;
+
+    const readerType = createType(readerSchema);
+    const resolver = readerType.createResolver(type);
+    const tap = new Tap(new ArrayBuffer(128));
+    await type.write(tap, value);
+    tap._testOnlyResetPos();
+    const resolved = await resolver.read(tap);
+    assertEquals(resolved, {
+      payload: {
+        "example.crossns.RefBranch": {
+          foo: { id: "ns-1", note: "" },
+          label: "ref",
+        },
+      },
+    });
+  });
+
+  it("reuses forward-referenced named types across multiple branches", async () => {
+    const schema = {
+      type: "record",
+      name: "Envelope",
+      namespace: "example.multiple",
+      fields: [
+        {
+          name: "unionField",
+          type: [
+            {
+              type: "record",
+              name: "AlphaBranch",
+              fields: [{ name: "foo", type: "Foo" }],
+            },
+            {
+              type: "record",
+              name: "BetaBranch",
+              fields: [{ name: "foo", type: "Foo" }],
+            },
+            {
+              type: "record",
+              name: "DefinitionBranch",
+              fields: [
+                {
+                  name: "foo",
+                  type: {
+                    type: "record",
+                    name: "Foo",
+                    fields: [{ name: "id", type: "string" }],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    } as const;
+
+    const type = createType(schema); // Writer with shared forward ref.
+    const value = {
+      unionField: {
+        "example.multiple.BetaBranch": { foo: { id: "beta" } },
+      },
+    };
+
+    const buffer = await type.toBuffer(value); // Writer round-trips.
+    const decoded = await type.fromBuffer(buffer);
+    assertEquals(decoded, value);
+
+    // Compatible reader evolves Foo.extra defaulted to "reader".
+    const readerSchema = {
+      type: "record",
+      name: "Envelope",
+      namespace: "example.multiple",
+      fields: [
+        {
+          name: "unionField",
+          type: [
+            {
+              type: "record",
+              name: "AlphaBranch",
+              fields: [{ name: "foo", type: "Foo" }],
+            },
+            {
+              type: "record",
+              name: "BetaBranch",
+              fields: [{ name: "foo", type: "Foo" }],
+            },
+            {
+              type: "record",
+              name: "DefinitionBranch",
+              fields: [
+                {
+                  name: "foo",
+                  type: {
+                    type: "record",
+                    name: "Foo",
+                    fields: [
+                      { name: "id", type: "string" },
+                      { name: "extra", type: "string", default: "reader" },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    } as const;
+
+    const readerType = createType(readerSchema);
+    const resolver = readerType.createResolver(type);
+    const tap = new Tap(new ArrayBuffer(128));
+    await type.write(tap, value);
+    tap._testOnlyResetPos();
+    const resolved = await resolver.read(tap);
+    assertEquals(resolved, {
+      unionField: {
+        "example.multiple.BetaBranch": { foo: { id: "beta", extra: "reader" } },
+      },
+    });
+
+    // Compatible reader migrates Foo.id from string to bytes.
+    const bytesReader = createType({
+      type: "record",
+      name: "Envelope",
+      namespace: "example.multiple",
+      fields: [
+        {
+          name: "unionField",
+          type: [
+            {
+              type: "record",
+              name: "AlphaBranch",
+              fields: [{ name: "foo", type: "Foo" }],
+            },
+            {
+              type: "record",
+              name: "BetaBranch",
+              fields: [{ name: "foo", type: "Foo" }],
+            },
+            {
+              type: "record",
+              name: "DefinitionBranch",
+              fields: [
+                {
+                  name: "foo",
+                  type: {
+                    type: "record",
+                    name: "Foo",
+                    fields: [{ name: "id", type: "bytes" }],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    } as const);
+    const bytesResolver = bytesReader.createResolver(type);
+    const bytesTap = new Tap(new ArrayBuffer(128));
+    await type.write(bytesTap, value);
+    bytesTap._testOnlyResetPos();
+    const bytesResolved = await bytesResolver.read(bytesTap);
+    const bytesId =
+      (bytesResolved as any).unionField["example.multiple.BetaBranch"].foo.id;
+    assertEquals(bytesId, new Uint8Array([98, 101, 116, 97]));
+  });
+
+  it("supports forward references to enums defined later in a union", async () => {
+    const schema = {
+      type: "record",
+      name: "Envelope",
+      namespace: "example.enum",
+      fields: [
+        {
+          name: "unionField",
+          type: [
+            {
+              type: "record",
+              name: "EnumUser",
+              fields: [{ name: "color", type: "Foo" }],
+            },
+            {
+              type: "enum",
+              name: "Foo",
+              symbols: ["RED", "GREEN"],
+            },
+          ],
+        },
+      ],
+    } as const;
+
+    const type = createType(schema); // Writer with forward-ref enum.
+    const value = {
+      unionField: {
+        "example.enum.EnumUser": { color: "RED" },
+      },
+    };
+
+    const buffer = await type.toBuffer(value); // Writer round-trips.
+    const decoded = await type.fromBuffer(buffer);
+    assertEquals(decoded, value);
+
+    // Reader with identical schema remains compatible via resolver.
+    const readerType = createType(schema);
+    const resolver = readerType.createResolver(type);
+    const tap = new Tap(new ArrayBuffer(64));
+    await type.write(tap, value);
+    tap._testOnlyResetPos();
+    const resolved = await resolver.read(tap);
+    assertEquals(resolved, value);
+  });
+
+  it("fails schema evolution when reader adds required nested fields without defaults", () => {
+    const readerSchema = {
+      type: "record",
+      name: "Envelope",
+      namespace: "example.compat",
+      fields: [
+        {
+          name: "unionField",
+          type: [
+            "null",
+            {
+              type: "record",
+              name: "BranchReferencingFoo",
+              fields: [
+                { name: "foo", type: "Foo" },
+                { name: "marker", type: "string" },
+              ],
+            },
+            {
+              type: "record",
+              name: "BranchWithFooDefinition",
+              fields: [
+                {
+                  name: "foo",
+                  type: {
+                    type: "record",
+                    name: "Foo",
+                    fields: [
+                      { name: "id", type: "string" },
+                      { name: "count", type: "int" },
+                      { name: "extra", type: "string" },
+                    ],
+                  },
+                },
+                { name: "note", type: "string", default: "" },
+              ],
+            },
+          ],
+          default: null,
+        },
+      ],
+    } as const;
+
+    const writerType = createType(WRITER_SCHEMA);
+    const readerType = createType(readerSchema);
+    assertThrows(() => readerType.createResolver(writerType)); // Incompatible: reader adds Foo.extra without a default.
+  });
+
+  it("surfaces errors for missing deeply nested named types", () => {
+    const schema = {
+      type: "record",
+      name: "Envelope",
+      namespace: "example.missingdeep",
+      fields: [
+        {
+          name: "payload",
+          type: {
+            type: "record",
+            name: "Top",
+            fields: [
+              {
+                name: "middle",
+                type: {
+                  type: "record",
+                  name: "Middle",
+                  fields: [
+                    { name: "leaf", type: "UndefinedLeaf" },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    } as const;
+
+    const type = createType(schema);
+    assertRejects( // Should fail because UndefinedLeaf is never defined.
+      () => type.toBuffer({ payload: { middle: { leaf: { id: "x" } } } }),
+      Error,
+    );
+  });
+
+  it("treats similarly spelled named types as distinct", () => {
+    const schema = {
+      type: "record",
+      name: "Envelope",
+      namespace: "example.casesense",
+      fields: [
+        {
+          name: "payload",
+          type: [
+            {
+              type: "record",
+              name: "BranchWithFoo",
+              fields: [{ name: "foo", type: "Foo" }],
+            },
+            {
+              type: "record",
+              name: "BranchWithfooDefinition",
+              fields: [
+                {
+                  name: "foo",
+                  type: {
+                    type: "record",
+                    name: "foo",
+                    fields: [{ name: "id", type: "string" }],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    } as const;
+
+    const type = createType(schema);
+    assertRejects( // Should fail because Foo !== foo by case.
+      () =>
+        type.toBuffer({
+          payload: {
+            "example.casesense.BranchWithFoo": { foo: { id: "upper" } },
+          },
+        }),
+      Error,
+    );
   });
 });
