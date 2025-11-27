@@ -1,0 +1,16 @@
+name: Temporary Node Check
+
+on:
+  pull_request:
+
+jobs:
+  check-node:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check npm Version
+        run: npm --version
