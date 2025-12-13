@@ -28,7 +28,7 @@
     "npm:build": "deno run -A scripts/build_npm.ts",
     "get-version": "deno run --allow-read scripts/get_version.ts",
     "jsdoc:lint": "find . -name \"*.ts\" | grep -v \"/test/\" | grep -v \"/scripts/\" | grep -v \"/examples/\" | xargs deno doc --lint",
-    "bench": "cd packages/benchmarks && deno bench --no-config"
+    "bench": "cd packages/benchmarks && deno bench --no-config --allow-write --allow-read"
   },
   "exclude": [
     "./packages/benchmarks/"

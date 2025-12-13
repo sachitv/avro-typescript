@@ -5,5 +5,6 @@
 
 import "./serialization_bench.ts";
 import "./schema_bench.ts";
+import "./sync_file_bench.ts";
 
 // Note: This file is meant to be run with `deno bench`, not `deno run`

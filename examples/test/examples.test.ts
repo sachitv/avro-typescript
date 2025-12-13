@@ -16,3 +16,7 @@ Deno.test("examples/stream_adapter_demo runs on import", async () => {
 Deno.test("examples/stream_transform_roundtrip_demo runs on import", async () => {
   await import("../stream_transform_roundtrip_demo.ts");
 });
+
+Deno.test("examples/read_avro_sync runs on import", async () => {
+  await import("../read_avro_sync.ts");
+});
