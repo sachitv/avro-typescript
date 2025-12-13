@@ -3,6 +3,11 @@ import {
   WritableTap,
   type WritableTapLike,
 } from "../../serialization/tap.ts";
+import {
+  type SyncReadableTapLike,
+  SyncWritableTap,
+  type SyncWritableTapLike,
+} from "../../serialization/sync_tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import type { JSONType, Type } from "../type.ts";
 import { Resolver } from "../resolver.ts";
@@ -63,6 +68,17 @@ export class LongType extends PrimitiveType<bigint> {
     return buf;
   }
 
+  /** Converts a bigint value to its buffer representation synchronously. */
+  public override toSyncBuffer(value: bigint): ArrayBuffer {
+    this.check(value, throwInvalidError, []);
+    // For long, allocate exact size based on value
+    const size = calculateVarintSize(value);
+    const buf = new ArrayBuffer(size);
+    const tap = new SyncWritableTap(buf);
+    this.writeSync(tap, value);
+    return buf;
+  }
+
   /**
    * Compares two long values.
    */
@@ -102,6 +118,11 @@ export class LongType extends PrimitiveType<bigint> {
           const intValue = await tap.readInt();
           return BigInt(intValue);
         }
+
+        public override readSync(tap: SyncReadableTapLike): bigint {
+          const intValue = tap.readInt();
+          return BigInt(intValue);
+        }
       }(this);
     } else {
       return super.createResolver(writerType);
@@ -119,5 +140,34 @@ export class LongType extends PrimitiveType<bigint> {
     tap2: ReadableTapLike,
   ): Promise<number> {
     return await tap1.matchLong(tap2);
+  }
+
+  /** Reads a long value synchronously from the tap. */
+  public override readSync(tap: SyncReadableTapLike): bigint {
+    return tap.readLong();
+  }
+
+  /** Writes a long value synchronously to the tap. */
+  public override writeSync(
+    tap: SyncWritableTapLike,
+    value: bigint,
+  ): void {
+    if (!this.check(value)) {
+      throwInvalidError([], value, this);
+    }
+    tap.writeLong(value);
+  }
+
+  /** Skips a long value synchronously in the tap. */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    tap.skipLong();
+  }
+
+  /** Compares two taps synchronously for long equality. */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchLong(tap2);
   }
 }

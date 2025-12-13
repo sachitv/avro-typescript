@@ -3,6 +3,11 @@ import {
   WritableTap,
   type WritableTapLike,
 } from "../../serialization/tap.ts";
+import {
+  type SyncReadableTapLike,
+  SyncWritableTap,
+  type SyncWritableTapLike,
+} from "../../serialization/sync_tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import type { JSONType, Type } from "./../type.ts";
 import { Resolver } from "./../resolver.ts";
@@ -34,6 +39,13 @@ export class BytesType extends PrimitiveType<Uint8Array> {
   }
 
   /**
+   * Reads a byte array from the sync tap.
+   */
+  public override readSync(tap: SyncReadableTapLike): Uint8Array {
+    return tap.readBytes();
+  }
+
+  /**
    * Writes a byte array to the tap.
    */
   public override async write(
@@ -47,10 +59,30 @@ export class BytesType extends PrimitiveType<Uint8Array> {
   }
 
   /**
+   * Writes a byte array to the sync tap.
+   */
+  public override writeSync(
+    tap: SyncWritableTapLike,
+    value: Uint8Array,
+  ): void {
+    if (!(value instanceof Uint8Array)) {
+      throwInvalidError([], value, this);
+    }
+    tap.writeBytes(value);
+  }
+
+  /**
    * Skips a byte array in the tap.
    */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipBytes();
+  }
+
+  /**
+   * Skips a byte array in the sync tap.
+   */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    tap.skipBytes();
   }
 
   /**
@@ -68,6 +100,20 @@ export class BytesType extends PrimitiveType<Uint8Array> {
   }
 
   /**
+   * Converts a byte array to an ArrayBuffer synchronously.
+   */
+  public override toSyncBuffer(value: Uint8Array): ArrayBuffer {
+    this.check(value, throwInvalidError, []);
+    // Pre-allocate buffer based on value length for efficiency
+    const lengthSize = calculateVarintSize(value.length);
+    const totalSize = lengthSize + value.length;
+    const buf = new ArrayBuffer(totalSize);
+    const tap = new SyncWritableTap(buf);
+    this.writeSync(tap, value);
+    return buf;
+  }
+
+  /**
    * Creates a resolver for the writer type.
    */
   public override createResolver(writerType: Type): Resolver {
@@ -79,6 +125,15 @@ export class BytesType extends PrimitiveType<Uint8Array> {
           tap: ReadableTapLike,
         ): Promise<Uint8Array> {
           const str = await tap.readString();
+          // Convert string to bytes (assuming UTF-8)
+          const encoder = new TextEncoder();
+          return encoder.encode(str);
+        }
+
+        public override readSync(
+          tap: SyncReadableTapLike,
+        ): Uint8Array {
+          const str = tap.readString();
           // Convert string to bytes (assuming UTF-8)
           const encoder = new TextEncoder();
           return encoder.encode(str);
@@ -152,5 +207,13 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     tap2: ReadableTapLike,
   ): Promise<number> {
     return await tap1.matchBytes(tap2);
+  }
+
+  /** Matches bytes between two sync taps. */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchBytes(tap2);
   }
 }

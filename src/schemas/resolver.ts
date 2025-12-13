@@ -1,4 +1,5 @@
 import type { ReadableTapLike } from "../serialization/tap.ts";
+import type { SyncReadableTapLike } from "../serialization/sync_tap.ts";
 import type { Type } from "./type.ts";
 
 /**
@@ -27,4 +28,10 @@ export abstract class Resolver<T = unknown> {
    * @param tap The tap to read from.
    */
   public abstract read(tap: ReadableTapLike): Promise<T>;
+
+  /**
+   * Reads a value from the sync tap using the resolution logic.
+   * @param tap The sync tap to read from.
+   */
+  public abstract readSync(tap: SyncReadableTapLike): T;
 }

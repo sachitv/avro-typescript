@@ -2,6 +2,7 @@ import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import { ReadableTap } from "../../../serialization/tap.ts";
+import { SyncReadableTap, SyncWritableTap } from "../../../serialization/sync_tap.ts";
 import { DoubleType } from "../double_type.ts";
 import { IntType } from "../int_type.ts";
 import { LongType } from "../long_type.ts";
@@ -309,6 +310,158 @@ describe("DoubleType", () => {
       assert(type.isValid(Infinity));
       assert(type.isValid(-Infinity));
       assert(!type.isValid("invalid"));
+    });
+  });
+
+  describe("synchronous API", () => {
+    describe("readSync", () => {
+      it("should read double from sync tap", () => {
+        const buffer = new ArrayBuffer(8);
+        const writeTap = new Tap(buffer);
+        writeTap.writeDouble(123.5);
+        const readTap = new SyncReadableTap(buffer);
+        assertEquals(type.readSync(readTap), 123.5);
+      });
+
+      it("should throw when insufficient data", () => {
+        const buffer = new ArrayBuffer(4); // Less than 8 bytes needed for double
+        const tap = new SyncReadableTap(buffer);
+        assertThrows(
+          () => {
+            type.readSync(tap);
+          },
+          Error, // ReadBufferError
+        );
+      });
+
+
+    });
+
+    describe("writeSync", () => {
+      it("should write double to sync tap", () => {
+        const buffer = new ArrayBuffer(8);
+        const writeTap = new SyncWritableTap(buffer);
+        type.writeSync(writeTap, 456.0);
+        const readTap = new SyncReadableTap(buffer);
+        assertEquals(readTap.readDouble(), 456.0);
+      });
+
+      it("should write and read Infinity without error", () => {
+        const buffer = new ArrayBuffer(8);
+        const writeTap = new SyncWritableTap(buffer);
+        type.writeSync(writeTap, Infinity);
+        const readTap = new SyncReadableTap(buffer);
+        assertEquals(readTap.readDouble(), Infinity);
+      });
+
+      it("should write and read NaN without error", () => {
+        const buffer = new ArrayBuffer(8);
+        const writeTap = new SyncWritableTap(buffer);
+        type.writeSync(writeTap, NaN);
+        const readTap = new SyncReadableTap(buffer);
+        const result = readTap.readDouble();
+        assert(Number.isNaN(result));
+      });
+
+      it("should throw for invalid value", () => {
+        const buffer = new ArrayBuffer(8);
+        const tap = new SyncWritableTap(buffer);
+        assertThrows(() => {
+          // deno-lint-ignore no-explicit-any
+          (type as any).writeSync(tap, "invalid");
+        }, ValidationError);
+      });
+    });
+
+    describe("skipSync", () => {
+      it("should skip double in sync tap", () => {
+        const buffer = new ArrayBuffer(16);
+        const tap = new SyncReadableTap(buffer);
+        const posBefore = tap.getPos();
+        type.skipSync(tap);
+        const posAfter = tap.getPos();
+        assertEquals(posAfter - posBefore, 8);
+      });
+    });
+
+    describe("matchSync", () => {
+      it("should match encoded double buffers correctly", () => {
+        const val1 = 1.0;
+        const val2 = 1.0;
+        const val3 = 2.0;
+
+        const buf1 = type.toSyncBuffer(val1);
+        const buf2 = type.toSyncBuffer(val2);
+        const buf3 = type.toSyncBuffer(val3);
+
+        assertEquals(type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)), 0); // 1.0 == 1.0
+        assertEquals(type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf3)), -1); // 1.0 < 2.0
+        assertEquals(type.matchSync(new SyncReadableTap(buf3), new SyncReadableTap(buf1)), 1); // 2.0 > 1.0
+      });
+    });
+
+    describe("createResolver sync", () => {
+      it("should create resolver for same type sync", () => {
+        const resolver = type.createResolver(type);
+        const value = 789.5;
+        const buffer = type.toSyncBuffer(value);
+        const tap = new SyncReadableTap(buffer);
+        const result = resolver.readSync(tap);
+        assertEquals(result, value);
+      });
+
+      it("should create resolver for IntType writer with sync read", async () => {
+        const intType = new IntType();
+        const resolver = type.createResolver(intType);
+        const intValue = 42;
+        const buffer = await intType.toBuffer(intValue);
+        const tap = new SyncReadableTap(buffer);
+        const result = resolver.readSync(tap);
+        assertEquals(result, intValue);
+      });
+
+      it("should create resolver for LongType writer with sync read", async () => {
+        const longType = new LongType();
+        const resolver = type.createResolver(longType);
+        const longValue = 1234567890123n;
+        const buffer = await longType.toBuffer(longValue);
+        const tap = new SyncReadableTap(buffer);
+        const result = resolver.readSync(tap);
+        assertEquals(result, Number(longValue));
+      });
+
+      it("should create resolver for FloatType writer with sync read", () => {
+        const floatType = new FloatType();
+        const resolver = type.createResolver(floatType);
+        const floatValue = 3.14159;
+        const buffer = floatType.toSyncBuffer(floatValue);
+        const tap = new SyncReadableTap(buffer);
+        const result = resolver.readSync(tap) as number;
+        // Float to double promotion may have precision differences
+        assert(Math.abs(result - floatValue) < 0.00001);
+      });
+    });
+
+    describe("sync buffer operations", () => {
+      it("should have toSyncBuffer and fromSyncBuffer", () => {
+        const value = 123.5;
+        const buffer = type.toSyncBuffer(value);
+        const result = type.fromSyncBuffer(buffer);
+        assertEquals(result, value);
+      });
+
+      it("should handle IEEE-754 specials in sync buffer operations", () => {
+        const values = [NaN, Infinity, -Infinity, 0, -0];
+        for (const value of values) {
+          const buffer = type.toSyncBuffer(value);
+          const result = type.fromSyncBuffer(buffer);
+          if (Number.isNaN(value)) {
+            assert(Number.isNaN(result));
+          } else {
+            assertEquals(result, value);
+          }
+        }
+      });
     });
   });
 });

@@ -1,6 +1,11 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/sync_tap.ts";
+import { ReadBufferError } from "../../../serialization/buffers/sync_buffer.ts";
 import { BooleanType } from "../boolean_type.ts";
 import { ValidationError } from "../../error.ts";
 
@@ -116,6 +121,152 @@ describe("BooleanType", () => {
         ),
         0,
       );
+    });
+  });
+
+  describe("sync APIs", () => {
+    describe("readSync", () => {
+      it("should read boolean synchronously from tap", () => {
+        const buffer = new ArrayBuffer(1);
+        const writeTap = new SyncWritableTap(buffer);
+        writeTap.writeBoolean(true);
+        const readTap = new SyncReadableTap(buffer);
+        assertEquals(type.readSync(readTap), true);
+      });
+
+      it("should read false boolean synchronously from tap", () => {
+        const buffer = new ArrayBuffer(1);
+        const writeTap = new SyncWritableTap(buffer);
+        writeTap.writeBoolean(false);
+        const readTap = new SyncReadableTap(buffer);
+        assertEquals(type.readSync(readTap), false);
+      });
+    });
+
+    describe("writeSync", () => {
+      it("should write boolean synchronously to tap", () => {
+        const buffer = new ArrayBuffer(1);
+        const writeTap = new SyncWritableTap(buffer);
+        type.writeSync(writeTap, true);
+        const readTap = new SyncReadableTap(buffer);
+        assertEquals(readTap.readBoolean(), true);
+      });
+
+      it("should write false boolean synchronously to tap", () => {
+        const buffer = new ArrayBuffer(1);
+        const writeTap = new SyncWritableTap(buffer);
+        type.writeSync(writeTap, false);
+        const readTap = new SyncReadableTap(buffer);
+        assertEquals(readTap.readBoolean(), false);
+      });
+
+      it("should throw for invalid value", () => {
+        const buffer = new ArrayBuffer(1);
+        const tap = new SyncWritableTap(buffer);
+        assertThrows(() => {
+          type.writeSync(tap, 123 as unknown as boolean);
+        }, ValidationError);
+      });
+    });
+
+    describe("skipSync", () => {
+      it("should skip boolean synchronously in tap", () => {
+        const buffer = new ArrayBuffer(2);
+        const tap = new SyncWritableTap(buffer);
+        tap.writeBoolean(true); // write something first
+        const readTap = new SyncReadableTap(buffer);
+        const posBefore = readTap.getPos();
+        type.skipSync(readTap);
+        const posAfter = readTap.getPos();
+        assertEquals(posAfter - posBefore, 1);
+      });
+    });
+
+    describe("toSyncBuffer", () => {
+      it("should serialize boolean to buffer synchronously", () => {
+        const value = true;
+        const buffer = type.toSyncBuffer(value);
+        assertEquals(buffer.byteLength, 1);
+        const tap = new SyncReadableTap(buffer);
+        assertEquals(type.readSync(tap), value);
+      });
+
+      it("should serialize false boolean to buffer synchronously", () => {
+        const value = false;
+        const buffer = type.toSyncBuffer(value);
+        assertEquals(buffer.byteLength, 1);
+        const tap = new SyncReadableTap(buffer);
+        assertEquals(type.readSync(tap), value);
+      });
+
+      it("should throw ValidationError for invalid value", () => {
+        assertThrows(() => {
+          type.toSyncBuffer("invalid" as unknown as boolean);
+        }, ValidationError);
+      });
+    });
+
+    describe("fromSyncBuffer", () => {
+      it("should deserialize boolean from buffer synchronously", () => {
+        const value = true;
+        const buffer = type.toSyncBuffer(value);
+        const result = type.fromSyncBuffer(buffer);
+        assertEquals(result, value);
+      });
+
+      it("should deserialize false boolean from buffer synchronously", () => {
+        const value = false;
+        const buffer = type.toSyncBuffer(value);
+        const result = type.fromSyncBuffer(buffer);
+        assertEquals(result, value);
+      });
+
+      it("should throw for truncated buffer", () => {
+        const buffer = new ArrayBuffer(0);
+        assertThrows(
+          () => {
+            type.fromSyncBuffer(buffer);
+          },
+          ReadBufferError,
+          "Operation exceeds buffer bounds",
+        );
+      });
+    });
+
+    describe("matchSync", () => {
+      it("should match encoded boolean buffers synchronously", () => {
+        const trueBuf = type.toSyncBuffer(true);
+        const falseBuf = type.toSyncBuffer(false);
+
+        assertEquals(
+          type.matchSync(
+            new SyncReadableTap(falseBuf),
+            new SyncReadableTap(trueBuf),
+          ),
+          -1,
+        );
+        assertEquals(
+          type.matchSync(
+            new SyncReadableTap(trueBuf),
+            new SyncReadableTap(falseBuf),
+          ),
+          1,
+        );
+        assertEquals(
+          type.matchSync(
+            new SyncReadableTap(trueBuf),
+            new SyncReadableTap(type.toSyncBuffer(true)),
+          ),
+          0,
+        );
+        assertEquals(
+          type.matchSync(
+            new SyncReadableTap(falseBuf),
+            new SyncReadableTap(type.toSyncBuffer(false)),
+          ),
+          0,
+        );
+      });
     });
   });
 

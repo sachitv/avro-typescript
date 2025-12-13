@@ -2,6 +2,10 @@ import type {
   ReadableTapLike,
   WritableTapLike,
 } from "../../serialization/tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../serialization/sync_tap.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
 import type { JSONType } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
@@ -96,5 +100,35 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     tap2: ReadableTapLike,
   ): Promise<number> {
     return await tap1.matchBoolean(tap2);
+  }
+
+  /**
+   * Reads a boolean value synchronously from the tap.
+   */
+  public override readSync(tap: SyncReadableTapLike): boolean {
+    return tap.readBoolean();
+  }
+
+  /**
+   * Writes a boolean value synchronously to the tap.
+   */
+  public override writeSync(
+    tap: SyncWritableTapLike,
+    value: boolean,
+  ): void {
+    if (typeof value !== "boolean") {
+      throwInvalidError([], value, this);
+    }
+    tap.writeBoolean(value);
+  }
+
+  /**
+   * Matches two boolean values synchronously from the taps.
+   */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchBoolean(tap2);
   }
 }

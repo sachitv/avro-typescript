@@ -2,6 +2,10 @@ import type {
   ReadableTapLike,
   WritableTapLike,
 } from "../../serialization/tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../serialization/sync_tap.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
 import type { JSONType } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
@@ -92,5 +96,34 @@ export class NullType extends FixedSizeBaseType<null> {
     _tap2: ReadableTapLike,
   ): Promise<number> {
     return await Promise.resolve(0);
+  }
+
+  /**
+   * Reads a null value synchronously from the tap.
+   */
+  public override readSync(_tap: SyncReadableTapLike): null {
+    return null;
+  }
+
+  /**
+   * Writes a null value synchronously to the tap.
+   */
+  public override writeSync(
+    _tap: SyncWritableTapLike,
+    value: null,
+  ): void {
+    if (value !== null) {
+      throwInvalidError([], value, this);
+    }
+  }
+
+  /**
+   * Compares two null values synchronously in the taps.
+   */
+  public override matchSync(
+    _tap1: SyncReadableTapLike,
+    _tap2: SyncReadableTapLike,
+  ): number {
+    return 0;
   }
 }
