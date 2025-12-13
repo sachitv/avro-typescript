@@ -2,6 +2,10 @@ import type {
   ReadableTapLike,
   WritableTapLike,
 } from "../../serialization/tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../serialization/sync_tap.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
 import type { JSONType, Type } from "../type.ts";
 import { Resolver } from "../resolver.ts";
@@ -48,6 +52,32 @@ export class DoubleType extends FixedSizeBaseType<number> {
     await tap.skipDouble();
   }
 
+  /** Reads a double value from the sync tap. */
+  public readSync(tap: SyncReadableTapLike): number {
+    return tap.readDouble();
+  }
+
+  /** Writes a double value to the sync tap. */
+  public writeSync(tap: SyncWritableTapLike, value: number): void {
+    if (!this.check(value)) {
+      throwInvalidError([], value, this);
+    }
+    tap.writeDouble(value);
+  }
+
+  /** Skips a double value in the sync tap. */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    tap.skipDouble();
+  }
+
+  /** Matches two sync taps for equality. */
+  public matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchDouble(tap2);
+  }
+
   /**
    * Gets the size in bytes.
    */
@@ -84,6 +114,11 @@ export class DoubleType extends FixedSizeBaseType<number> {
           const intValue = await tap.readInt();
           return intValue;
         }
+
+        public override readSync(tap: SyncReadableTapLike): number {
+          const intValue = tap.readInt();
+          return intValue;
+        }
       }(this);
     } else if (writerType instanceof LongType) {
       // Double can promote from long (64-bit to 64-bit double, lossy for large values)
@@ -92,12 +127,22 @@ export class DoubleType extends FixedSizeBaseType<number> {
           const longValue = await tap.readLong();
           return Number(longValue);
         }
+
+        public override readSync(tap: SyncReadableTapLike): number {
+          const longValue = tap.readLong();
+          return Number(longValue);
+        }
       }(this);
     } else if (writerType instanceof FloatType) {
       // Double can promote from float (32-bit to 64-bit double)
       return new class extends Resolver {
         public override async read(tap: ReadableTapLike): Promise<number> {
           const floatValue = await tap.readFloat();
+          return floatValue;
+        }
+
+        public override readSync(tap: SyncReadableTapLike): number {
+          const floatValue = tap.readFloat();
           return floatValue;
         }
       }(this);

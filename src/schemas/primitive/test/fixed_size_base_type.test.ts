@@ -1,7 +1,8 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { FixedSizeBaseType } from "../fixed_size_base_type.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
+import { SyncReadableTap, SyncWritableTap } from "../../../serialization/sync_tap.ts";
 import { type ErrorHook, ValidationError } from "../../error.ts";
 import type { JSONType } from "../../type.ts";
 
@@ -50,6 +51,18 @@ class TestFixedSizeType extends FixedSizeBaseType<number> {
   public override async match(tap1: Tap, tap2: Tap): Promise<number> {
     return await tap1.matchInt(tap2);
   }
+
+  public override readSync(tap: SyncReadableTap): number {
+    return tap.readInt() || 0;
+  }
+
+  public override writeSync(tap: SyncWritableTap, value: number): void {
+    tap.writeInt(value);
+  }
+
+  public override matchSync(tap1: SyncReadableTap, tap2: SyncReadableTap): number {
+    return tap1.matchInt(tap2);
+  }
 }
 
 describe("FixedSizeBaseType", () => {
@@ -94,6 +107,50 @@ describe("FixedSizeBaseType", () => {
         await type.match(new Tap(buf1), new Tap(await type.toBuffer(1))),
         0,
       );
+    });
+  });
+
+  describe("sync APIs", () => {
+    describe("toSyncBuffer", () => {
+      it("should serialize value using fixed size synchronously", () => {
+        const value = 42;
+        const buffer = type.toSyncBuffer(value);
+        assertEquals(buffer.byteLength, 4);
+        const tap = new SyncReadableTap(buffer);
+        assertEquals(type.readSync(tap), value);
+      });
+
+      it("should throw ValidationError for invalid value", () => {
+        assertThrows(() => {
+          type.toSyncBuffer("invalid" as unknown as number);
+        }, ValidationError);
+      });
+    });
+
+    describe("skipSync", () => {
+      it("should skip fixed-size value synchronously", () => {
+        const value = 42;
+        const buffer = type.toSyncBuffer(value);
+        const tap = new SyncReadableTap(buffer);
+        const posBefore = tap.getPos();
+        type.skipSync(tap);
+        const posAfter = tap.getPos();
+        assertEquals(posAfter - posBefore, 4); // sizeBytes() returns 4
+      });
+    });
+
+    describe("matchSync", () => {
+      it("should match encoded buffers synchronously", () => {
+        const buf1 = type.toSyncBuffer(1);
+        const buf2 = type.toSyncBuffer(2);
+
+        assertEquals(type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)), -1);
+        assertEquals(type.matchSync(new SyncReadableTap(buf2), new SyncReadableTap(buf1)), 1);
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(type.toSyncBuffer(1))),
+          0,
+        );
+      });
     });
   });
 });

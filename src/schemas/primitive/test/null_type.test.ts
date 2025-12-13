@@ -1,6 +1,10 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/sync_tap.ts";
 import { NullType } from "../null_type.ts";
 import { ValidationError } from "../../error.ts";
 
@@ -96,6 +100,84 @@ describe("NullType", () => {
   describe("toJSON", () => {
     it('should return "null"', () => {
       assertEquals(type.toJSON(), "null");
+    });
+  });
+
+  describe("sync APIs", () => {
+    describe("readSync", () => {
+      it("should return null", () => {
+        const buffer = new ArrayBuffer(0);
+        const tap = new SyncReadableTap(buffer);
+        assertEquals(type.readSync(tap), null);
+      });
+    });
+
+    describe("writeSync", () => {
+      it("should write null to tap", () => {
+        const buffer = new ArrayBuffer(0);
+        const tap = new SyncWritableTap(buffer);
+        type.writeSync(tap, null);
+        // Nothing to assert, just shouldn't throw
+      });
+
+      it("should throw for non-null value", () => {
+        const buffer = new ArrayBuffer(0);
+        const tap = new SyncWritableTap(buffer);
+        assertThrows(() => {
+          // deno-lint-ignore no-explicit-any
+          (type as any).writeSync(tap, "invalid");
+        }, ValidationError);
+      });
+    });
+
+    describe("skipSync", () => {
+      it("should skip null in tap", () => {
+        const buffer = new ArrayBuffer(1);
+        const tap = new SyncReadableTap(buffer);
+        const posBefore = tap.getPos();
+        type.skipSync(tap);
+        const posAfter = tap.getPos();
+        assertEquals(posAfter - posBefore, 0);
+      });
+    });
+
+    describe("toSyncBuffer", () => {
+      it("should serialize null to buffer synchronously", () => {
+        const value = null;
+        const buffer = type.toSyncBuffer(value);
+        assertEquals(buffer.byteLength, 0);
+        const tap = new SyncReadableTap(buffer);
+        assertEquals(type.readSync(tap), value);
+      });
+
+      it("should throw ValidationError for invalid value", () => {
+        assertThrows(() => {
+          type.toSyncBuffer("invalid" as unknown as null);
+        }, ValidationError);
+      });
+    });
+
+    describe("fromSyncBuffer", () => {
+      it("should deserialize null from buffer synchronously", () => {
+        const value = null;
+        const buffer = type.toSyncBuffer(value);
+        const result = type.fromSyncBuffer(buffer);
+        assertEquals(result, value);
+      });
+
+      it("should deserialize from an empty buffer", () => {
+        const result = type.fromSyncBuffer(new ArrayBuffer(0));
+        assertEquals(result, null);
+      });
+    });
+
+    describe("matchSync", () => {
+      it("should always return 0 for null buffers", () => {
+        const buf1 = type.toSyncBuffer(null);
+        const buf2 = type.toSyncBuffer(null);
+
+        assertEquals(type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)), 0);
+      });
     });
   });
 

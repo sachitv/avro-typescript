@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
+import { SyncWritableTap } from "../../../serialization/sync_tap.ts";
 import { PrimitiveType } from "../primitive_type.ts";
 import type { JSONType, Type } from "../../type.ts";
 import { throwInvalidError, ValidationError } from "../../error.ts";
@@ -66,6 +67,33 @@ class TestPrimitiveType extends PrimitiveType<number> {
   public override async match(tap1: Tap, tap2: Tap): Promise<number> {
     return await tap1.matchInt(tap2);
   }
+
+  public override toSyncBuffer(value: number): ArrayBuffer {
+    // Allocate 5 bytes (max size for 32-bit int varint)
+    const buf = new ArrayBuffer(5);
+    const tap = new SyncWritableTap(buf);
+    this.writeSync(tap, value);
+    return buf.slice(0, tap.getPos());
+  }
+
+  public override readSync(tap: any): number {
+    return tap.readInt();
+  }
+
+  public override writeSync(tap: any, value: number): void {
+    if (!this.check(value)) {
+      throwInvalidError([], value, this);
+    }
+    tap.writeInt(value);
+  }
+
+  public override skipSync(tap: any): void {
+    tap.skipInt();
+  }
+
+  public override matchSync(tap1: any, tap2: any): number {
+    return tap1.matchInt(tap2);
+  }
 }
 
 /**
@@ -125,6 +153,33 @@ class FakePrimitiveType extends PrimitiveType<string> {
 
   public override async match(tap1: Tap, tap2: Tap): Promise<number> {
     return await tap1.matchString(tap2);
+  }
+
+  public override toSyncBuffer(value: string): ArrayBuffer {
+    const strBytes = encode(value);
+    const buf = new ArrayBuffer(5 + strBytes.length);
+    const tap = new SyncWritableTap(buf);
+    tap.writeString(value);
+    return buf.slice(0, tap.getPos());
+  }
+
+  public override readSync(tap: any): string {
+    return tap.readString()!;
+  }
+
+  public override writeSync(tap: any, value: string): void {
+    if (!this.check(value)) {
+      throwInvalidError([], value, this);
+    }
+    tap.writeString(value);
+  }
+
+  public override skipSync(tap: any): void {
+    tap.skipString();
+  }
+
+  public override matchSync(tap1: any, tap2: any): number {
+    return tap1.matchString(tap2);
   }
 }
 

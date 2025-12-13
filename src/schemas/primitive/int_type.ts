@@ -3,6 +3,11 @@ import {
   WritableTap,
   type WritableTapLike,
 } from "../../serialization/tap.ts";
+import {
+  type SyncReadableTapLike,
+  SyncWritableTap,
+  type SyncWritableTapLike,
+} from "../../serialization/sync_tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import type { JSONType } from "../type.ts";
 import { calculateVarintSize } from "../../internal/varint.ts";
@@ -83,5 +88,45 @@ export class IntType extends PrimitiveType<number> {
     tap2: ReadableTapLike,
   ): Promise<number> {
     return await tap1.matchInt(tap2);
+  }
+
+  /** Converts a 32-bit integer to its buffer representation synchronously. */
+  public override toSyncBuffer(value: number): ArrayBuffer {
+    this.check(value, throwInvalidError, []);
+    // For int, allocate exact size based on value
+    const size = calculateVarintSize(value);
+    const buf = new ArrayBuffer(size);
+    const tap = new SyncWritableTap(buf);
+    this.writeSync(tap, value);
+    return buf;
+  }
+
+  /** Reads a 32-bit integer synchronously from the tap. */
+  public override readSync(tap: SyncReadableTapLike): number {
+    return tap.readInt();
+  }
+
+  /** Writes a 32-bit integer synchronously to the tap. */
+  public override writeSync(
+    tap: SyncWritableTapLike,
+    value: number,
+  ): void {
+    if (!this.check(value)) {
+      throwInvalidError([], value, this);
+    }
+    tap.writeInt(value);
+  }
+
+  /** Skips a 32-bit integer synchronously in the tap. */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    tap.skipInt();
+  }
+
+  /** Matches two 32-bit integers synchronously in the taps. */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchInt(tap2);
   }
 }

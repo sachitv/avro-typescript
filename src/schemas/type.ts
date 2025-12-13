@@ -1,4 +1,5 @@
 import type { ReadableTapLike, WritableTapLike } from "../serialization/tap.ts";
+import type { SyncReadableTapLike, SyncWritableTapLike } from "../serialization/sync_tap.ts";
 import type { Resolver } from "./resolver.ts";
 import type { ErrorHook } from "./error.ts";
 
@@ -124,4 +125,49 @@ export abstract class Type<T = unknown> {
     tap1: ReadableTapLike,
     tap2: ReadableTapLike,
   ): Promise<number>;
+
+  /**
+   * Serializes a value into an ArrayBuffer synchronously using the schema.
+   * @param value The value to serialize.
+   * @returns The serialized ArrayBuffer.
+   */
+  public abstract toSyncBuffer(value: T): ArrayBuffer;
+
+  /**
+   * Deserializes an ArrayBuffer into a value synchronously using the schema.
+   * @param buffer The ArrayBuffer to deserialize.
+   * @returns The deserialized value.
+   */
+  public abstract fromSyncBuffer(buffer: ArrayBuffer): T;
+
+  /**
+   * Writes a value to the sync tap. Must be implemented by subclasses.
+   * @param tap The sync tap to write to.
+   * @param value The value to write.
+   */
+  public abstract writeSync(tap: SyncWritableTapLike, value: T): void;
+
+  /**
+   * Reads a value from the sync tap. Must be implemented by subclasses.
+   * @param tap The sync tap to read from.
+   * @returns The read value.
+   */
+  public abstract readSync(tap: SyncReadableTapLike): T;
+
+  /**
+   * Skips a value in the sync tap. Must be implemented by subclasses.
+   * @param tap The sync tap to skip from.
+   */
+  public abstract skipSync(tap: SyncReadableTapLike): void;
+
+  /**
+   * Compares two encoded buffers synchronously. Must be implemented by subclasses.
+   * @param tap1 The first sync tap.
+   * @param tap2 The second sync tap.
+   * @returns -1 if tap1 < tap2, 0 if equal, 1 if tap1 > tap2.
+   */
+  public abstract matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number;
 }

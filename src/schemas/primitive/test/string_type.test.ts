@@ -1,9 +1,11 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { StringType } from "../string_type.ts";
 import { BytesType } from "../bytes_type.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import { ReadableTap } from "../../../serialization/tap.ts";
+import { SyncReadableTap, SyncWritableTap } from "../../../serialization/sync_tap.ts";
+import { ReadBufferError } from "../../../serialization/buffers/sync_buffer.ts";
 
 describe("StringType", () => {
   const type = new StringType();
@@ -183,6 +185,121 @@ describe("StringType", () => {
         RangeError,
         "Attempt to read beyond buffer bounds.",
       );
+    });
+  });
+
+  describe("Sync API", () => {
+    it("toSyncBuffer should allocate enough space for multi-byte strings", () => {
+      const value = "\u00e9".repeat(40);
+      const buf = type.toSyncBuffer(value);
+      assertEquals(buf.byteLength, 82);
+      const tap = new SyncReadableTap(buf);
+      assertEquals(type.readSync(tap), value);
+    });
+
+    it("toSyncBuffer should throw ValidationError for invalid value", () => {
+      // deno-lint-ignore no-explicit-any
+      assertThrows(() => type.toSyncBuffer(123 as any));
+    });
+
+    it("toSyncBuffer and readSync should serialize and deserialize strings", () => {
+      const testStrings = ["hello", "", "test string", "🚀 emoji"];
+
+      for (const str of testStrings) {
+        const buf = type.toSyncBuffer(str);
+        const tap = new SyncReadableTap(buf);
+        assertEquals(type.readSync(tap), str);
+      }
+    });
+
+    it("writeSync should write strings to tap", () => {
+      const buf = new ArrayBuffer(100);
+      const writeTap = new SyncWritableTap(buf);
+      type.writeSync(writeTap, "test");
+      const readTap = new SyncReadableTap(buf);
+      assertEquals(type.readSync(readTap), "test");
+    });
+
+    it("writeSync should throw for non-strings", () => {
+      const buf = new ArrayBuffer(10);
+      const tap = new SyncWritableTap(buf);
+      // deno-lint-ignore no-explicit-any
+      const invalidValue: any = 123;
+      assertThrows(() => type.writeSync(tap, invalidValue), Error);
+    });
+
+    it("skipSync should skip string in tap", () => {
+      const str = "test";
+      const buffer = type.toSyncBuffer(str);
+      const tap = new SyncReadableTap(buffer);
+      const posBefore = tap.getPos();
+      type.skipSync(tap);
+      const posAfter = tap.getPos();
+      assertEquals(posAfter - posBefore, buffer.byteLength);
+    });
+
+    it("readSync should throw for insufficient data", () => {
+      const buf = new ArrayBuffer(5);
+      const writeTap = new SyncWritableTap(buf);
+      writeTap.writeLong(10n); // Need to write long first
+      const readTap = new SyncReadableTap(buf);
+      assertThrows(
+        () => type.readSync(readTap),
+        ReadBufferError,
+        "Operation exceeds buffer bounds",
+      );
+    });
+
+    it("matchSync should match encoded string buffers", () => {
+      const bufA = type.toSyncBuffer("a");
+      const bufB = type.toSyncBuffer("b");
+      const bufEmpty = type.toSyncBuffer("");
+
+      assertEquals(type.matchSync(new SyncReadableTap(bufA), new SyncReadableTap(bufB)), -1);
+      assertEquals(type.matchSync(new SyncReadableTap(bufB), new SyncReadableTap(bufA)), 1);
+      assertEquals(
+        type.matchSync(new SyncReadableTap(bufA), new SyncReadableTap(type.toSyncBuffer("a"))),
+        0,
+      );
+      assertEquals(
+        type.matchSync(new SyncReadableTap(bufEmpty), new SyncReadableTap(type.toSyncBuffer(""))),
+        0,
+      );
+    });
+
+    describe("createResolver sync", () => {
+      it("should create resolver for same type sync", () => {
+        const resolver = type.createResolver(type);
+        const str = "test";
+        const buffer = type.toSyncBuffer(str);
+        const tap = new SyncReadableTap(buffer);
+        const result = resolver.readSync(tap);
+        assertEquals(result, str);
+      });
+
+      it("should create resolver for BytesType writer sync", () => {
+        const bytesType = new BytesType();
+        const resolver = type.createResolver(bytesType);
+        const bytes = new Uint8Array([72, 101, 108, 108, 111]); // 'Hello'
+        const buffer = bytesType.toSyncBuffer(bytes);
+        const tap = new SyncReadableTap(buffer);
+        const result = resolver.readSync(tap);
+        assertEquals(result, "Hello");
+      });
+
+      it("should throw when reading bytes with insufficient data in resolver sync", () => {
+        const bytesType = new BytesType();
+        const resolver = type.createResolver(bytesType);
+        const buf = new ArrayBuffer(5);
+        const writeTap = new SyncWritableTap(buf);
+        writeTap.writeLong(10n);
+        const readTap = new SyncReadableTap(buf);
+        assertThrows(
+          () => resolver.readSync(readTap),
+          ReadBufferError,
+          "Operation exceeds buffer bounds",
+        );
+      });
     });
   });
 });

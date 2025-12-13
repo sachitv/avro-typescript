@@ -3,6 +3,11 @@ import {
   WritableTap,
   type WritableTapLike,
 } from "../../serialization/tap.ts";
+import {
+  type SyncReadableTapLike,
+  SyncWritableTap,
+  type SyncWritableTapLike,
+} from "../../serialization/sync_tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import type { JSONType, Type } from "../type.ts";
 import { Resolver } from "../resolver.ts";
@@ -84,6 +89,12 @@ export class StringType extends PrimitiveType<string> {
           // Convert bytes to string (assuming UTF-8)
           return decode(bytes);
         }
+
+        public override readSync(tap: SyncReadableTapLike): string {
+          const bytes = tap.readBytes();
+          // Convert bytes to string (assuming UTF-8)
+          return decode(bytes);
+        }
       }(this);
     } else {
       return super.createResolver(writerType);
@@ -101,5 +112,45 @@ export class StringType extends PrimitiveType<string> {
     tap2: ReadableTapLike,
   ): Promise<number> {
     return await tap1.matchString(tap2);
+  }
+
+  /** Converts a string value to its Avro-encoded buffer representation synchronously. */
+  public override toSyncBuffer(value: string): ArrayBuffer {
+    this.check(value, throwInvalidError, []);
+    const strBytes = encode(value);
+    const lengthSize = calculateVarintSize(strBytes.length);
+    const buf = new ArrayBuffer(lengthSize + strBytes.length);
+    const tap = new SyncWritableTap(buf);
+    this.writeSync(tap, value);
+    return buf;
+  }
+
+  /** Reads a string value synchronously from the tap. */
+  public override readSync(tap: SyncReadableTapLike): string {
+    return tap.readString();
+  }
+
+  /** Writes a string value synchronously to the tap. */
+  public override writeSync(
+    tap: SyncWritableTapLike,
+    value: string,
+  ): void {
+    if (typeof value !== "string") {
+      throwInvalidError([], value, this);
+    }
+    tap.writeString(value);
+  }
+
+  /** Skips a string value synchronously in the tap. */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    tap.skipString();
+  }
+
+  /** Matches two readable taps synchronously for string equality. */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchString(tap2);
   }
 }
