@@ -93,11 +93,21 @@ export { ForwardOnlyStreamReadableBufferAdapter } from "./serialization/streams/
 
 // Encoders/Decoders
 export type { Encoder } from "./serialization/encoders/encoder.ts";
+export type {
+  SyncEncoder,
+  SyncEncoderRegistry,
+} from "./serialization/encoders/sync_encoder.ts";
 export type { Decoder } from "./serialization/decoders/decoder.ts";
+export type {
+  SyncDecoder,
+  SyncDecoderRegistry,
+} from "./serialization/decoders/sync_decoder.ts";
 export { NullEncoder } from "./serialization/encoders/null_encoder.ts";
 export { DeflateEncoder } from "./serialization/encoders/deflate_encoder.ts";
+export { NullSyncEncoder } from "./serialization/encoders/null_sync_encoder.ts";
 export { NullDecoder } from "./serialization/decoders/null_decoder.ts";
 export { DeflateDecoder } from "./serialization/decoders/deflate_decoder.ts";
+export { NullSyncDecoder } from "./serialization/decoders/null_sync_decoder.ts";
 
 // Taps
 export type { ReadableTapLike, WritableTapLike } from "./serialization/tap.ts";
