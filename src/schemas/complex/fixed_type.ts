@@ -3,6 +3,11 @@ import {
   WritableTap,
   type WritableTapLike,
 } from "../../serialization/tap.ts";
+import {
+  type SyncReadableTapLike,
+  SyncWritableTap,
+  type SyncWritableTapLike,
+} from "../../serialization/sync_tap.ts";
 import { NamedType } from "./named_type.ts";
 import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
@@ -63,11 +68,30 @@ export class FixedType extends NamedType<Uint8Array> {
   }
 
   /**
+   * Builds a synchronous buffer containing the fixed-length data.
+   */
+  public override toSyncBuffer(value: Uint8Array): ArrayBuffer {
+    this.check(value, throwInvalidError, []);
+    const size = this.sizeBytes();
+    const buf = new ArrayBuffer(size);
+    const tap = new SyncWritableTap(buf);
+    tap.writeFixed(value);
+    return buf;
+  }
+
+  /**
    * Skips a fixed-size value by advancing the tap by the fixed size.
    * @param tap The tap to skip from.
    */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipFixed(this.sizeBytes());
+  }
+
+  /**
+   * Advances a sync tap past the fixed payload without reading.
+   */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    tap.skipFixed(this.sizeBytes());
   }
 
   /**
@@ -108,6 +132,13 @@ export class FixedType extends NamedType<Uint8Array> {
   }
 
   /**
+   * Reads the fixed bytes synchronously from a tap.
+   */
+  public override readSync(tap: SyncReadableTapLike): Uint8Array {
+    return tap.readFixed(this.#size);
+  }
+
+  /**
    * Writes a fixed-size byte array to the tap.
    * @param tap The tap to write to.
    * @param value The byte array to write.
@@ -123,6 +154,19 @@ export class FixedType extends NamedType<Uint8Array> {
   }
 
   /**
+   * Writes the fixed bytes synchronously without awaiting.
+   */
+  public override writeSync(
+    tap: SyncWritableTapLike,
+    value: Uint8Array,
+  ): void {
+    if (!(value instanceof Uint8Array) || value.length !== this.#size) {
+      throwInvalidError([], value, this);
+    }
+    tap.writeFixed(value);
+  }
+
+  /**
    * Matches two fixed-size byte arrays from the taps.
    * @param tap1 The first tap.
    * @param tap2 The second tap.
@@ -133,6 +177,16 @@ export class FixedType extends NamedType<Uint8Array> {
     tap2: ReadableTapLike,
   ): Promise<number> {
     return await tap1.matchFixed(tap2, this.#size);
+  }
+
+  /**
+   * Compares two sync taps that decode fixed values.
+   */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchFixed(tap2, this.#size);
   }
 
   /**
@@ -252,5 +306,10 @@ class FixedResolver extends Resolver<Uint8Array> {
   public override async read(tap: ReadableTapLike): Promise<Uint8Array> {
     const reader = this.readerType as FixedType;
     return await reader.read(tap);
+  }
+
+  public override readSync(tap: SyncReadableTapLike): Uint8Array {
+    const reader = this.readerType as FixedType;
+    return reader.readSync(tap);
   }
 }

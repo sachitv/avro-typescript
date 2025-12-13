@@ -17,9 +17,13 @@ import { FixedType } from "../fixed_type.ts";
 import { Type } from "../../type.ts";
 import type { Resolver } from "../../resolver.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/sync_tap.ts";
 
 describe("UnionType", () => {
-  describe("union with null", () => {
+  describe("null union handling", () => {
     /*
      * Union Structure:
      * Union
@@ -413,6 +417,14 @@ describe("UnionType", () => {
         assertEquals(result, { string: "test" });
       });
 
+      it("reads branch resolver synchronously", () => {
+        const resolver = unionType.createResolver(stringType);
+        const buffer = stringType.toSyncBuffer("sync");
+        assertEquals(resolver.readSync(new SyncReadableTap(buffer)), {
+          string: "sync",
+        });
+      });
+
       it("UnionFromUnionResolver throws for invalid index", async () => {
         const resolver = unionType.createResolver(unionType);
         // Create buffer with invalid index 999
@@ -425,6 +437,14 @@ describe("UnionType", () => {
           Error,
           "Invalid union index: 999",
         );
+      });
+
+      it("reads union-to-union resolver synchronously", () => {
+        const resolver = unionType.createResolver(unionType);
+        const buffer = unionType.toSyncBuffer({ string: "sync" });
+        assertEquals(resolver.readSync(new SyncReadableTap(buffer)), {
+          string: "sync",
+        });
       });
     });
   });
@@ -880,12 +900,166 @@ describe("UnionType", () => {
         async match(): Promise<number> {
           return await Promise.resolve(0);
         }
+        toSyncBuffer(): ArrayBuffer {
+          return new ArrayBuffer(0);
+        }
+
+        fromSyncBuffer(): string {
+          return "";
+        }
+
+        writeSync(): void {}
+
+        readSync(): string {
+          return "";
+        }
+
+        skipSync(): void {}
+
+        matchSync(): number {
+          return 0;
+        }
       })();
       assertThrows(
         () => new UnionType({ types: [invalidType] }),
         Error,
         "Unable to determine union branch name.",
       );
+    });
+
+    it("throws when readSync encounters invalid union index", () => {
+      const union = new UnionType({ types: [new StringType()] });
+      const buffer = new ArrayBuffer(8);
+      const tap = new SyncWritableTap(buffer);
+      tap.writeLong(123n);
+      const readTap = new SyncReadableTap(buffer);
+      assertThrows(
+        () => union.readSync(readTap),
+        Error,
+        "Invalid union index: 123",
+      );
+    });
+
+    it("UnionFromUnionResolver throws for invalid index via sync tap", () => {
+      const union = new UnionType({ types: [new StringType()] });
+      const resolver = union.createResolver(union);
+      const buffer = new ArrayBuffer(8);
+      const tap = new SyncWritableTap(buffer);
+      tap.writeLong(999n);
+      const readTap = new SyncReadableTap(buffer);
+      assertThrows(
+        () => resolver.readSync(readTap),
+        Error,
+        "Invalid union index: 999",
+      );
+    });
+
+    describe("sync helpers", () => {
+      const syncUnion = new UnionType({
+        types: [new NullType(), new StringType()],
+      });
+
+      it("round-trips via sync buffer", () => {
+        const stringValue = { string: "sync" };
+        const stringBuffer = syncUnion.toSyncBuffer(stringValue);
+        assertEquals(syncUnion.fromSyncBuffer(stringBuffer), stringValue);
+
+        const nullBuffer = syncUnion.toSyncBuffer(null);
+        assertEquals(syncUnion.fromSyncBuffer(nullBuffer), null);
+      });
+
+      it("reads and writes via sync taps", () => {
+        const value = { string: "sync" };
+        const buffer = new ArrayBuffer(64);
+        const writeTap = new SyncWritableTap(buffer);
+        syncUnion.writeSync(writeTap, value);
+        const readTap = new SyncReadableTap(buffer);
+        assertEquals(syncUnion.readSync(readTap), value);
+        assertEquals(readTap.getPos(), writeTap.getPos());
+      });
+
+      it("skips values via sync taps", () => {
+        const buffer = syncUnion.toSyncBuffer(null);
+        const tap = new SyncReadableTap(buffer);
+        syncUnion.skipSync(tap);
+        assertEquals(tap.getPos(), buffer.byteLength);
+      });
+
+      it("skips non-null values via sync taps", () => {
+        const buffer = syncUnion.toSyncBuffer({ string: "skip" });
+        const tap = new SyncReadableTap(buffer);
+        syncUnion.skipSync(tap);
+        assertEquals(tap.getPos(), buffer.byteLength);
+      });
+
+      it("matches encoded buffers via sync taps", () => {
+        const bufNull = syncUnion.toSyncBuffer(null);
+        const bufString = syncUnion.toSyncBuffer({ string: "a" });
+        assertEquals(
+          syncUnion.matchSync(
+            new SyncReadableTap(bufNull),
+            new SyncReadableTap(bufString),
+          ),
+          -1,
+        );
+        assertEquals(
+          syncUnion.matchSync(
+            new SyncReadableTap(bufString),
+            new SyncReadableTap(bufString),
+          ),
+          0,
+        );
+        assertEquals(
+          syncUnion.matchSync(
+            new SyncReadableTap(bufNull),
+            new SyncReadableTap(bufNull),
+          ),
+          0,
+        );
+      });
+
+      it("matches identical non-null branches via sync taps", () => {
+        const bufString = syncUnion.toSyncBuffer({ string: "same" });
+        assertEquals(
+          syncUnion.matchSync(
+            new SyncReadableTap(bufString),
+            new SyncReadableTap(bufString),
+          ),
+          0,
+        );
+      });
+
+      it("compares different non-null branches via sync taps", () => {
+        const multiUnion = new UnionType({
+          types: [new IntType(), new StringType()],
+        });
+        const bufInt = multiUnion.toSyncBuffer({ int: 1 });
+        const bufString = multiUnion.toSyncBuffer({ string: "a" });
+        // int branch (index 0) < string branch (index 1)
+        assertEquals(
+          multiUnion.matchSync(
+            new SyncReadableTap(bufInt),
+            new SyncReadableTap(bufString),
+          ),
+          -1,
+        );
+        // string branch (index 1) > int branch (index 0)
+        assertEquals(
+          multiUnion.matchSync(
+            new SyncReadableTap(bufString),
+            new SyncReadableTap(bufInt),
+          ),
+          1,
+        );
+      });
+
+      it("returns null from sync resolver when branch is null", () => {
+        const resolver = syncUnion.createResolver(new NullType());
+        assertEquals(
+          resolver.readSync(new SyncReadableTap(new ArrayBuffer(0))),
+          null,
+        );
+      });
     });
   });
 });

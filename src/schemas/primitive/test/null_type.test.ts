@@ -176,7 +176,10 @@ describe("NullType", () => {
         const buf1 = type.toSyncBuffer(null);
         const buf2 = type.toSyncBuffer(null);
 
-        assertEquals(type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)), 0);
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)),
+          0,
+        );
       });
     });
   });

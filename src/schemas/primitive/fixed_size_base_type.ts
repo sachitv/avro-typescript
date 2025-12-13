@@ -1,5 +1,8 @@
 import { type ReadableTapLike, WritableTap } from "../../serialization/tap.ts";
-import { SyncWritableTap, type SyncReadableTapLike } from "../../serialization/sync_tap.ts";
+import {
+  type SyncReadableTapLike,
+  SyncWritableTap,
+} from "../../serialization/sync_tap.ts";
 import { BaseType } from "../base_type.ts";
 import { throwInvalidError } from "../error.ts";
 

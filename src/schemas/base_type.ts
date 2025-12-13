@@ -1,5 +1,8 @@
 import { ReadableTap, type ReadableTapLike } from "../serialization/tap.ts";
-import { SyncReadableTap, type SyncReadableTapLike } from "../serialization/sync_tap.ts";
+import {
+  SyncReadableTap,
+  type SyncReadableTapLike,
+} from "../serialization/sync_tap.ts";
 import { Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
 import { safeStringify } from "./json.ts";

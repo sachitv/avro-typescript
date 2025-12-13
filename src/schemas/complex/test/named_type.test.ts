@@ -2,6 +2,10 @@ import { assert, assertEquals } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../../serialization/sync_tap.ts";
 import { NamedType } from "../named_type.ts";
 import { type ResolvedNames, resolveNames } from "../resolve_names.ts";
 import type { JSONType } from "../../type.ts";
@@ -55,37 +59,67 @@ class DummyNamedType extends NamedType<string> {
   public override async match(_tap1: Tap, _tap2: Tap): Promise<number> {
     return 0;
   }
+
+  public override toSyncBuffer(_value: string): ArrayBuffer {
+    return new ArrayBuffer(0);
+  }
+
+  public override fromSyncBuffer(_buffer: ArrayBuffer): string {
+    return "";
+  }
+
+  public override writeSync(
+    _tap: SyncWritableTapLike,
+    _value: string,
+  ): void {}
+
+  public override readSync(_tap: SyncReadableTapLike): string {
+    return "";
+  }
+
+  public override skipSync(_tap: SyncReadableTapLike): void {}
+
+  public override matchSync(
+    _tap1: SyncReadableTapLike,
+    _tap2: SyncReadableTapLike,
+  ): number {
+    return 0;
+  }
 }
 
 describe("NamedType", () => {
-  it("resolves fully qualified name and namespace", () => {
-    const params = {
-      name: "Person",
-      namespace: "com.example",
-      aliases: ["LegacyPerson", "other.Alias"],
-    };
-    const resolved = resolveNames(params);
-    const type = new DummyNamedType(resolved);
+  describe("name resolution", () => {
+    it("resolves fully qualified name and namespace", () => {
+      const params = {
+        name: "Person",
+        namespace: "com.example",
+        aliases: ["LegacyPerson", "other.Alias"],
+      };
+      const resolved = resolveNames(params);
+      const type = new DummyNamedType(resolved);
 
-    assertEquals(type.getFullName(), resolved.fullName);
-    assertEquals(type.getNamespace(), resolved.namespace);
-    assertEquals(type.getAliases(), resolved.aliases);
-    assert(type.matchesName("com.example.Person"));
-    assert(type.matchesName("com.example.LegacyPerson"));
-    assert(type.matchesName("other.Alias"));
+      assertEquals(type.getFullName(), resolved.fullName);
+      assertEquals(type.getNamespace(), resolved.namespace);
+      assertEquals(type.getAliases(), resolved.aliases);
+      assert(type.matchesName("com.example.Person"));
+      assert(type.matchesName("com.example.LegacyPerson"));
+      assert(type.matchesName("other.Alias"));
+    });
   });
 
-  it("match should return 0", async () => {
-    const params = {
-      name: "Test",
-      namespace: "test",
-    };
-    const resolved = resolveNames(params);
-    const type = new DummyNamedType(resolved);
+  describe("match operations", () => {
+    it("match should return 0", async () => {
+      const params = {
+        name: "Test",
+        namespace: "test",
+      };
+      const resolved = resolveNames(params);
+      const type = new DummyNamedType(resolved);
 
-    const buf1 = await type.toBuffer("a");
-    const buf2 = await type.toBuffer("b");
+      const buf1 = await type.toBuffer("a");
+      const buf2 = await type.toBuffer("b");
 
-    assertEquals(await type.match(new Tap(buf1), new Tap(buf2)), 0);
+      assertEquals(await type.match(new Tap(buf1), new Tap(buf2)), 0);
+    });
   });
 });

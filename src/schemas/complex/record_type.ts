@@ -7,6 +7,10 @@ import { Resolver } from "../resolver.ts";
 import { type JSONType, Type } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
 import { isValidName, type ResolvedNames } from "./resolve_names.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../serialization/sync_tap.ts";
 
 /**
  * Specifies the sort order for record fields.
@@ -261,6 +265,23 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   }
 
   /**
+   * Serializes every field synchronously onto the tap, honoring defaults.
+   */
+  public override writeSync(
+    tap: SyncWritableTapLike,
+    value: Record<string, unknown>,
+  ): void {
+    this.#ensureFields();
+    if (!this.#isRecord(value)) {
+      throwInvalidError([], value, this);
+    }
+
+    for (const field of this.#fields) {
+      this.#writeFieldSync(field, value, tap);
+    }
+  }
+
+  /**
    * Reads a record value from the tap.
    * @param tap The readable tap to read from.
    * @returns The read record value.
@@ -277,6 +298,18 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   }
 
   /**
+   * Reads every field synchronously using each field type's sync reader.
+   */
+  public override readSync(tap: SyncReadableTapLike): Record<string, unknown> {
+    this.#ensureFields();
+    const result: Record<string, unknown> = {};
+    for (const field of this.#fields) {
+      result[field.getName()] = field.getType().readSync(tap);
+    }
+    return result;
+  }
+
+  /**
    * Skips a record value in the tap.
    * @param tap The readable tap to skip in.
    */
@@ -284,6 +317,16 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     this.#ensureFields();
     for (const field of this.#fields) {
       await field.getType().skip(tap);
+    }
+  }
+
+  /**
+   * Skips all fields synchronously without materializing values.
+   */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    this.#ensureFields();
+    for (const field of this.#fields) {
+      field.getType().skipSync(tap);
     }
   }
 
@@ -303,6 +346,31 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     const buffers: Uint8Array[] = [];
     for (const field of this.#fields) {
       buffers.push(await this.#getFieldBuffer(field, value));
+    }
+
+    const totalSize = buffers.reduce((sum, buf) => sum + buf.byteLength, 0);
+    const combined = new Uint8Array(totalSize);
+    let offset = 0;
+    for (const buf of buffers) {
+      combined.set(buf, offset);
+      offset += buf.byteLength;
+    }
+
+    return combined.buffer;
+  }
+
+  /**
+   * Encodes every field synchronously into a single buffer.
+   */
+  public override toSyncBuffer(value: Record<string, unknown>): ArrayBuffer {
+    this.#ensureFields();
+    if (!this.#isRecord(value)) {
+      throwInvalidError([], value, this);
+    }
+
+    const buffers: Uint8Array[] = [];
+    for (const field of this.#fields) {
+      buffers.push(this.#getFieldBufferSync(field, value));
     }
 
     const totalSize = buffers.reduce((sum, buf) => sum + buf.byteLength, 0);
@@ -436,6 +504,30 @@ export class RecordType extends NamedType<Record<string, unknown>> {
       } else {
         await type.skip(tap1);
         await type.skip(tap2);
+      }
+    }
+    return 0;
+  }
+
+  /**
+   * Matches two buffers of serialized records synchronously, honoring field order.
+   */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    this.#ensureFields();
+    for (const field of this.#fields) {
+      const order = this.#getOrderValue(field.getOrder());
+      const type = field.getType();
+      if (order !== 0) {
+        const result = type.matchSync(tap1, tap2) * order;
+        if (result !== 0) {
+          return result;
+        }
+      } else {
+        type.skipSync(tap1);
+        type.skipSync(tap2);
       }
     }
     return 0;
@@ -624,6 +716,25 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     await field.getType().write(tap, toWrite as unknown);
   }
 
+  /**
+   * Writes a single field using the field's sync writer, respecting defaults.
+   */
+  #writeFieldSync(
+    field: RecordField,
+    record: Record<string, unknown>,
+    tap: SyncWritableTapLike,
+  ): void {
+    const { hasValue, fieldValue } = this.#extractFieldValue(record, field);
+    let toWrite = fieldValue;
+    if (!hasValue) {
+      if (!field.hasDefault()) {
+        throwInvalidError([field.getName()], undefined, this);
+      }
+      toWrite = field.getDefault();
+    }
+    field.getType().writeSync(tap, toWrite as unknown);
+  }
+
   async #getFieldBuffer(
     field: RecordField,
     record: Record<string, unknown>,
@@ -637,6 +748,24 @@ export class RecordType extends NamedType<Record<string, unknown>> {
       toEncode = field.getDefault();
     }
     return new Uint8Array(await field.getType().toBuffer(toEncode));
+  }
+
+  /**
+   * Encodes a single field synchronously into a Uint8Array.
+   */
+  #getFieldBufferSync(
+    field: RecordField,
+    record: Record<string, unknown>,
+  ): Uint8Array {
+    const { hasValue, fieldValue } = this.#extractFieldValue(record, field);
+    let toEncode = fieldValue;
+    if (!hasValue) {
+      if (!field.hasDefault()) {
+        throwInvalidError([field.getName()], undefined, this);
+      }
+      toEncode = field.getDefault();
+    }
+    return new Uint8Array(field.getType().toSyncBuffer(toEncode));
   }
 
   #cloneField(
@@ -703,6 +832,40 @@ class RecordResolver extends Resolver<Record<string, unknown>> {
       const value = mapping.resolver
         ? await mapping.resolver.read(tap)
         : await mapping.writerField.getType().read(tap);
+
+      const readerField = this.#readerFields[mapping.readerIndex];
+      result[readerField.getName()] = value;
+      seen[mapping.readerIndex] = true;
+    }
+
+    for (let i = 0; i < this.#readerFields.length; i++) {
+      if (!seen[i]) {
+        const field = this.#readerFields[i];
+        result[field.getName()] = field.getDefault();
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Resolves incoming data synchronously, applying missing defaults as needed.
+   */
+  public override readSync(
+    tap: SyncReadableTapLike,
+  ): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    const seen = new Array(this.#readerFields.length).fill(false);
+
+    for (const mapping of this.#mappings) {
+      if (mapping.readerIndex === -1) {
+        mapping.writerField.getType().skipSync(tap);
+        continue;
+      }
+
+      const value = mapping.resolver
+        ? mapping.resolver.readSync(tap)
+        : mapping.writerField.getType().readSync(tap);
 
       const readerField = this.#readerFields[mapping.readerIndex];
       result[readerField.getName()] = value;

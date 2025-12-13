@@ -49,6 +49,10 @@
 - Keep documentation and examples aligned with the runtime structure so
   consumers can trace primitives, complexes, and logical types from namespaced
   exports to file paths.
+- Sync APIs (`readSync`, `writeSync`, `skipSync`, `matchSync`, `toSyncBuffer`,
+  etc.) must be 1:1 ports of their async counterparts that differ only in the
+  taps/buffers they use; reviewers should flag any divergence in validation,
+  control flow, or emitted binary layout between the async and sync paths.
 
 ## Testing Guidelines
 

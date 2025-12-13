@@ -9,6 +9,10 @@ import { StringType } from "../../primitive/string_type.ts";
 import { FixedType } from "../../complex/fixed_type.ts";
 import { resolveNames } from "../../complex/resolve_names.ts";
 import { ReadableTap, WritableTap } from "../../../serialization/tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/sync_tap.ts";
 import { ValidationError } from "../../error.ts";
 
 // A simple test logical type that wraps strings
@@ -424,5 +428,46 @@ describe("withLogicalTypeJSON", () => {
       Error,
       "Unsupported underlying schema for logical type serialization.",
     );
+  });
+
+  describe("sync helpers", () => {
+    const type = new TestLogicalType();
+
+    it("round-trips via sync buffer", () => {
+      const buffer = type.toSyncBuffer("sync");
+      assertEquals(type.fromSyncBuffer(buffer), "sync");
+    });
+
+    it("writes, reads, and skips via sync taps", () => {
+      const buffer = new ArrayBuffer(64);
+      const writeTap = new SyncWritableTap(buffer);
+      type.writeSync(writeTap, "sync");
+      const readTap = new SyncReadableTap(buffer);
+      assertEquals(type.readSync(readTap), "sync");
+      assertEquals(readTap.getPos(), writeTap.getPos());
+
+      const skipTap = new SyncReadableTap(buffer);
+      type.skipSync(skipTap);
+      assertEquals(skipTap.getPos(), writeTap.getPos());
+    });
+
+    it("matches buffers via matchSync", () => {
+      const bufA = type.toSyncBuffer("a");
+      const bufB = type.toSyncBuffer("b");
+      assertEquals(
+        type.matchSync(new SyncReadableTap(bufA), new SyncReadableTap(bufB)),
+        -1,
+      );
+      assertEquals(
+        type.matchSync(new SyncReadableTap(bufA), new SyncReadableTap(bufA)),
+        0,
+      );
+    });
+
+    it("resolver.readSync returns logical values", () => {
+      const resolver = type.createResolver(type);
+      const buffer = type.toSyncBuffer("resolved");
+      assertEquals(resolver.readSync(new SyncReadableTap(buffer)), "resolved");
+    });
   });
 });

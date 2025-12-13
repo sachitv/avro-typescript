@@ -2,6 +2,10 @@ import type {
   ReadableTapLike,
   WritableTapLike,
 } from "../../serialization/tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../serialization/sync_tap.ts";
 import { Resolver } from "../resolver.ts";
 import type { NamedType } from "../complex/named_type.ts";
 import { Type } from "../type.ts";
@@ -78,6 +82,23 @@ export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
    */
   public override async fromBuffer(buffer: ArrayBuffer): Promise<TValue> {
     const underlying = await this.underlyingType.fromBuffer(buffer);
+    return this.fromUnderlying(underlying);
+  }
+
+  /**
+   * Delegates synchronous buffer serialization to the underlying type.
+   */
+  public override toSyncBuffer(value: TValue): ArrayBuffer {
+    this.ensureValid(value, []);
+    const underlying = this.toUnderlying(value);
+    return this.underlyingType.toSyncBuffer(underlying);
+  }
+
+  /**
+   * Converts a synchronous buffer into the logical value by decoding the underlying type.
+   */
+  public override fromSyncBuffer(buffer: ArrayBuffer): TValue {
+    const underlying = this.underlyingType.fromSyncBuffer(buffer);
     return this.fromUnderlying(underlying);
   }
 
@@ -164,9 +185,25 @@ export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
     await this.underlyingType.write(tap, this.toUnderlying(value));
   }
 
+  /**
+   * Writes the logical value synchronously via the underlying type's writer.
+   */
+  public override writeSync(tap: SyncWritableTapLike, value: TValue): void {
+    this.ensureValid(value, []);
+    this.underlyingType.writeSync(tap, this.toUnderlying(value));
+  }
+
   /** Reads the value from the tap. */
   public override async read(tap: ReadableTapLike): Promise<TValue> {
     const underlying = await this.underlyingType.read(tap);
+    return this.fromUnderlying(underlying);
+  }
+
+  /**
+   * Reads the logical value synchronously from the underlying type.
+   */
+  public override readSync(tap: SyncReadableTapLike): TValue {
+    const underlying = this.underlyingType.readSync(tap);
     return this.fromUnderlying(underlying);
   }
 
@@ -175,12 +212,29 @@ export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
     await this.underlyingType.skip(tap);
   }
 
+  /**
+   * Skips the logical value by skipping the underlying representation.
+   */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    this.underlyingType.skipSync(tap);
+  }
+
   /** Matches the value in the taps. */
   public override async match(
     tap1: ReadableTapLike,
     tap2: ReadableTapLike,
   ): Promise<number> {
     return await this.underlyingType.match(tap1, tap2);
+  }
+
+  /**
+   * Compares two sync taps by delegating to the underlying type match.
+   */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return this.underlyingType.matchSync(tap1, tap2);
   }
 
   /**
@@ -235,6 +289,14 @@ class LogicalResolver<TValue, TUnderlying> extends Resolver<TValue> {
 
   public override async read(tap: ReadableTapLike): Promise<TValue> {
     const underlying = await this.#resolver.read(tap);
+    return this.#logicalType.convertFromUnderlying(underlying);
+  }
+
+  /**
+   * Synchronously resolves logical values emitted by resolved streams.
+   */
+  public override readSync(tap: SyncReadableTapLike): TValue {
+    const underlying = this.#resolver.readSync(tap);
     return this.#logicalType.convertFromUnderlying(underlying);
   }
 }
