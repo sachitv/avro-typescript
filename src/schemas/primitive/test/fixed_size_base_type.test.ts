@@ -2,9 +2,9 @@ import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { FixedSizeBaseType } from "../fixed_size_base_type.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
-import type {
+import {
   SyncReadableTap,
-  SyncWritableTap,
+  type SyncWritableTap,
 } from "../../../serialization/sync_tap.ts";
 import { type ErrorHook, ValidationError } from "../../error.ts";
 import type { JSONType } from "../../type.ts";
