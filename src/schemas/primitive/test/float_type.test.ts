@@ -2,7 +2,10 @@ import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import { ReadableTap } from "../../../serialization/tap.ts";
-import { SyncReadableTap, SyncWritableTap } from "../../../serialization/sync_tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/sync_tap.ts";
 import { FloatType } from "../float_type.ts";
 import { IntType } from "../int_type.ts";
 import { LongType } from "../long_type.ts";
@@ -318,9 +321,18 @@ describe("FloatType", () => {
       const buf2 = type.toSyncBuffer(val2);
       const buf3 = type.toSyncBuffer(val3);
 
-      assertEquals(type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)), 0); // 1.0 == 1.0
-      assertEquals(type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf3)), -1); // 1.0 < 2.0
-      assertEquals(type.matchSync(new SyncReadableTap(buf3), new SyncReadableTap(buf1)), 1); // 2.0 > 1.0
+      assertEquals(
+        type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)),
+        0,
+      ); // 1.0 == 1.0
+      assertEquals(
+        type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf3)),
+        -1,
+      ); // 1.0 < 2.0
+      assertEquals(
+        type.matchSync(new SyncReadableTap(buf3), new SyncReadableTap(buf1)),
+        1,
+      ); // 2.0 > 1.0
     });
   });
 

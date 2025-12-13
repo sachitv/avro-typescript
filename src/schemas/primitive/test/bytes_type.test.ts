@@ -2,7 +2,10 @@ import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import type { ReadableTapLike } from "../../../serialization/tap.ts";
-import { SyncReadableTap, SyncWritableTap } from "../../../serialization/sync_tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/sync_tap.ts";
 import { BytesType } from "../bytes_type.ts";
 import { StringType } from "../string_type.ts";
 import { ValidationError } from "../../error.ts";
@@ -384,11 +387,26 @@ describe("BytesType", () => {
         const buf3 = type.toSyncBuffer(val3);
         const buf4 = type.toSyncBuffer(val4);
 
-        assertEquals(type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)), 0); // equal
-        assertEquals(type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf3)), -1); // [1,2,3] < [1,2,4]
-        assertEquals(type.matchSync(new SyncReadableTap(buf3), new SyncReadableTap(buf1)), 1); // [1,2,4] > [1,2,3]
-        assertEquals(type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf4)), 1); // longer > shorter
-        assertEquals(type.matchSync(new SyncReadableTap(buf4), new SyncReadableTap(buf1)), -1); // shorter < longer
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)),
+          0,
+        ); // equal
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf3)),
+          -1,
+        ); // [1,2,3] < [1,2,4]
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf3), new SyncReadableTap(buf1)),
+          1,
+        ); // [1,2,4] > [1,2,3]
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf4)),
+          1,
+        ); // longer > shorter
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf4), new SyncReadableTap(buf1)),
+          -1,
+        ); // shorter < longer
       });
     });
 

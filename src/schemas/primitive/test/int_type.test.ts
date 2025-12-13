@@ -347,18 +347,33 @@ describe("IntType", () => {
         const bufNeg = type.toSyncBuffer(-1);
         const bufZero = type.toSyncBuffer(0);
 
-        assertEquals(type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)), -1);
-        assertEquals(type.matchSync(new SyncReadableTap(buf2), new SyncReadableTap(buf1)), 1);
         assertEquals(
-          type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(type.toSyncBuffer(1))),
+          type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)),
+          -1,
+        );
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf2), new SyncReadableTap(buf1)),
+          1,
+        );
+        assertEquals(
+          type.matchSync(
+            new SyncReadableTap(buf1),
+            new SyncReadableTap(type.toSyncBuffer(1)),
+          ),
           0,
         );
         assertEquals(
-          type.matchSync(new SyncReadableTap(bufNeg), new SyncReadableTap(type.toSyncBuffer(-1))),
+          type.matchSync(
+            new SyncReadableTap(bufNeg),
+            new SyncReadableTap(type.toSyncBuffer(-1)),
+          ),
           0,
         );
         assertEquals(
-          type.matchSync(new SyncReadableTap(bufZero), new SyncReadableTap(type.toSyncBuffer(0))),
+          type.matchSync(
+            new SyncReadableTap(bufZero),
+            new SyncReadableTap(type.toSyncBuffer(0)),
+          ),
           0,
         );
       });
@@ -367,8 +382,20 @@ describe("IntType", () => {
         const minBuf = type.toSyncBuffer(-2147483648);
         const maxBuf = type.toSyncBuffer(2147483647);
 
-        assertEquals(type.matchSync(new SyncReadableTap(minBuf), new SyncReadableTap(maxBuf)), -1);
-        assertEquals(type.matchSync(new SyncReadableTap(maxBuf), new SyncReadableTap(minBuf)), 1);
+        assertEquals(
+          type.matchSync(
+            new SyncReadableTap(minBuf),
+            new SyncReadableTap(maxBuf),
+          ),
+          -1,
+        );
+        assertEquals(
+          type.matchSync(
+            new SyncReadableTap(maxBuf),
+            new SyncReadableTap(minBuf),
+          ),
+          1,
+        );
       });
     });
   });

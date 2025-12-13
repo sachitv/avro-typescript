@@ -9,6 +9,11 @@ import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
 import { calculateVarintSize } from "../../internal/varint.ts";
+import {
+  type SyncReadableTapLike,
+  SyncWritableTap,
+  type SyncWritableTapLike,
+} from "../../serialization/sync_tap.ts";
 
 /**
  * Helper function to read an array from a tap.
@@ -35,6 +40,30 @@ export async function readArrayInto<T>(
     }
     for (let i = 0; i < count; i++) {
       collect(await readElement(tap));
+    }
+  }
+}
+
+export function readArrayIntoSync<T>(
+  tap: SyncReadableTapLike,
+  readElement: (tap: SyncReadableTapLike) => T,
+  collect: (value: T) => void,
+): void {
+  /**
+   * Reads repeated blocks from the tap synchronously and collects decoded elements.
+   */
+  while (true) {
+    const rawCount = tap.readLong();
+    if (rawCount === 0n) {
+      break;
+    }
+    let count = bigIntToSafeNumber(rawCount, "Array block length");
+    if (count < 0) {
+      count = -count;
+      tap.skipLong();
+    }
+    for (let i = 0; i < count; i++) {
+      collect(readElement(tap));
     }
   }
 }
@@ -133,6 +162,23 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
   }
 
   /**
+   * Serializes the array synchronously to the provided tap.
+   */
+  public override writeSync(tap: SyncWritableTapLike, value: T[]): void {
+    if (!Array.isArray(value)) {
+      throwInvalidError([], value, this);
+    }
+
+    if (value.length > 0) {
+      tap.writeLong(BigInt(value.length));
+      for (const element of value) {
+        this.#itemsType.writeSync(tap, element);
+      }
+    }
+    tap.writeLong(0n);
+  }
+
+  /**
    * Overrides the base skip method to skip over an array in the tap.
    * @param tap The tap to skip from.
    */
@@ -162,6 +208,30 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
   }
 
   /**
+   * Advances the sync tap past the encoded array without decoding elements.
+   */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    while (true) {
+      const rawCount = tap.readLong();
+      if (rawCount === 0n) {
+        break;
+      }
+      let count = bigIntToSafeNumber(rawCount, "Array block length");
+      if (count < 0) {
+        count = -count;
+        const blockSize = Number(tap.readLong());
+        if (blockSize > 0) {
+          tap.skipFixed(blockSize);
+        }
+      } else {
+        for (let i = 0; i < count; i++) {
+          this.#itemsType.skipSync(tap);
+        }
+      }
+    }
+  }
+
+  /**
    * Overrides the base read method to deserialize an array.
    * @param tap The tap to read from.
    * @returns The deserialized array.
@@ -171,6 +241,24 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     await readArrayInto(
       tap,
       async (innerTap) => await this.#itemsType.read(innerTap),
+      (value) => {
+        result.push(value);
+      },
+    );
+    return result;
+  }
+
+  /**
+   * Reads the entire array synchronously from the tap.
+   */
+  /**
+   * Reads resolved elements synchronously through the item resolver.
+   */
+  public override readSync(tap: SyncReadableTapLike): T[] {
+    const result: T[] = [];
+    readArrayIntoSync(
+      tap,
+      (innerTap) => this.#itemsType.readSync(innerTap),
       (value) => {
         result.push(value);
       },
@@ -212,6 +300,42 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
       }
     }
     await tap.writeLong(0n);
+
+    return buffer;
+  }
+
+  /**
+   * Encodes the array synchronously into a dedicated buffer.
+   */
+  public override toSyncBuffer(value: T[]): ArrayBuffer {
+    if (!Array.isArray(value)) {
+      throwInvalidError([], value, this);
+    }
+
+    const elementBuffers = value.length === 0
+      ? []
+      : value.map((element) =>
+        new Uint8Array(this.#itemsType.toSyncBuffer(element))
+      );
+
+    let totalSize = 1; // final zero block terminator
+    if (value.length > 0) {
+      totalSize += calculateVarintSize(value.length);
+      for (const buf of elementBuffers) {
+        totalSize += buf.byteLength;
+      }
+    }
+
+    const buffer = new ArrayBuffer(totalSize);
+    const tap = new SyncWritableTap(buffer);
+
+    if (value.length > 0) {
+      tap.writeLong(BigInt(value.length));
+      for (const buf of elementBuffers) {
+        tap.writeFixed(buf);
+      }
+    }
+    tap.writeLong(0n);
 
     return buffer;
   }
@@ -303,7 +427,49 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
         n2 = await this.#readArraySize(tap2);
       }
     }
-    return n1 === n2 ? 0 : n1 < n2 ? -1 : 1;
+    if (n1 === n2) {
+      return 0;
+    }
+    if (n1 < n2) {
+      return -1;
+    }
+    return 1;
+  }
+
+  /**
+   * Compares two sync taps that encode arrays for ordering.
+   */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    let n1 = this.#readArraySizeSync(tap1);
+    let n2 = this.#readArraySizeSync(tap2);
+    while (n1 !== 0n && n2 !== 0n) {
+      const f = this.#itemsType.matchSync(tap1, tap2);
+      if (f !== 0) {
+        return f;
+      }
+      if (n1 > 0n) {
+        n1--;
+      }
+      if (n1 === 0n) {
+        n1 = this.#readArraySizeSync(tap1);
+      }
+      if (n2 > 0n) {
+        n2--;
+      }
+      if (n2 === 0n) {
+        n2 = this.#readArraySizeSync(tap2);
+      }
+    }
+    if (n1 === n2) {
+      return 0;
+    }
+    if (n1 < n2) {
+      return -1;
+    }
+    return 1;
   }
 
   async #readArraySize(tap: ReadableTapLike): Promise<bigint> {
@@ -311,6 +477,18 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     if (n < 0n) {
       n = -n;
       await tap.skipLong(); // skip size
+    }
+    return n;
+  }
+
+  /**
+   * Reads the next block header synchronously, respecting size-prefixed markers.
+   */
+  #readArraySizeSync(tap: SyncReadableTapLike): bigint {
+    let n = tap.readLong();
+    if (n < 0n) {
+      n = -n;
+      tap.skipLong();
     }
     return n;
   }
@@ -351,6 +529,18 @@ class ArrayResolver<T> extends Resolver<T[]> {
     await readArrayInto(
       tap,
       async (innerTap) => await this.#itemResolver.read(innerTap),
+      (value) => {
+        result.push(value);
+      },
+    );
+    return result;
+  }
+
+  public override readSync(tap: SyncReadableTapLike): T[] {
+    const result: T[] = [];
+    readArrayIntoSync(
+      tap,
+      (innerTap) => this.#itemResolver.readSync(innerTap),
       (value) => {
         result.push(value);
       },

@@ -4,7 +4,10 @@ import { StringType } from "../string_type.ts";
 import { BytesType } from "../bytes_type.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import { ReadableTap } from "../../../serialization/tap.ts";
-import { SyncReadableTap, SyncWritableTap } from "../../../serialization/sync_tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/sync_tap.ts";
 import { ReadBufferError } from "../../../serialization/buffers/sync_buffer.ts";
 
 describe("StringType", () => {
@@ -255,14 +258,26 @@ describe("StringType", () => {
       const bufB = type.toSyncBuffer("b");
       const bufEmpty = type.toSyncBuffer("");
 
-      assertEquals(type.matchSync(new SyncReadableTap(bufA), new SyncReadableTap(bufB)), -1);
-      assertEquals(type.matchSync(new SyncReadableTap(bufB), new SyncReadableTap(bufA)), 1);
       assertEquals(
-        type.matchSync(new SyncReadableTap(bufA), new SyncReadableTap(type.toSyncBuffer("a"))),
+        type.matchSync(new SyncReadableTap(bufA), new SyncReadableTap(bufB)),
+        -1,
+      );
+      assertEquals(
+        type.matchSync(new SyncReadableTap(bufB), new SyncReadableTap(bufA)),
+        1,
+      );
+      assertEquals(
+        type.matchSync(
+          new SyncReadableTap(bufA),
+          new SyncReadableTap(type.toSyncBuffer("a")),
+        ),
         0,
       );
       assertEquals(
-        type.matchSync(new SyncReadableTap(bufEmpty), new SyncReadableTap(type.toSyncBuffer(""))),
+        type.matchSync(
+          new SyncReadableTap(bufEmpty),
+          new SyncReadableTap(type.toSyncBuffer("")),
+        ),
         0,
       );
     });

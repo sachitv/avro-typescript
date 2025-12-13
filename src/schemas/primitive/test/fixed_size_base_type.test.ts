@@ -2,7 +2,10 @@ import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { FixedSizeBaseType } from "../fixed_size_base_type.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
-import { SyncReadableTap, SyncWritableTap } from "../../../serialization/sync_tap.ts";
+import type {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/sync_tap.ts";
 import { type ErrorHook, ValidationError } from "../../error.ts";
 import type { JSONType } from "../../type.ts";
 
@@ -60,7 +63,10 @@ class TestFixedSizeType extends FixedSizeBaseType<number> {
     tap.writeInt(value);
   }
 
-  public override matchSync(tap1: SyncReadableTap, tap2: SyncReadableTap): number {
+  public override matchSync(
+    tap1: SyncReadableTap,
+    tap2: SyncReadableTap,
+  ): number {
     return tap1.matchInt(tap2);
   }
 }
@@ -144,10 +150,19 @@ describe("FixedSizeBaseType", () => {
         const buf1 = type.toSyncBuffer(1);
         const buf2 = type.toSyncBuffer(2);
 
-        assertEquals(type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)), -1);
-        assertEquals(type.matchSync(new SyncReadableTap(buf2), new SyncReadableTap(buf1)), 1);
         assertEquals(
-          type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(type.toSyncBuffer(1))),
+          type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)),
+          -1,
+        );
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf2), new SyncReadableTap(buf1)),
+          1,
+        );
+        assertEquals(
+          type.matchSync(
+            new SyncReadableTap(buf1),
+            new SyncReadableTap(type.toSyncBuffer(1)),
+          ),
           0,
         );
       });

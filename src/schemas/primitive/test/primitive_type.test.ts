@@ -2,6 +2,7 @@ import { assert, assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import { SyncWritableTap } from "../../../serialization/sync_tap.ts";
+import type { SyncReadableTap } from "../../../serialization/sync_tap.ts";
 import { PrimitiveType } from "../primitive_type.ts";
 import type { JSONType, Type } from "../../type.ts";
 import { throwInvalidError, ValidationError } from "../../error.ts";
@@ -76,22 +77,25 @@ class TestPrimitiveType extends PrimitiveType<number> {
     return buf.slice(0, tap.getPos());
   }
 
-  public override readSync(tap: any): number {
+  public override readSync(tap: SyncReadableTap): number {
     return tap.readInt();
   }
 
-  public override writeSync(tap: any, value: number): void {
+  public override writeSync(tap: SyncWritableTap, value: number): void {
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
     tap.writeInt(value);
   }
 
-  public override skipSync(tap: any): void {
+  public override skipSync(tap: SyncReadableTap): void {
     tap.skipInt();
   }
 
-  public override matchSync(tap1: any, tap2: any): number {
+  public override matchSync(
+    tap1: SyncReadableTap,
+    tap2: SyncReadableTap,
+  ): number {
     return tap1.matchInt(tap2);
   }
 }
@@ -163,22 +167,25 @@ class FakePrimitiveType extends PrimitiveType<string> {
     return buf.slice(0, tap.getPos());
   }
 
-  public override readSync(tap: any): string {
+  public override readSync(tap: SyncReadableTap): string {
     return tap.readString()!;
   }
 
-  public override writeSync(tap: any, value: string): void {
+  public override writeSync(tap: SyncWritableTap, value: string): void {
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
     tap.writeString(value);
   }
 
-  public override skipSync(tap: any): void {
+  public override skipSync(tap: SyncReadableTap): void {
     tap.skipString();
   }
 
-  public override matchSync(tap1: any, tap2: any): number {
+  public override matchSync(
+    tap1: SyncReadableTap,
+    tap2: SyncReadableTap,
+  ): number {
     return tap1.matchString(tap2);
   }
 }

@@ -3,6 +3,11 @@ import {
   WritableTap,
   type WritableTapLike,
 } from "../../serialization/tap.ts";
+import {
+  type SyncReadableTapLike,
+  SyncWritableTap,
+  type SyncWritableTapLike,
+} from "../../serialization/sync_tap.ts";
 import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
 import { NamedType } from "./named_type.ts";
@@ -111,6 +116,17 @@ export class EnumType extends NamedType<string> {
   }
 
   /**
+   * Encodes the enum index synchronously.
+   */
+  public override writeSync(tap: SyncWritableTapLike, value: string): void {
+    const index = this.#indices.get(value);
+    if (index === undefined) {
+      throwInvalidError([], value, this);
+    }
+    tap.writeLong(BigInt(index));
+  }
+
+  /**
    * Skips the enum value in the tap.
    */
   public override async skip(tap: ReadableTapLike): Promise<void> {
@@ -118,10 +134,33 @@ export class EnumType extends NamedType<string> {
   }
 
   /**
+   * Advances the sync tap past a stored enum index.
+   */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    tap.skipLong();
+  }
+
+  /**
    * Reads the enum value from the tap.
    */
   public override async read(tap: ReadableTapLike): Promise<string> {
     const rawIndex = await tap.readLong();
+    const index = Number(rawIndex);
+    if (
+      !Number.isSafeInteger(index) || index < 0 || index >= this.#symbols.length
+    ) {
+      throw new Error(
+        `Invalid enum index ${rawIndex.toString()} for ${this.getFullName()}`,
+      );
+    }
+    return this.#symbols[index];
+  }
+
+  /**
+   * Reads an enum index synchronously and returns the matching symbol.
+   */
+  public override readSync(tap: SyncReadableTapLike): string {
+    const rawIndex = tap.readLong();
     const index = Number(rawIndex);
     if (
       !Number.isSafeInteger(index) || index < 0 || index >= this.#symbols.length
@@ -143,6 +182,19 @@ export class EnumType extends NamedType<string> {
     const buffer = new ArrayBuffer(size);
     const tap = new WritableTap(buffer);
     await this.write(tap, value);
+    return buffer;
+  }
+
+  /**
+   * Emits a buffer containing the enum index synchronously.
+   */
+  public override toSyncBuffer(value: string): ArrayBuffer {
+    this.check(value, throwInvalidError, []);
+    const index = this.#indices.get(value)!;
+    const size = calculateVarintSize(index);
+    const buffer = new ArrayBuffer(size);
+    const tap = new SyncWritableTap(buffer);
+    tap.writeLong(BigInt(index));
     return buffer;
   }
 
@@ -190,6 +242,16 @@ export class EnumType extends NamedType<string> {
   }
 
   /**
+   * Compares the enum indices stored in two sync taps.
+   */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchLong(tap2);
+  }
+
+  /**
    * Creates a resolver for schema evolution between enum types.
    */
   public override createResolver(writerType: Type): Resolver {
@@ -225,6 +287,13 @@ export class EnumType extends NamedType<string> {
         public override async read(tap: ReadableTapLike): Promise<string> {
           return await this.#writer.read(tap);
         }
+
+        /**
+         * Reads a symbol via the underlying writer enum synchronously.
+         */
+        public override readSync(tap: SyncReadableTapLike): string {
+          return this.#writer.readSync(tap);
+        }
       }(this, writerType);
     } else if (this.#default !== undefined) {
       return new class extends Resolver<string> {
@@ -239,6 +308,18 @@ export class EnumType extends NamedType<string> {
 
         public override async read(tap: ReadableTapLike): Promise<string> {
           const writerSymbol = await this.#writer.read(tap);
+          if (this.#reader.#indices.has(writerSymbol)) {
+            return writerSymbol;
+          } else {
+            return this.#reader.#default!;
+          }
+        }
+
+        /**
+         * Reads a writer symbol and falls back to the reader default synchronously.
+         */
+        public override readSync(tap: SyncReadableTapLike): string {
+          const writerSymbol = this.#writer.readSync(tap);
           if (this.#reader.#indices.has(writerSymbol)) {
             return writerSymbol;
           } else {

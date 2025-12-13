@@ -8,6 +8,11 @@ import {
   WritableTap,
   type WritableTapLike,
 } from "../../serialization/tap.ts";
+import {
+  type SyncReadableTapLike,
+  SyncWritableTap,
+  type SyncWritableTapLike,
+} from "../../serialization/sync_tap.ts";
 import { bigIntToSafeNumber } from "../../serialization/conversion.ts";
 import { calculateVarintSize } from "../../internal/varint.ts";
 
@@ -211,6 +216,20 @@ export class UnionType extends BaseType<UnionValue> {
   }
 
   /**
+   * Writes the union branch index and payload through sync taps.
+   */
+  public override writeSync(
+    tap: SyncWritableTapLike,
+    value: UnionValue,
+  ): void {
+    const { index, branchValue } = this.#resolveBranch(value);
+    tap.writeLong(BigInt(index));
+    if (branchValue !== undefined) {
+      this.#branches[index].type.writeSync(tap, branchValue);
+    }
+  }
+
+  /**
    * Deserializes a union value from the readable tap.
    * Reads the branch index, and if not null, reads the branch value and wraps it in an object.
    * @param tap The readable tap to read from.
@@ -227,6 +246,22 @@ export class UnionType extends BaseType<UnionValue> {
   }
 
   /**
+   * Reads a union branch index and its payload synchronously.
+   */
+  /**
+   * Delegates synchronous read to the branch resolver.
+   */
+  public override readSync(tap: SyncReadableTapLike): UnionValue {
+    const index = this.#readBranchIndexSync(tap);
+    const branch = this.#branches[index];
+    if (branch.isNull) {
+      return null;
+    }
+    const branchValue = branch.type.readSync(tap);
+    return { [branch.name]: branchValue };
+  }
+
+  /**
    * Skips over a union value in the readable tap.
    * Reads the branch index and skips the branch value if not null.
    * @param tap The readable tap to skip in.
@@ -236,6 +271,17 @@ export class UnionType extends BaseType<UnionValue> {
     const branch = this.#branches[index];
     if (!branch.isNull) {
       await branch.type.skip(tap);
+    }
+  }
+
+  /**
+   * Skips a union value by skipping its branch payload synchronously.
+   */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    const index = this.#readBranchIndexSync(tap);
+    const branch = this.#branches[index];
+    if (!branch.isNull) {
+      branch.type.skipSync(tap);
     }
   }
 
@@ -262,6 +308,30 @@ export class UnionType extends BaseType<UnionValue> {
     await tap.writeLong(BigInt(index));
     if (branchBytes) {
       await tap.writeFixed(branchBytes);
+    }
+    return buffer;
+  }
+
+  /**
+   * Encodes a union value synchronously into an ArrayBuffer.
+   */
+  public override toSyncBuffer(value: UnionValue): ArrayBuffer {
+    const { index, branchValue } = this.#resolveBranch(value);
+    const indexSize = calculateVarintSize(index);
+    let totalSize = indexSize;
+    let branchBytes: Uint8Array | undefined;
+    if (branchValue !== undefined) {
+      branchBytes = new Uint8Array(
+        this.#branches[index].type.toSyncBuffer(branchValue),
+      );
+      totalSize += branchBytes.byteLength;
+    }
+
+    const buffer = new ArrayBuffer(totalSize);
+    const tap = new SyncWritableTap(buffer);
+    tap.writeLong(BigInt(index));
+    if (branchBytes) {
+      tap.writeFixed(branchBytes);
     }
     return buffer;
   }
@@ -361,6 +431,25 @@ export class UnionType extends BaseType<UnionValue> {
   }
 
   /**
+   * Compares union-encoded buffers synchronously.
+   */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    const idx1 = this.#readBranchIndexSync(tap1);
+    const idx2 = this.#readBranchIndexSync(tap2);
+    if (idx1 === idx2) {
+      const branch = this.#branches[idx1];
+      if (branch.isNull) {
+        return 0;
+      }
+      return branch.type.matchSync(tap1, tap2);
+    }
+    return idx1 < idx2 ? -1 : 1;
+  }
+
+  /**
    * Creates a resolver for schema evolution from the writer type to this union type.
    * If the writer is also a union, creates resolvers for each branch.
    * Otherwise, finds a compatible branch in this union and creates a resolver for it.
@@ -436,6 +525,18 @@ export class UnionType extends BaseType<UnionValue> {
     }
     return index;
   }
+
+  /**
+   * Decodes a branch index from a sync tap with validation.
+   */
+  #readBranchIndexSync(tap: SyncReadableTapLike): number {
+    const indexBigInt = tap.readLong();
+    const index = bigIntToSafeNumber(indexBigInt, "Union branch index");
+    if (index < 0 || index >= this.#branches.length) {
+      throw new Error(`Invalid union index: ${index}`);
+    }
+    return index;
+  }
 }
 
 class UnionBranchResolver extends Resolver<UnionValue> {
@@ -461,6 +562,17 @@ class UnionBranchResolver extends Resolver<UnionValue> {
     }
     return { [this.#branch.name]: resolvedValue };
   }
+
+  /**
+   * Reads the branch index synchronously and forwards to the per-branch resolver.
+   */
+  public override readSync(tap: SyncReadableTapLike): UnionValue {
+    const resolvedValue = this.#branchResolver.readSync(tap);
+    if (this.#branch.isNull) {
+      return null;
+    }
+    return { [this.#branch.name]: resolvedValue };
+  }
 }
 
 class UnionFromUnionResolver extends Resolver<UnionValue> {
@@ -481,5 +593,15 @@ class UnionFromUnionResolver extends Resolver<UnionValue> {
       throw new Error(`Invalid union index: ${index}`);
     }
     return await resolver.read(tap);
+  }
+
+  public override readSync(tap: SyncReadableTapLike): UnionValue {
+    const indexBigInt = tap.readLong();
+    const index = bigIntToSafeNumber(indexBigInt, "Union branch index");
+    const resolver = this.#resolvers[index];
+    if (!resolver) {
+      throw new Error(`Invalid union index: ${index}`);
+    }
+    return resolver.readSync(tap);
   }
 }

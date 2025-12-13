@@ -1,7 +1,10 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../../serialization/test/test_tap.ts";
-import { SyncReadableTap, SyncWritableTap } from "../../serialization/sync_tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../serialization/sync_tap.ts";
 import { ReadBufferError } from "../../serialization/buffers/sync_buffer.ts";
 import type { JSONType, Type } from "../type.ts";
 import { Resolver } from "../resolver.ts";
@@ -89,7 +92,10 @@ class TestType extends BaseType<string> {
     tap.skipString();
   }
 
-  public override matchSync(tap1: SyncReadableTap, tap2: SyncReadableTap): number {
+  public override matchSync(
+    tap1: SyncReadableTap,
+    tap2: SyncReadableTap,
+  ): number {
     return tap1.matchString(tap2);
   }
 }
@@ -161,7 +167,10 @@ class OtherType extends FixedSizeBaseType<number> {
     tap.skipDouble();
   }
 
-  public override matchSync(tap1: SyncReadableTap, tap2: SyncReadableTap): number {
+  public override matchSync(
+    tap1: SyncReadableTap,
+    tap2: SyncReadableTap,
+  ): number {
     return tap1.matchDouble(tap2);
   }
 }
@@ -443,11 +452,29 @@ describe("Type", () => {
         const buffer3 = type.toSyncBuffer(value3);
 
         // apple < banana
-        assertEquals(type.matchSync(new SyncReadableTap(buffer1), new SyncReadableTap(buffer2)), -1);
+        assertEquals(
+          type.matchSync(
+            new SyncReadableTap(buffer1),
+            new SyncReadableTap(buffer2),
+          ),
+          -1,
+        );
         // banana > apple
-        assertEquals(type.matchSync(new SyncReadableTap(buffer2), new SyncReadableTap(buffer1)), 1);
+        assertEquals(
+          type.matchSync(
+            new SyncReadableTap(buffer2),
+            new SyncReadableTap(buffer1),
+          ),
+          1,
+        );
         // apple == apple
-        assertEquals(type.matchSync(new SyncReadableTap(buffer1), new SyncReadableTap(buffer3)), 0);
+        assertEquals(
+          type.matchSync(
+            new SyncReadableTap(buffer1),
+            new SyncReadableTap(buffer3),
+          ),
+          0,
+        );
       });
 
       it("should handle empty strings", () => {
@@ -455,15 +482,24 @@ describe("Type", () => {
         const nonEmptyBuf = type.toSyncBuffer("a");
 
         assertEquals(
-          type.matchSync(new SyncReadableTap(emptyBuf), new SyncReadableTap(nonEmptyBuf)),
+          type.matchSync(
+            new SyncReadableTap(emptyBuf),
+            new SyncReadableTap(nonEmptyBuf),
+          ),
           -1,
         );
         assertEquals(
-          type.matchSync(new SyncReadableTap(nonEmptyBuf), new SyncReadableTap(emptyBuf)),
+          type.matchSync(
+            new SyncReadableTap(nonEmptyBuf),
+            new SyncReadableTap(emptyBuf),
+          ),
           1,
         );
         assertEquals(
-          type.matchSync(new SyncReadableTap(emptyBuf), new SyncReadableTap(type.toSyncBuffer(""))),
+          type.matchSync(
+            new SyncReadableTap(emptyBuf),
+            new SyncReadableTap(type.toSyncBuffer("")),
+          ),
           0,
         );
       });
@@ -476,7 +512,10 @@ describe("Type", () => {
         const buffer2 = type.toSyncBuffer(value2);
 
         // Compare based on encoded byte order
-        const result = type.matchSync(new SyncReadableTap(buffer1), new SyncReadableTap(buffer2));
+        const result = type.matchSync(
+          new SyncReadableTap(buffer1),
+          new SyncReadableTap(buffer2),
+        );
         assert(typeof result === "number");
         assert(result !== 0); // They should be different
       });

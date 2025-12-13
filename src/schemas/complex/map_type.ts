@@ -3,6 +3,11 @@ import {
   WritableTap,
   type WritableTapLike,
 } from "../../serialization/tap.ts";
+import {
+  type SyncReadableTapLike,
+  SyncWritableTap,
+  type SyncWritableTapLike,
+} from "../../serialization/sync_tap.ts";
 import { encode } from "../../serialization/text_encoding.ts";
 import { bigIntToSafeNumber } from "../../serialization/conversion.ts";
 import { BaseType } from "../base_type.ts";
@@ -43,6 +48,32 @@ export async function readMapInto<T>(
     for (let i = 0; i < count; i++) {
       const key = await tap.readString();
       const value = await readValue(tap);
+      collect(key, value);
+    }
+  }
+}
+
+export function readMapIntoSync<T>(
+  tap: SyncReadableTapLike,
+  readValue: (tap: SyncReadableTapLike) => T,
+  collect: (key: string, value: T) => void,
+): void {
+  /**
+   * Synchronously reads map blocks from the tap and populates the provided map.
+   */
+  while (true) {
+    let rawCount = tap.readLong();
+    if (rawCount === 0n) {
+      break;
+    }
+    if (rawCount < 0n) {
+      rawCount = -rawCount;
+      tap.skipLong();
+    }
+    const count = bigIntToSafeNumber(rawCount, "Map block length");
+    for (let i = 0; i < count; i++) {
+      const key = tap.readString();
+      const value = readValue(tap);
       collect(key, value);
     }
   }
@@ -139,6 +170,30 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
   }
 
   /**
+   * Serializes the map synchronously on the supplied tap.
+   */
+  public override writeSync(
+    tap: SyncWritableTapLike,
+    value: Map<string, T>,
+  ): void {
+    if (!(value instanceof Map)) {
+      throwInvalidError([], value, this);
+    }
+
+    if (value.size > 0) {
+      tap.writeLong(BigInt(value.size));
+      for (const [key, entry] of value) {
+        if (typeof key !== "string") {
+          throwInvalidError([], value, this);
+        }
+        tap.writeString(key);
+        this.#valuesType.writeSync(tap, entry);
+      }
+    }
+    tap.writeLong(0n);
+  }
+
+  /**
    * Reads a map value from the provided tap.
    */
   public override async read(
@@ -148,6 +203,24 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     await readMapInto(
       tap,
       async (innerTap) => await this.#valuesType.read(innerTap),
+      (key, value) => {
+        result.set(key, value);
+      },
+    );
+    return result;
+  }
+
+  /**
+   * Reads the map from a sync tap without asynchronous operations.
+   */
+  /**
+   * Resolves nested map entries synchronously using the value resolver.
+   */
+  public override readSync(tap: SyncReadableTapLike): Map<string, T> {
+    const result = new Map<string, T>();
+    readMapIntoSync(
+      tap,
+      (innerTap) => this.#valuesType.readSync(innerTap),
       (key, value) => {
         result.set(key, value);
       },
@@ -177,6 +250,31 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
       for (let i = 0; i < count; i++) {
         await tap.skipString();
         await this.#valuesType.skip(tap);
+      }
+    }
+  }
+
+  /**
+   * Skips the encoded map blocks on the sync tap efficiently.
+   */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    while (true) {
+      const rawCount = tap.readLong();
+      if (rawCount === 0n) {
+        break;
+      }
+      if (rawCount < 0n) {
+        const blockSize = tap.readLong();
+        const size = bigIntToSafeNumber(blockSize, "Map block size");
+        if (size > 0) {
+          tap.skipFixed(size);
+        }
+        continue;
+      }
+      const count = bigIntToSafeNumber(rawCount, "Map block length");
+      for (let i = 0; i < count; i++) {
+        tap.skipString();
+        this.#valuesType.skipSync(tap);
       }
     }
   }
@@ -225,6 +323,52 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
       }
     }
     await tap.writeLong(0n);
+
+    return buffer;
+  }
+
+  /**
+   * Encodes the entire map synchronously into a contiguous buffer.
+   */
+  public override toSyncBuffer(value: Map<string, T>): ArrayBuffer {
+    if (!(value instanceof Map)) {
+      throwInvalidError([], value, this);
+    }
+
+    const serializedEntries: Array<{
+      keyBytes: Uint8Array;
+      valueBytes: Uint8Array;
+    }> = [];
+
+    let totalSize = 1; // final zero block terminator
+
+    for (const [key, entry] of value.entries()) {
+      if (typeof key !== "string") {
+        throwInvalidError([], value, this);
+      }
+      const keyBytes = encode(key);
+      const valueBytes = new Uint8Array(this.#valuesType.toSyncBuffer(entry));
+      totalSize += calculateVarintSize(keyBytes.length) + keyBytes.length;
+      totalSize += valueBytes.length;
+      serializedEntries.push({ keyBytes, valueBytes });
+    }
+
+    if (serializedEntries.length > 0) {
+      totalSize += calculateVarintSize(serializedEntries.length);
+    }
+
+    const buffer = new ArrayBuffer(totalSize);
+    const tap = new SyncWritableTap(buffer);
+
+    if (serializedEntries.length > 0) {
+      tap.writeLong(BigInt(serializedEntries.length));
+      for (const { keyBytes, valueBytes } of serializedEntries) {
+        tap.writeLong(BigInt(keyBytes.length));
+        tap.writeFixed(keyBytes);
+        tap.writeFixed(valueBytes);
+      }
+    }
+    tap.writeLong(0n);
 
     return buffer;
   }
@@ -313,6 +457,16 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
   }
 
   /**
+   * Raises for maps because they cannot be compared even in sync mode.
+   */
+  public override matchSync(
+    _tap1: SyncReadableTapLike,
+    _tap2: SyncReadableTapLike,
+  ): number {
+    throw new Error("maps cannot be compared");
+  }
+
+  /**
    * Creates a resolver for schema evolution from a writer type to this reader type.
    * @param writerType The writer schema type.
    * @returns A resolver for reading the writer type as this type.
@@ -349,6 +503,18 @@ class MapResolver<T> extends Resolver<Map<string, T>> {
     await readMapInto(
       tap,
       async (innerTap) => await this.#valueResolver.read(innerTap),
+      (key, value) => {
+        result.set(key, value);
+      },
+    );
+    return result;
+  }
+
+  public override readSync(tap: SyncReadableTapLike): Map<string, T> {
+    const result = new Map<string, T>();
+    readMapIntoSync(
+      tap,
+      (innerTap) => this.#valueResolver.readSync(innerTap),
       (key, value) => {
         result.set(key, value);
       },

@@ -1,7 +1,10 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
-import { SyncReadableTap, SyncWritableTap } from "../../../serialization/sync_tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/sync_tap.ts";
 import { LongType } from "../long_type.ts";
 import { IntType } from "../int_type.ts";
 import { ValidationError } from "../../error.ts";
@@ -413,9 +416,13 @@ describe("LongType", () => {
 
       it("should throw for insufficient data", () => {
         const buffer = new ArrayBuffer(0);
-        assertThrows(() => {
-          type.fromSyncBuffer(buffer);
-        }, Error, "Operation exceeds buffer bounds");
+        assertThrows(
+          () => {
+            type.fromSyncBuffer(buffer);
+          },
+          Error,
+          "Operation exceeds buffer bounds",
+        );
       });
 
       it("should throw for extra data", () => {
@@ -423,9 +430,13 @@ describe("LongType", () => {
         const buffer = type.toSyncBuffer(value);
         const largeBuffer = new ArrayBuffer(buffer.byteLength + 1);
         new Uint8Array(largeBuffer).set(new Uint8Array(buffer), 0);
-        assertThrows(() => {
-          type.fromSyncBuffer(largeBuffer);
-        }, Error, "Insufficient data for type");
+        assertThrows(
+          () => {
+            type.fromSyncBuffer(largeBuffer);
+          },
+          Error,
+          "Insufficient data for type",
+        );
       });
     });
 
@@ -435,17 +446,38 @@ describe("LongType", () => {
         const buf2 = type.toSyncBuffer(2n);
         const buf3 = type.toSyncBuffer(1n);
 
-        assertEquals(type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)), -1); // 1n < 2n
-        assertEquals(type.matchSync(new SyncReadableTap(buf2), new SyncReadableTap(buf1)), 1); // 2n > 1n
-        assertEquals(type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf3)), 0); // 1n == 1n
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)),
+          -1,
+        ); // 1n < 2n
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf2), new SyncReadableTap(buf1)),
+          1,
+        ); // 2n > 1n
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf3)),
+          0,
+        ); // 1n == 1n
       });
 
       it("should handle edge cases synchronously", () => {
         const minBuf = type.toSyncBuffer(minLong);
         const maxBuf = type.toSyncBuffer(maxLong);
 
-        assertEquals(type.matchSync(new SyncReadableTap(minBuf), new SyncReadableTap(maxBuf)), -1);
-        assertEquals(type.matchSync(new SyncReadableTap(maxBuf), new SyncReadableTap(minBuf)), 1);
+        assertEquals(
+          type.matchSync(
+            new SyncReadableTap(minBuf),
+            new SyncReadableTap(maxBuf),
+          ),
+          -1,
+        );
+        assertEquals(
+          type.matchSync(
+            new SyncReadableTap(maxBuf),
+            new SyncReadableTap(minBuf),
+          ),
+          1,
+        );
       });
     });
 

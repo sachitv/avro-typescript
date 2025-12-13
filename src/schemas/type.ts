@@ -1,5 +1,8 @@
 import type { ReadableTapLike, WritableTapLike } from "../serialization/tap.ts";
-import type { SyncReadableTapLike, SyncWritableTapLike } from "../serialization/sync_tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../serialization/sync_tap.ts";
 import type { Resolver } from "./resolver.ts";
 import type { ErrorHook } from "./error.ts";
 

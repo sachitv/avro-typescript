@@ -2,8 +2,13 @@ import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/sync_tap.ts";
 import { IntType } from "../../primitive/int_type.ts";
 import { StringType } from "../../primitive/string_type.ts";
+import { LongType } from "../../primitive/long_type.ts";
 import { BytesType } from "../../primitive/bytes_type.ts";
 import { RecordType } from "../record_type.ts";
 import { resolveNames } from "../resolve_names.ts";
@@ -36,7 +41,7 @@ function createRecord(params: {
 }
 
 describe("RecordType", () => {
-  describe("Constructor", () => {
+  describe("constructor validation", () => {
     it("requires a fields array", () => {
       const names = resolveNames({ name: "example.Empty" });
       assertThrows(() =>
@@ -1026,6 +1031,43 @@ describe("RecordType", () => {
       assertEquals([...value.data], [1, 2]);
     });
 
+    it("skips extra writer fields via sync resolver", () => {
+      const writer = createRecord({
+        name: "example.SyncWriter",
+        fields: [
+          { name: "name", type: new StringType() },
+          { name: "age", type: new IntType() },
+        ],
+      });
+      const reader = createRecord({
+        name: "example.SyncWriter",
+        fields: [{ name: "name", type: new StringType() }],
+      });
+
+      const resolver = reader.createResolver(writer);
+      const buffer = writer.toSyncBuffer({ name: "Ann", age: 30 });
+      const result = resolver.readSync(new SyncReadableTap(buffer));
+      assertEquals(result, { name: "Ann" });
+    });
+
+    it("uses nested resolvers for compatible field promotion via sync resolver", () => {
+      const writer = createRecord({
+        name: "example.SyncPayload",
+        fields: [{ name: "data", type: new IntType() }],
+      });
+      const reader = createRecord({
+        name: "example.SyncPayload",
+        fields: [{ name: "data", type: new LongType() }],
+      });
+
+      const resolver = reader.createResolver(writer);
+      const buffer = writer.toSyncBuffer({ data: 15 });
+      const result = resolver.readSync(new SyncReadableTap(buffer)) as {
+        data: bigint;
+      };
+      assertEquals(result.data, 15n);
+    });
+
     it("throws resolver error when reader field lacks default", () => {
       const writer = createRecord({
         name: "example.Person",
@@ -1270,6 +1312,240 @@ describe("RecordType", () => {
         Error,
         "Field 'id' has no default",
       );
+    });
+  });
+
+  describe("sync serialization", () => {
+    const type = createRecord({
+      name: "example.Sync",
+      fields: [
+        { name: "id", type: new IntType() },
+        { name: "name", type: new StringType() },
+      ],
+    });
+
+    it("round-trips via sync buffer", () => {
+      const recordValue = { id: 1, name: "Ann" };
+      const buffer = type.toSyncBuffer(recordValue);
+      assertEquals(type.fromSyncBuffer(buffer), recordValue);
+    });
+
+    it("reads and writes via sync taps", () => {
+      const recordValue = { id: 2, name: "Bob" };
+      const buffer = new ArrayBuffer(256);
+      const writeTap = new SyncWritableTap(buffer);
+      type.writeSync(writeTap, recordValue);
+      const readTap = new SyncReadableTap(buffer);
+      assertEquals(type.readSync(readTap), recordValue);
+      assertEquals(readTap.getPos(), writeTap.getPos());
+    });
+
+    it("throws when writeSync receives a non-record value", () => {
+      const buffer = new ArrayBuffer(64);
+      const tap = new SyncWritableTap(buffer);
+      assertThrows(
+        () =>
+          type.writeSync(
+            tap,
+            "not a record" as unknown as Record<string, unknown>,
+          ),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("throws when toSyncBuffer receives a non-record value", () => {
+      assertThrows(
+        () =>
+          type.toSyncBuffer(
+            "not a record" as unknown as Record<string, unknown>,
+          ),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("skips records via sync taps", () => {
+      const recordValue = { id: 3, name: "Cleo" };
+      const buffer = type.toSyncBuffer(recordValue);
+      const tap = new SyncReadableTap(buffer);
+      assertEquals(tap.getPos(), 0);
+      type.skipSync(tap);
+      assertEquals(tap.getPos(), buffer.byteLength);
+    });
+
+    it("matches encoded records via sync taps", () => {
+      const a = { id: 1, name: "A" };
+      const b = { id: 2, name: "B" };
+      const bufA = type.toSyncBuffer(a);
+      const bufB = type.toSyncBuffer(b);
+
+      assertEquals(
+        type.matchSync(new SyncReadableTap(bufA), new SyncReadableTap(bufB)),
+        -1,
+      );
+      assertEquals(
+        type.matchSync(new SyncReadableTap(bufA), new SyncReadableTap(bufA)),
+        0,
+      );
+    });
+
+    it("skips ignore-ordered fields via matchSync", () => {
+      const ignoreType = createRecord({
+        name: "example.IgnoreOrder",
+        fields: [
+          { name: "score", type: new IntType(), order: "ascending" },
+          { name: "ignored", type: new IntType(), order: "ignore" },
+        ],
+      });
+
+      const valueA = { score: 5, ignored: 10 };
+      const valueB = { score: 5, ignored: 20 };
+      const bufA = ignoreType.toSyncBuffer(valueA);
+      const bufB = ignoreType.toSyncBuffer(valueB);
+
+      assertEquals(
+        ignoreType.matchSync(
+          new SyncReadableTap(bufA),
+          new SyncReadableTap(bufB),
+        ),
+        0,
+      );
+    });
+
+    it("applies defaults when writing sync data", () => {
+      const defaultType = createRecord({
+        name: "example.DefaultSync",
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "rating", type: new IntType(), default: 7 },
+        ],
+      });
+
+      const recordValue = { id: 9 };
+      const buffer = new ArrayBuffer(64);
+      const writeTap = new SyncWritableTap(buffer);
+      defaultType.writeSync(writeTap, recordValue);
+      const readTap = new SyncReadableTap(buffer);
+
+      assertEquals(
+        defaultType.readSync(readTap),
+        { id: 9, rating: 7 },
+      );
+
+      const syncBuffer = defaultType.toSyncBuffer(recordValue);
+      assertEquals(defaultType.fromSyncBuffer(syncBuffer), {
+        id: 9,
+        rating: 7,
+      });
+    });
+
+    it("throws when missing required field during writeSync", () => {
+      const type = createRecord({
+        name: "example.Person",
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType(), default: "unknown" },
+        ],
+      });
+
+      const buffer = new ArrayBuffer(16);
+      const tap = new SyncWritableTap(buffer);
+      assertThrows(
+        () =>
+          type.writeSync(
+            tap,
+            { name: "Ann" } as unknown as Record<string, unknown>,
+          ),
+        Error,
+        `Invalid value: 'undefined' for type:`,
+      );
+    });
+
+    it("throws when missing required field during toSyncBuffer", () => {
+      const type = createRecord({
+        name: "example.Person",
+        fields: [
+          { name: "id", type: new IntType() }, // required field
+          { name: "name", type: new StringType(), default: "unknown" },
+        ],
+      });
+
+      assertThrows(
+        () =>
+          type.toSyncBuffer(
+            { name: "Ann" } as unknown as Record<string, unknown>,
+          ),
+        Error,
+        `Invalid value: 'undefined' for type:`,
+      );
+    });
+
+    it("uses nested resolvers for compatible field promotion via sync resolver", () => {
+      const writer = createRecord({
+        name: "example.SyncPayload",
+        fields: [{ name: "data", type: new StringType() }],
+      });
+      const reader = createRecord({
+        name: "example.SyncPayload",
+        fields: [{ name: "data", type: new BytesType() }],
+      });
+
+      const resolver = reader.createResolver(writer);
+      const buffer = writer.toSyncBuffer({ data: "\x01\x02" });
+      const result = resolver.readSync(new SyncReadableTap(buffer)) as {
+        data: Uint8Array;
+      };
+      assertEquals([...result.data], [1, 2]);
+    });
+
+    it("uses direct field reading when no resolver needed via sync resolver", () => {
+      const sharedType = new StringType();
+      const writer = createRecord({
+        name: "example.SyncDirect",
+        fields: [{ name: "data", type: sharedType }],
+      });
+      const reader = createRecord({
+        name: "example.SyncDirect",
+        fields: [{ name: "data", type: sharedType }],
+      });
+
+      const resolver = reader.createResolver(writer);
+      const buffer = writer.toSyncBuffer({ data: "test" });
+      const result = resolver.readSync(new SyncReadableTap(buffer)) as {
+        data: string;
+      };
+      assertEquals(result.data, "test");
+    });
+
+    it("reads records via sync resolver", () => {
+      const writer = createRecord({
+        name: "example.Person",
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+        ],
+      });
+      const reader = createRecord({
+        name: "example.Person",
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+          { name: "rating", type: new IntType(), default: 0 },
+        ],
+      });
+      const resolver = reader.createResolver(writer);
+
+      const value = { id: 3, name: "Sync" };
+      const buffer = writer.toSyncBuffer(value);
+      const result = resolver.readSync(new SyncReadableTap(buffer)) as {
+        id: number;
+        name: string;
+        rating: number;
+      };
+      assertEquals(result.id, value.id);
+      assertEquals(result.name, value.name);
+      assertEquals(result.rating, 0);
     });
   });
 });
