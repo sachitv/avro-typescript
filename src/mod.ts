@@ -1,6 +1,8 @@
 // Core Avro functionality
 export { AvroReader } from "./avro_reader.ts";
 export { AvroWriter } from "./avro_writer.ts";
+export { SyncAvroReader } from "./sync_avro_reader.ts";
+export { SyncAvroWriter } from "./sync_avro_writer.ts";
 export { createType } from "./type/create_type.ts";
 
 // Schema types
