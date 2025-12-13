@@ -61,6 +61,10 @@ export type {
 export type { AvroWriterOptions } from "./serialization/avro_file_writer.ts";
 export { AvroFileParser } from "./serialization/avro_file_parser.ts";
 export { AvroFileWriter } from "./serialization/avro_file_writer.ts";
+export type { SyncAvroFileParserOptions } from "./serialization/sync_avro_file_parser.ts";
+export type { SyncAvroWriterOptions } from "./serialization/sync_avro_file_writer.ts";
+export { SyncAvroFileParser } from "./serialization/sync_avro_file_parser.ts";
+export { SyncAvroFileWriter } from "./serialization/sync_avro_file_writer.ts";
 export {
   BLOCK_TYPE,
   HEADER_TYPE,
