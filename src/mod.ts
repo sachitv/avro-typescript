@@ -90,6 +90,14 @@ export { StreamReadableBufferAdapter } from "./serialization/streams/stream_read
 export { StreamWritableBufferAdapter } from "./serialization/streams/stream_writable_buffer_adapter.ts";
 export { FixedSizeStreamReadableBufferAdapter } from "./serialization/streams/fixed_size_stream_readable_buffer_adapter.ts";
 export { ForwardOnlyStreamReadableBufferAdapter } from "./serialization/streams/forward_only_stream_readable_buffer_adapter.ts";
+export type {
+  ISyncStreamReadableBuffer,
+  ISyncStreamWritableBuffer,
+} from "./serialization/streams/sync_streams.ts";
+export { SyncStreamReadableBufferAdapter } from "./serialization/streams/sync_stream_readable_buffer_adapter.ts";
+export { SyncStreamWritableBufferAdapter } from "./serialization/streams/sync_stream_writable_buffer_adapter.ts";
+export { SyncFixedSizeStreamReader } from "./serialization/streams/sync_fixed_size_stream_reader.ts";
+export { SyncFixedSizeStreamWriter } from "./serialization/streams/sync_fixed_size_stream_writer.ts";
 
 // Encoders/Decoders
 export type { Encoder } from "./serialization/encoders/encoder.ts";
