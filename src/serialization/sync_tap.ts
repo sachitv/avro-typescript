@@ -1,6 +1,6 @@
 import { bigIntToSafeNumber } from "./conversion.ts";
 import { compareUint8Arrays } from "./compare_bytes.ts";
-import { decode, encode } from "./text_encoding.ts";
+import { decode, encoder } from "./text_encoding.ts";
 import { TapBase } from "./tap.ts";
 import type { ISyncReadable, ISyncWritable } from "./buffers/sync_buffer.ts";
 import { ReadBufferError } from "./buffers/sync_buffer.ts";
@@ -340,6 +340,8 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
   // String buffer pool: Pre-allocated buffer for ASCII string encoding
   // Avoids allocations for common ASCII strings up to 1024 characters
   private static readonly stringBuffer = new Uint8Array(1024);
+  private static encodedStringBuffer = new Uint8Array(0);
+  private static binaryBuffer = new Uint8Array(0);
 
   constructor(buf: ArrayBuffer | ISyncWritable, pos = 0) {
     super(pos);
@@ -449,40 +451,66 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
     // Hybrid approach: ASCII fast path + encodeInto() for Unicode
     if (strLen <= 1024) {
       // Check if string is ASCII (single pass detection)
-      let isAscii = true;
-      for (let i = 0; i < strLen; i++) {
-        if (str.charCodeAt(i) > 127) {
-          isAscii = false;
+      const buf = SyncWritableTap.stringBuffer;
+      let i = 0;
+      for (; i < strLen; i++) {
+        const code = str.charCodeAt(i);
+        if (code > 127) {
           break;
         }
+        buf[i] = code;
       }
 
-      if (isAscii) {
+      if (i === strLen) {
         // Fast ASCII path: direct charCodeAt() encoding
         // Avoids TextEncoder overhead for common ASCII strings
         this.writeLong(BigInt(strLen));
-        const buf = SyncWritableTap.stringBuffer;
-        for (let i = 0; i < strLen; i++) {
-          buf[i] = str.charCodeAt(i);
+        if (strLen > 0) {
+          this.appendRawBytes(buf.subarray(0, strLen));
         }
-        this.appendRawBytes(buf.subarray(0, strLen));
         return;
       }
     }
 
     // Fallback for large or complex strings
-    // Uses standard TextEncoder.encode() for edge cases
-    const encoded = encode(str);
-    this.writeLong(BigInt(encoded.length));
-    this.writeFixed(encoded);
+    const estimatedSize = strLen * 3 + 4;
+    let encodedBuffer = SyncWritableTap.ensureEncodedStringBuffer(
+      estimatedSize,
+    );
+    let result = encoder.encodeInto(str, encodedBuffer);
+    if (result.read !== strLen) {
+      encodedBuffer = SyncWritableTap.ensureEncodedStringBuffer(strLen * 4 + 8);
+      result = encoder.encodeInto(str, encodedBuffer);
+      if (result.read !== strLen) {
+        throw new Error(
+          "TextEncoder.encodeInto failed to consume the entire string.",
+        );
+      }
+    }
+    this.writeLong(BigInt(result.written));
+    this.appendRawBytes(encodedBuffer.subarray(0, result.written));
   }
 
   writeBinary(str: string, len: number): void {
     if (len <= 0) return;
-    const bytes = new Uint8Array(len);
+    const bytes = SyncWritableTap.ensureBinaryBuffer(len);
     for (let i = 0; i < len; i++) {
       bytes[i] = str.charCodeAt(i) & 0xff;
     }
-    this.appendRawBytes(bytes);
+    this.appendRawBytes(bytes.subarray(0, len));
+  }
+
+  private static ensureEncodedStringBuffer(minSize: number): Uint8Array {
+    if (SyncWritableTap.encodedStringBuffer.length < minSize) {
+      SyncWritableTap.encodedStringBuffer = new Uint8Array(minSize);
+    }
+    return SyncWritableTap.encodedStringBuffer;
+  }
+
+  private static ensureBinaryBuffer(size: number): Uint8Array {
+    if (SyncWritableTap.binaryBuffer.length < size) {
+      SyncWritableTap.binaryBuffer = new Uint8Array(size);
+    }
+    return SyncWritableTap.binaryBuffer;
   }
 }
