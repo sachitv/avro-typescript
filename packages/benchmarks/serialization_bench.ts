@@ -1,10 +1,15 @@
-import { createType, AvroReader, AvroWriter } from "../../src/mod.ts";
+import { Buffer } from "node:buffer";
+import type { SchemaLike } from "../../src/type/create_type.ts";
+import {
+  createSerializationTargets,
+  type SerializationTarget,
+} from "./library_targets.ts";
 
 /**
  * Benchmark serialization performance
  */
 
-const schema = {
+const schema: SchemaLike = {
   type: "record",
   name: "TestRecord",
   fields: [
@@ -16,7 +21,6 @@ const schema = {
   ],
 };
 
-const testType = createType(schema);
 const testData = {
   id: 12345,
   name: "benchmark test record",
@@ -25,21 +29,39 @@ const testData = {
   data: new Uint8Array([1, 2, 3, 4, 5]),
 };
 
-Deno.bench("serialize single record", async () => {
-  await testType.toBuffer(testData);
-});
+type TestRecord = typeof testData;
 
-Deno.bench("deserialize single record", async () => {
-  const serialized = await testType.toBuffer(testData);
-  await testType.fromBuffer(serialized);
-});
+const serializationTargets: SerializationTarget<TestRecord>[] =
+  createSerializationTargets<TestRecord>(schema, {
+    avsc: { prepareInput: toNodeFriendlyRecord },
+    "avro-js": { prepareInput: toNodeFriendlyRecord },
+  });
 
-Deno.bench("round-trip serialization", async () => {
-  const serialized = await testType.toBuffer(testData);
-  const result = await testType.fromBuffer(serialized);
+for (const target of serializationTargets) {
+  Deno.bench(`serialize single record (${target.label})`, () => {
+    const record = target.prepareInput(testData);
+    target.serialize(record);
+  });
 
-  // Verify correctness
-  if ((result as any).id !== testData.id) {
-    throw new Error("Round-trip failed");
-  }
-});
+  Deno.bench(`deserialize single record (${target.label})`, () => {
+    const record = target.prepareInput(testData);
+    const serialized = target.serialize(record);
+    target.deserialize(serialized);
+  });
+
+  Deno.bench(`round-trip serialization (${target.label})`, () => {
+    const record = target.prepareInput(testData);
+    const serialized = target.serialize(record);
+    const result = target.deserialize(serialized);
+    if ((result as { id?: number }).id !== testData.id) {
+      throw new Error(`Round-trip failed for ${target.label}`);
+    }
+  });
+}
+
+function toNodeFriendlyRecord(record: TestRecord): TestRecord {
+  return {
+    ...record,
+    data: Buffer.from(record.data),
+  };
+}
