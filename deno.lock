@@ -12,10 +12,13 @@
     "jsr:@std/json@^1.0.2": "1.0.2",
     "jsr:@std/jsonc@^1.0.1": "1.0.2",
     "jsr:@std/jsonc@^1.0.2": "1.0.2",
+    "jsr:@std/path@^1.0.6": "1.1.3",
     "jsr:@std/path@^1.1.2": "1.1.3",
     "jsr:@std/path@^1.1.3": "1.1.3",
     "jsr:@std/random@~0.1.3": "0.1.3",
-    "jsr:@std/testing@^1.0.16": "1.0.16"
+    "jsr:@std/testing@^1.0.16": "1.0.16",
+    "npm:avro-js@*": "1.12.1",
+    "npm:avsc@*": "5.7.9"
   },
   "jsr": {
     "@std/assert@1.0.16": {
@@ -74,6 +77,20 @@
         "jsr:@std/internal@^1.0.12",
         "jsr:@std/path@^1.1.2"
       ]
+    }
+  },
+  "npm": {
+    "avro-js@1.12.1": {
+      "integrity": "sha512-P8gTa620GdU/p1XXkWJup9Nkth3aEExgw8+0eyrKBrFLBW587iXOKyQfQ+TkgzyxUcMm8wo45KmPKujvPPRpsQ==",
+      "dependencies": [
+        "underscore"
+      ]
+    },
+    "avsc@5.7.9": {
+      "integrity": "sha512-yOA4wFeI7ET3v32Di/sUybQ+ttP20JHSW3mxLuNGeO0uD6PPcvLrIQXSvy/rhJOWU5JrYh7U4OHplWMmtAtjMg=="
+    },
+    "underscore@1.13.7": {
+      "integrity": "sha512-GMXzWtsc57XAtguZgaQViUOzs0KTkk8ojr3/xAxXLITqf/3EMwxC0inyETfDFjH/Krbhuep0HNbbjI9i/q3F3g=="
     }
   },
   "remote": {

@@ -1,10 +1,19 @@
 import { createType } from "../../src/mod.ts";
+import type { SchemaLike } from "../../src/type/create_type.ts";
+import avsc from "npm:avsc";
+import avrojs from "npm:avro-js";
+import {
+  createSerializationTargets,
+  type BenchmarkLibrary,
+  type SerializationTarget,
+} from "./library_targets.ts";
+type AvscSchema = Parameters<typeof avsc.Type.forSchema>[0];
 
 /**
  * Benchmark schema creation and type operations
  */
 
-const simpleSchema = {
+const simpleSchema: SchemaLike = {
   type: "record",
   name: "SimpleRecord",
   fields: [
@@ -13,7 +22,7 @@ const simpleSchema = {
   ],
 };
 
-const complexSchema = {
+const complexSchema: SchemaLike = {
   type: "record",
   name: "ComplexRecord",
   fields: [
@@ -24,30 +33,80 @@ const complexSchema = {
     { name: "tags", type: { type: "array", items: "string" } },
   ],
 };
+interface SchemaFactory {
+  id: BenchmarkLibrary;
+  label: string;
+  create(schema: SchemaLike): unknown;
+}
 
-Deno.bench("create simple type", () => {
-  createType(simpleSchema);
-});
+const schemaFactories: SchemaFactory[] = [
+  {
+    id: "avro-typescript",
+    label: "avro-typescript",
+    create: (schema) => createType(schema),
+  },
+  {
+    id: "avsc",
+    label: "avsc",
+    create: (schema) => avsc.Type.forSchema(schema as AvscSchema),
+  },
+  {
+    id: "avro-js",
+    label: "avro-js",
+    create: (schema) => avrojs.parse(schema as Parameters<typeof avrojs.parse>[0]),
+  },
+];
 
-Deno.bench("create complex type", () => {
-  createType(complexSchema);
-});
+for (const factory of schemaFactories) {
+  Deno.bench(`create simple type (${factory.label})`, () => {
+    factory.create(simpleSchema);
+  });
 
-Deno.bench("type serialization/deserialization", async () => {
-  const type = createType(complexSchema);
-  const testData = {
-    id: 123456789n,
-    name: "John Doe",
-    email: "john@example.com",
-    age: 30,
-    tags: ["developer", "typescript", "avro"],
-  };
+  Deno.bench(`create complex type (${factory.label})`, () => {
+    factory.create(complexSchema);
+  });
+}
 
-  // This will exercise the type's serialization logic
-  const serialized = await type.toBuffer(testData);
-  const deserialized = await type.fromBuffer(serialized);
+type ComplexRecord = {
+  id: number | bigint;
+  name: string;
+  email: string;
+  age: number;
+  tags: string[];
+};
 
-  if ((deserialized as any).id !== testData.id) {
-    throw new Error("Type round-trip failed");
+const complexRecordTargets: SerializationTarget<ComplexRecord>[] =
+  createSerializationTargets<ComplexRecord>(complexSchema, {
+    avsc: { prepareInput: toNodeFriendlyComplexRecord },
+    "avro-js": { prepareInput: toNodeFriendlyComplexRecord },
+  });
+
+const complexRecord: ComplexRecord = {
+  id: 123456789n,
+  name: "John Doe",
+  email: "john@example.com",
+  age: 30,
+  tags: ["developer", "typescript", "avro"],
+};
+
+for (const target of complexRecordTargets) {
+  Deno.bench(`type serialization/deserialization (${target.label})`, () => {
+    const record = target.prepareInput(complexRecord);
+    const serialized = target.serialize(record);
+    const deserialized = target.deserialize(serialized);
+    const decodedId = (deserialized as { id?: bigint | number }).id;
+    if (Number(decodedId ?? -1) !== Number(complexRecord.id)) {
+      throw new Error(`Type round-trip failed for ${target.label}`);
+    }
+  });
+}
+
+function toNodeFriendlyComplexRecord(record: ComplexRecord): ComplexRecord {
+  if (typeof record.id === "number") {
+    return record;
   }
-});
+  return {
+    ...record,
+    id: Number(record.id),
+  };
+}

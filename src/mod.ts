@@ -79,11 +79,19 @@ export type {
   IReadableBuffer,
   IWritableBuffer,
 } from "./serialization/buffers/buffer.ts";
+export type {
+  ISyncReadable,
+  ISyncWritable,
+} from "./serialization/buffers/sync_buffer.ts";
 export { BlobReadableBuffer } from "./serialization/buffers/blob_readable_buffer.ts";
 export {
   InMemoryReadableBuffer,
   InMemoryWritableBuffer,
 } from "./serialization/buffers/in_memory_buffer.ts";
+export {
+  SyncInMemoryReadableBuffer,
+  SyncInMemoryWritableBuffer,
+} from "./serialization/buffers/sync_in_memory_buffer.ts";
 
 // Streams
 export type {
