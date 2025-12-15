@@ -421,6 +421,76 @@ describe("SyncWritableTap vs WritableTap parity", () => {
     expect(asyncTapUnicode.getPos()).toBe(syncTapUnicode.getPos());
   });
 
+  describe("SyncWritableTap writeString fallback handling", () => {
+    const fallbackString = "😀".repeat(8);
+
+    it("retries encodeInto when the first buffer is too small", () => {
+      const buffer = new ArrayBuffer(512);
+      const writer = new SyncWritableTap(
+        new SyncInMemoryWritableBuffer(buffer),
+      );
+      // @ts-ignore private method access needed for coverage
+      const originalEnsure = SyncWritableTap.ensureEncodedStringBuffer;
+      let ensureCallCount = 0;
+
+      // @ts-ignore private method access needed for the controlled scenario
+      SyncWritableTap.ensureEncodedStringBuffer = (minSize: number) => {
+        ensureCallCount++;
+        if (ensureCallCount === 1) {
+          const smallBuffer = new Uint8Array(1);
+          // @ts-ignore private field access for coverage
+          SyncWritableTap.encodedStringBuffer = smallBuffer;
+          return smallBuffer;
+        }
+        return originalEnsure.call(SyncWritableTap, minSize);
+      };
+
+      try {
+        writer.writeString(fallbackString);
+      } finally {
+        // @ts-ignore private field reset for subsequent tests
+        SyncWritableTap.encodedStringBuffer = new Uint8Array(0);
+        // @ts-ignore restore original method
+        SyncWritableTap.ensureEncodedStringBuffer = originalEnsure;
+      }
+
+      const reader = new SyncReadableTap(
+        new SyncInMemoryReadableBuffer(buffer),
+      );
+      expect(reader.readString()).toBe(fallbackString);
+    });
+
+    it("throws when encodeInto still cannot consume the entire string", () => {
+      const buffer = new ArrayBuffer(512);
+      const writer = new SyncWritableTap(
+        new SyncInMemoryWritableBuffer(buffer),
+      );
+      // @ts-ignore private method access needed for coverage
+      const originalEnsure = SyncWritableTap.ensureEncodedStringBuffer;
+
+      // @ts-ignore private method access needed for the controlled scenario
+      SyncWritableTap.ensureEncodedStringBuffer = () => {
+        const smallBuffer = new Uint8Array(1);
+        // @ts-ignore private field access for coverage
+        SyncWritableTap.encodedStringBuffer = smallBuffer;
+        return smallBuffer;
+      };
+
+      try {
+        assertThrows(
+          () => writer.writeString(fallbackString),
+          Error,
+          "TextEncoder.encodeInto failed to consume the entire string.",
+        );
+      } finally {
+        // @ts-ignore private field reset for subsequent tests
+        SyncWritableTap.encodedStringBuffer = new Uint8Array(0);
+        // @ts-ignore restore original method
+        SyncWritableTap.ensureEncodedStringBuffer = originalEnsure;
+      }
+    });
+  });
+
   it("writeFixed encodes identical bytes when sizes match", async () => {
     const payload = toUint8Array([1, 5, 255, 9]);
 
