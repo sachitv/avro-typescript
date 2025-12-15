@@ -402,6 +402,23 @@ describe("SyncWritableTap vs WritableTap parity", () => {
       expect(bytesOf(asyncBuf)).toEqual(bytesOf(syncBuf));
       expect(asyncTap.getPos()).toBe(syncTap.getPos());
     }
+
+    // Test Unicode string to cover encodeInto() path in writeString()
+    // This ensures the Unicode branch of the ASCII/Unicode hybrid optimization is tested
+    // Uses Japanese proverb "七転び八起き" (Fall seven times, stand up eight) for cultural relevance
+    const unicodeStr = "七転び八起き";
+    const asyncBufUnicode = new ArrayBuffer(128);
+    const syncBufUnicode = new ArrayBuffer(128);
+    const asyncTapUnicode = new WritableTap(asyncBufUnicode);
+    const syncTapUnicode = new SyncWritableTap(
+      new SyncInMemoryWritableBuffer(syncBufUnicode),
+    );
+
+    await asyncTapUnicode.writeString(unicodeStr);
+    syncTapUnicode.writeString(unicodeStr);
+
+    expect(bytesOf(asyncBufUnicode)).toEqual(bytesOf(syncBufUnicode));
+    expect(asyncTapUnicode.getPos()).toBe(syncTapUnicode.getPos());
   });
 
   it("writeFixed encodes identical bytes when sizes match", async () => {

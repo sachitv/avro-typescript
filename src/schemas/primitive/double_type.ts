@@ -59,7 +59,8 @@ export class DoubleType extends FixedSizeBaseType<number> {
 
   /** Writes a double value to the sync tap. */
   public writeSync(tap: SyncWritableTapLike, value: number): void {
-    if (!this.check(value)) {
+    // Fast path: inline validation for performance
+    if (typeof value !== "number") {
       throwInvalidError([], value, this);
     }
     tap.writeDouble(value);
