@@ -111,7 +111,11 @@ export class IntType extends PrimitiveType<number> {
     tap: SyncWritableTapLike,
     value: number,
   ): void {
-    if (!this.check(value)) {
+    // Fast path: inline validation for performance
+    if (
+      typeof value !== "number" || !Number.isInteger(value) ||
+      value < -2147483648 || value > 2147483647
+    ) {
       throwInvalidError([], value, this);
     }
     tap.writeInt(value);

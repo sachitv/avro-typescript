@@ -1,12 +1,20 @@
+#!/usr/bin/env -S deno run --allow-read --allow-write
+
 import { Buffer } from "node:buffer";
 import type { SchemaLike } from "../../src/type/create_type.ts";
 import {
   createSerializationTargets,
   type SerializationTarget,
 } from "./library_targets.ts";
+import {
+  SyncInMemoryWritableBuffer,
+} from "../../src/serialization/buffers/sync_in_memory_buffer.ts";
+import {
+  SyncWritableTap,
+} from "../../src/serialization/sync_tap.ts";
 
 /**
- * Benchmark serialization performance
+ * Focused benchmark script for serialize single record performance
  */
 
 const schema: SchemaLike = {
@@ -37,33 +45,26 @@ const serializationTargets: SerializationTarget<TestRecord>[] =
     "avro-js": { prepareInput: toNodeFriendlyRecord },
   });
 
+// Benchmark string writing specifically
+Deno.bench({
+  name: "string writing benchmark",
+  n: 100000,
+}, () => {
+  const buffer = new ArrayBuffer(1024);
+  const writable = new SyncInMemoryWritableBuffer(buffer);
+  const tap = new SyncWritableTap(writable);
+  tap.writeString(testData.name);
+});
+
+// Run only serialize single record benchmarks
 for (const target of serializationTargets) {
-  {
-    const record = target.prepareInput(testData);
-    Deno.bench(`serialize single record (${target.label})`, () => {
-      target.serialize(record);
-    });
-  }
-
-  {
-    const record = target.prepareInput(testData);
-    const serialized = target.serialize(record);
-    const serializedSnapshot = new Uint8Array(serialized);
-    Deno.bench(`deserialize single record (${target.label})`, () => {
-      target.deserialize(serializedSnapshot);
-    });
-  }
-
-  {
-    const record = target.prepareInput(testData);
-    Deno.bench(`round-trip serialization (${target.label})`, () => {
-      const serialized = target.serialize(record);
-      const result = target.deserialize(serialized);
-      if ((result as { id?: number }).id !== testData.id) {
-        throw new Error(`Round-trip failed for ${target.label}`);
-      }
-    });
-  }
+  const record = target.prepareInput(testData);
+  Deno.bench({
+    name: `serialize single record (${target.label})`,
+    n: 100000, // More iterations for stable results
+  }, () => {
+    target.serialize(record);
+  });
 }
 
 function toNodeFriendlyRecord(record: TestRecord): TestRecord {

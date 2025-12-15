@@ -152,7 +152,11 @@ export class LongType extends PrimitiveType<bigint> {
     tap: SyncWritableTapLike,
     value: bigint,
   ): void {
-    if (!this.check(value)) {
+    // Fast path: inline validation for performance
+    if (
+      typeof value !== "bigint" || value < -(1n << 63n) ||
+      value > (1n << 63n) - 1n
+    ) {
       throwInvalidError([], value, this);
     }
     tap.writeLong(value);

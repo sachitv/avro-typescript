@@ -1,4 +1,12 @@
-const encoder = new TextEncoder();
+/**
+ * Text encoding utilities with performance optimizations.
+ *
+ * Optimizations:
+ * - Export encoder for direct encodeInto() access (browser equivalent of utf8Write)
+ * - encodeInto() provides zero-copy UTF-8 encoding for modern browsers
+ * - Used in writeString() for Unicode string optimization
+ */
+export const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 /**
