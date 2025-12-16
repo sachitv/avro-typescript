@@ -18,6 +18,10 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
  * Double type (64-bit).
  */
 export class DoubleType extends FixedSizeBaseType<number> {
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /** Checks if the value is a valid double. */
   public check(
     value: unknown,
@@ -41,9 +45,20 @@ export class DoubleType extends FixedSizeBaseType<number> {
     tap: WritableTapLike,
     value: number,
   ): Promise<void> {
+    if (!this.validateWrites) {
+      await this.writeUnchecked(tap, value);
+      return;
+    }
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
+    await tap.writeDouble(value);
+  }
+
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: number,
+  ): Promise<void> {
     await tap.writeDouble(value);
   }
 
@@ -59,10 +74,21 @@ export class DoubleType extends FixedSizeBaseType<number> {
 
   /** Writes a double value to the sync tap. */
   public writeSync(tap: SyncWritableTapLike, value: number): void {
+    if (!this.validateWrites) {
+      this.writeSyncUnchecked(tap, value);
+      return;
+    }
     // Fast path: inline validation for performance
     if (typeof value !== "number") {
       throwInvalidError([], value, this);
     }
+    tap.writeDouble(value);
+  }
+
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: number,
+  ): void {
     tap.writeDouble(value);
   }
 

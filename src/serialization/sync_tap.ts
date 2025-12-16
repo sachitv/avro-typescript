@@ -29,6 +29,7 @@ function isISyncWritable(obj: unknown): obj is ISyncWritable {
     typeof obj === "object" &&
     obj !== null &&
     typeof (obj as ISyncWritable).appendBytes === "function" &&
+    typeof (obj as ISyncWritable).appendBytesFrom === "function" &&
     typeof (obj as ISyncWritable).isValid === "function" &&
     typeof (obj as ISyncWritable).canAppendMore === "function"
   );
@@ -328,14 +329,28 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
 export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
   private readonly buffer: ISyncWritable;
 
+  private static readonly INT_MIN = -2147483648;
+  private static readonly INT_MAX = 2147483647;
+
   // Buffer pool optimization: Pre-allocated static buffers to avoid per-operation allocations
   // Reduces GC pressure and improves performance for hot serialization paths
   private static readonly floatBuffer = new ArrayBuffer(8);
   private static readonly floatView = new DataView(SyncWritableTap.floatBuffer);
+  private static readonly float32Bytes = new Uint8Array(
+    SyncWritableTap.floatBuffer,
+    0,
+    4,
+  );
+  private static readonly float64Bytes = new Uint8Array(
+    SyncWritableTap.floatBuffer,
+    0,
+    8,
+  );
   private static readonly trueByte = new Uint8Array([1]);
   private static readonly falseByte = new Uint8Array([0]);
 
   private static readonly varintBufferLong = new Uint8Array(11); // Max 11 bytes for 64-bit long (2^70 needs 11 bytes)
+  private static readonly varintBufferInt = new Uint8Array(5); // Max 5 bytes for zigzag-encoded int32
 
   // String buffer pool: Pre-allocated buffer for ASCII string encoding
   // Avoids allocations for common ASCII strings up to 1024 characters
@@ -360,10 +375,14 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
     return this.buffer.isValid();
   }
 
-  private appendRawBytes(bytes: Uint8Array): void {
-    if (bytes.length === 0) return;
-    this.buffer.appendBytes(bytes);
-    this.pos += bytes.length;
+  private appendRawBytes(
+    bytes: Uint8Array,
+    offset = 0,
+    length = bytes.length - offset,
+  ): void {
+    if (length <= 0) return;
+    this.buffer.appendBytesFrom(bytes, offset, length);
+    this.pos += length;
   }
 
   writeBoolean(value: boolean): void {
@@ -374,13 +393,33 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
 
   /**
    * Writes a 32-bit integer using zigzag + varint encoding.
-   *
-   * Optimization: Delegates to writeLong(BigInt(value)) to ensure correctness
-   * for all integer values, including those outside safe JavaScript integer range.
-   * The BigInt conversion handles edge cases like Number.MAX_SAFE_INTEGER.
    */
   writeInt(value: number): void {
-    this.writeLong(BigInt(value));
+    if (
+      typeof value !== "number" ||
+      !Number.isInteger(value) ||
+      value < SyncWritableTap.INT_MIN ||
+      value > SyncWritableTap.INT_MAX
+    ) {
+      throw new RangeError(
+        `Value ${value} out of range for Avro int (${SyncWritableTap.INT_MIN}..${SyncWritableTap.INT_MAX})`,
+      );
+    }
+    this.writeVarint32ZigZag(value);
+  }
+
+  private writeVarint32ZigZag(value: number): void {
+    // Zigzag encode to an unsigned 32-bit integer:
+    // (n << 1) ^ (n >> 31)
+    let n = ((value << 1) ^ (value >> 31)) >>> 0;
+    let i = 0;
+    const buf = SyncWritableTap.varintBufferInt;
+    while (n > 0x7f) {
+      buf[i++] = (n & 0x7f) | 0x80;
+      n >>>= 7;
+    }
+    buf[i++] = n;
+    this.appendRawBytes(buf, 0, i);
   }
 
   /**
@@ -388,8 +427,7 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
    *
    * Optimizations:
    * - Buffer pool: Uses pre-allocated varintBufferLong to avoid allocations
-   * - Direct buffer writing: Writes directly to buffer, then uses subarray()
-   * - Eliminates: Uint8Array.from() calls that were in the original implementation
+   * - Direct buffer writing: Encodes into a shared buffer then appends a slice
    *
    * Performance impact: ~3x faster than original array-based approach
    */
@@ -409,22 +447,22 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
       n >>= 7n;
     }
     buf[i++] = Number(n);
-    this.appendRawBytes(buf.subarray(0, i));
+    this.appendRawBytes(buf, 0, i);
   }
 
   writeFloat(value: number): void {
     SyncWritableTap.floatView.setFloat32(0, value, true);
-    this.appendRawBytes(new Uint8Array(SyncWritableTap.floatBuffer, 0, 4));
+    this.appendRawBytes(SyncWritableTap.float32Bytes);
   }
 
   writeDouble(value: number): void {
     SyncWritableTap.floatView.setFloat64(0, value, true);
-    this.appendRawBytes(new Uint8Array(SyncWritableTap.floatBuffer, 0, 8));
+    this.appendRawBytes(SyncWritableTap.float64Bytes);
   }
 
   writeFixed(buf: Uint8Array): void {
     if (buf.length === 0) return;
-    this.appendRawBytes(buf);
+    this.appendRawBytes(buf, 0, buf.length);
   }
 
   writeBytes(buf: Uint8Array): void {
@@ -466,7 +504,7 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
         // Avoids TextEncoder overhead for common ASCII strings
         this.writeLong(BigInt(strLen));
         if (strLen > 0) {
-          this.appendRawBytes(buf.subarray(0, strLen));
+          this.appendRawBytes(buf, 0, strLen);
         }
         return;
       }
@@ -488,7 +526,7 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
       }
     }
     this.writeLong(BigInt(result.written));
-    this.appendRawBytes(encodedBuffer.subarray(0, result.written));
+    this.appendRawBytes(encodedBuffer, 0, result.written);
   }
 
   writeBinary(str: string, len: number): void {
@@ -497,7 +535,7 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
     for (let i = 0; i < len; i++) {
       bytes[i] = str.charCodeAt(i) & 0xff;
     }
-    this.appendRawBytes(bytes.subarray(0, len));
+    this.appendRawBytes(bytes, 0, len);
   }
 
   private static ensureEncodedStringBuffer(minSize: number): Uint8Array {

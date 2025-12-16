@@ -39,6 +39,34 @@ export class SyncFixedSizeStreamWriter implements ISyncStreamWritableBuffer {
     this.#offset += data.length;
   }
 
+  public writeBytesFrom(
+    data: Uint8Array,
+    offset: number,
+    length: number,
+  ): void {
+    if (this.#isClosed) {
+      throw new Error("Cannot write to a closed writer");
+    }
+    if (length === 0) {
+      return;
+    }
+    if (
+      !Number.isInteger(offset) || !Number.isInteger(length) ||
+      offset < 0 || length < 0 || offset + length > data.length
+    ) {
+      throw new RangeError(
+        `Invalid source range offset=${offset} length=${length} for dataSize=${data.length}`,
+      );
+    }
+    if (this.#offset + length > this.#target.length) {
+      throw new RangeError("Write operation exceeds buffer capacity");
+    }
+    for (let i = 0; i < length; i++) {
+      this.#target[this.#offset + i] = data[offset + i]!;
+    }
+    this.#offset += length;
+  }
+
   /**
    * Closes the writer and prevents further writes.
    */

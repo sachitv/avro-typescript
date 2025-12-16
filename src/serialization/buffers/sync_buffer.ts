@@ -94,6 +94,12 @@ export interface ISyncWritable {
   appendBytes(data: Uint8Array): void;
 
   /**
+   * Appends a slice of bytes to the buffer without requiring callers to create
+   * a subarray view.
+   */
+  appendBytesFrom(data: Uint8Array, offset: number, length: number): void;
+
+  /**
    * Returns whether the buffer can continue accepting writes. Implementations
    * should flip this to `false` after a write would exceed capacity so callers
    * can detect the overflow condition.

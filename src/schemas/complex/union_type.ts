@@ -31,6 +31,8 @@ export type UnionValue = UnionWrappedValue | null;
 export interface UnionTypeParams {
   /** The types that make up the union. */
   types: Type[];
+  /** Whether to validate during writes. Defaults to true. */
+  validate?: boolean;
 }
 
 interface BranchInfo {
@@ -78,6 +80,7 @@ export class UnionType extends BaseType<UnionValue> {
   readonly #types: Type[];
   readonly #branches: BranchInfo[];
   readonly #indices: Map<string, number>;
+  readonly #validate: boolean;
 
   /**
    * Creates a new UnionType.
@@ -97,6 +100,7 @@ export class UnionType extends BaseType<UnionValue> {
     this.#types = [];
     this.#branches = [];
     this.#indices = new Map();
+    this.#validate = params.validate ?? true;
 
     types.forEach((type, index) => {
       if (!(type instanceof Type)) {
@@ -208,10 +212,14 @@ export class UnionType extends BaseType<UnionValue> {
     tap: WritableTapLike,
     value: UnionValue,
   ): Promise<void> {
+    if (!this.#validate) {
+      await this.writeUnchecked(tap, value);
+      return;
+    }
     const { index, branchValue } = this.#resolveBranch(value as UnionValue);
     await tap.writeLong(BigInt(index));
     if (branchValue !== undefined) {
-      await this.#branches[index].type.write(tap, branchValue);
+      await this.#branches[index].type.write(tap, branchValue as never);
     }
   }
 
@@ -222,10 +230,48 @@ export class UnionType extends BaseType<UnionValue> {
     tap: SyncWritableTapLike,
     value: UnionValue,
   ): void {
+    if (!this.#validate) {
+      this.writeSyncUnchecked(tap, value);
+      return;
+    }
     const { index, branchValue } = this.#resolveBranch(value);
     tap.writeLong(BigInt(index));
     if (branchValue !== undefined) {
-      this.#branches[index].type.writeSync(tap, branchValue);
+      this.#branches[index].type.writeSync(tap, branchValue as never);
+    }
+  }
+
+  /**
+   * Writes union value without validation.
+   */
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: UnionValue,
+  ): Promise<void> {
+    const { index, branchValue } = this.#resolveBranch(value);
+    await tap.writeLong(BigInt(index));
+    if (branchValue !== undefined) {
+      await this.#branches[index].type.writeUnchecked(
+        tap,
+        branchValue as never,
+      );
+    }
+  }
+
+  /**
+   * Writes union value without validation synchronously.
+   */
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: UnionValue,
+  ): void {
+    const { index, branchValue } = this.#resolveBranch(value);
+    tap.writeLong(BigInt(index));
+    if (branchValue !== undefined) {
+      this.#branches[index].type.writeSyncUnchecked(
+        tap,
+        branchValue as never,
+      );
     }
   }
 

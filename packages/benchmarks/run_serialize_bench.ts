@@ -57,21 +57,47 @@ try {
   console.log("\n# Serialize Single Record Benchmark Results\n");
   console.log(`Generated on ${new Date().toISOString()}\n`);
 
-  console.log("| Benchmark | Avg Time | Iter/s | Min | Max | P75 | P99 |");
-  console.log("| --- | --- | --- | --- | --- | --- | --- |");
+  const formatRow = (bench: (typeof benchData)["benches"][number]) => {
+    const ok = bench.results[0]?.ok;
+    if (!ok) return undefined;
+    const avgNs = ok.avg;
+    const avgTime = avgNs < 1000
+      ? `${avgNs.toFixed(1)} ns`
+      : avgNs < 1000000
+      ? `${(avgNs / 1000).toFixed(1)} µs`
+      : `${(avgNs / 1000000).toFixed(1)} ms`;
+    const iterPerSec = (1000000000 / avgNs).toLocaleString();
+    return `| ${bench.name} | ${avgTime} | ${iterPerSec}/s | ${
+      (ok.min / 1000).toFixed(1)
+    } µs | ${(ok.max / 1000).toFixed(1)} µs | ${(ok.p75 / 1000).toFixed(1)} µs | ${
+      (ok.p99 / 1000).toFixed(1)
+    } µs |`;
+  };
 
-  for (const bench of benchData.benches) {
-    if (bench.results[0]?.ok) {
-      const ok = bench.results[0].ok;
-      const avgNs = ok.avg;
-      const avgTime = avgNs < 1000 ? `${(avgNs).toFixed(1)} ns` :
-                     avgNs < 1000000 ? `${(avgNs / 1000).toFixed(1)} µs` :
-                     `${(avgNs / 1000000).toFixed(1)} ms`;
-      const iterPerSec = (1000000000 / avgNs).toLocaleString();
+  const benchesWithValidation = benchData.benches.filter((bench) =>
+    bench.name.includes("validate=true")
+  );
+  const benchesWithoutValidation = benchData.benches.filter((bench) =>
+    bench.name.includes("validate=false")
+  );
+  const benchesOther = benchData.benches.filter((bench) =>
+    !bench.name.includes("validate=true") && !bench.name.includes("validate=false")
+  );
 
-      console.log(`| ${bench.name} | ${avgTime} | ${iterPerSec}/s | ${(ok.min / 1000).toFixed(1)} µs | ${(ok.max / 1000).toFixed(1)} µs | ${(ok.p75 / 1000).toFixed(1)} µs | ${(ok.p99 / 1000).toFixed(1)} µs |`);
+  const printTable = (title: string, benches: typeof benchData.benches) => {
+    if (benches.length === 0) return;
+    console.log(`\n## ${title}\n`);
+    console.log("| Benchmark | Avg Time | Iter/s | Min | Max | P75 | P99 |");
+    console.log("| --- | --- | --- | --- | --- | --- | --- |");
+    for (const bench of benches) {
+      const row = formatRow(bench);
+      if (row) console.log(row);
     }
-  }
+  };
+
+  printTable("With Validation", benchesWithValidation);
+  printTable("Without Validation", benchesWithoutValidation);
+  printTable("Other", benchesOther);
 
   console.log("\nBenchmark completed successfully!");
 

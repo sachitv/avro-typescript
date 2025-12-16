@@ -169,19 +169,29 @@ export class SyncInMemoryWritableBuffer extends SyncInMemoryBufferBase
    * @param data The data to write.
    */
   protected checkWriteBounds(offset: number, data: Uint8Array): void {
+    this.checkWriteBoundsSize(offset, data.length);
+  }
+
+  /**
+   * Checks if writing the given number of bytes at the specified offset would exceed buffer bounds.
+   * Throws a WriteBufferError if the operation would exceed bounds.
+   * @param offset The offset to write at.
+   * @param size The number of bytes to write.
+   */
+  protected checkWriteBoundsSize(offset: number, size: number): void {
     if (offset < 0) {
       throw new WriteBufferError(
         `Offset must be non-negative. Got offset=${offset}`,
         offset,
-        data.length,
+        size,
         this.view.length,
       );
     }
-    if (offset + data.length > this.view.length) {
+    if (offset + size > this.view.length) {
       throw new WriteBufferError(
-        `Write operation exceeds buffer bounds. offset=${offset}, dataSize=${data.length}, bufferLength=${this.view.length}`,
+        `Write operation exceeds buffer bounds. offset=${offset}, dataSize=${size}, bufferLength=${this.view.length}`,
         offset,
-        data.length,
+        size,
         this.view.length,
       );
     }
@@ -198,6 +208,33 @@ export class SyncInMemoryWritableBuffer extends SyncInMemoryBufferBase
     }
     this.view.set(data, this.#offset);
     this.#offset += data.length;
+  }
+
+  /**
+   * Appends a slice of bytes to the buffer at the current offset and advances the offset.
+   * This avoids allocating subarray views in higher-level hot paths.
+   */
+  public appendBytesFrom(
+    data: Uint8Array,
+    offset: number,
+    length: number,
+  ): void {
+    if (length === 0) {
+      return;
+    }
+    if (
+      !Number.isInteger(offset) || !Number.isInteger(length) ||
+      offset < 0 || length < 0 || offset + length > data.length
+    ) {
+      throw new RangeError(
+        `Invalid source range offset=${offset} length=${length} for dataSize=${data.length}`,
+      );
+    }
+    this.checkWriteBoundsSize(this.#offset, length);
+    for (let i = 0; i < length; i++) {
+      this.view[this.#offset + i] = data[offset + i]!;
+    }
+    this.#offset += length;
   }
 
   /**
@@ -256,5 +293,12 @@ export class SyncInMemoryWritableBuffer extends SyncInMemoryBufferBase
    */
   public _testCheckWriteBounds(offset: number, data: Uint8Array): void {
     this.checkWriteBounds(offset, data);
+  }
+
+  /**
+   * @internal Test-only method to check write bounds with arbitrary offset and size.
+   */
+  public _testCheckWriteBoundsSize(offset: number, size: number): void {
+    this.checkWriteBoundsSize(offset, size);
   }
 }

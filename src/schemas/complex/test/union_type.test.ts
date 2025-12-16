@@ -1061,5 +1061,59 @@ describe("UnionType", () => {
         );
       });
     });
+
+    describe("validation modes", () => {
+      it("write() with validate=false allows invalid values", async () => {
+        const noValidateUnion = new UnionType({
+          types: [new StringType(), new IntType()],
+          validate: false,
+        });
+        const buffer = new ArrayBuffer(64);
+        const tap = new Tap(buffer);
+        // This would normally fail validation, but with validate=false it should work
+        await noValidateUnion.write(tap, { string: "test" });
+        const readTap = new Tap(buffer);
+        const result = await noValidateUnion.read(readTap);
+        assertEquals(result, { string: "test" });
+      });
+
+      it("writeSync() with validate=false allows invalid values", () => {
+        const noValidateUnion = new UnionType({
+          types: [new StringType(), new IntType()],
+          validate: false,
+        });
+        const buffer = new ArrayBuffer(64);
+        const tap = new SyncWritableTap(buffer);
+        // This would normally fail validation, but with validate=false it should work
+        noValidateUnion.writeSync(tap, { string: "test" });
+        const readTap = new SyncReadableTap(buffer);
+        const result = noValidateUnion.readSync(readTap);
+        assertEquals(result, { string: "test" });
+      });
+
+      it("writeUnchecked() works with non-null branch value", async () => {
+        const union = new UnionType({
+          types: [new StringType(), new IntType()],
+        });
+        const buffer = new ArrayBuffer(64);
+        const tap = new Tap(buffer);
+        await union.writeUnchecked(tap, { string: "unchecked" });
+        const readTap = new Tap(buffer);
+        const result = await union.read(readTap);
+        assertEquals(result, { string: "unchecked" });
+      });
+
+      it("writeSyncUnchecked() works with non-null branch value", () => {
+        const union = new UnionType({
+          types: [new StringType(), new IntType()],
+        });
+        const buffer = new ArrayBuffer(64);
+        const tap = new SyncWritableTap(buffer);
+        union.writeSyncUnchecked(tap, { int: 42 });
+        const readTap = new SyncReadableTap(buffer);
+        const result = union.readSync(readTap);
+        assertEquals(result, { int: 42 });
+      });
+    });
   });
 });

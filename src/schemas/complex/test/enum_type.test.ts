@@ -477,4 +477,176 @@ describe("EnumType", () => {
       assertThrows(() => type.createResolver(intType));
     });
   });
+
+  describe("validation disabled", () => {
+    it("writes valid values without validation", async () => {
+      const resolved = resolveNames({ name: "Letter" });
+      const type = new EnumType({
+        ...resolved,
+        symbols: ["A", "B", "C"],
+        validate: false,
+      });
+      const buffer = new ArrayBuffer(16);
+      const tap = new Tap(buffer);
+      await type.write(tap, "B");
+      tap._testOnlyResetPos();
+      const value = await type.read(tap);
+      assertEquals(value, "B");
+    });
+
+    it("throws when writing invalid values even without validation", async () => {
+      const resolved = resolveNames({ name: "Letter" });
+      const type = new EnumType({
+        ...resolved,
+        symbols: ["A", "B"],
+        validate: false,
+      });
+      const buffer = new ArrayBuffer(16);
+      const tap = new Tap(buffer);
+      await assertRejects(
+        async () => await type.write(tap, "Z"),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("writes valid values synchronously without validation", () => {
+      const resolved = resolveNames({ name: "Letter" });
+      const type = new EnumType({
+        ...resolved,
+        symbols: ["A", "B", "C"],
+        validate: false,
+      });
+      const buffer = new ArrayBuffer(16);
+      const writeTap = new SyncWritableTap(buffer);
+      type.writeSync(writeTap, "B");
+      const readTap = new SyncReadableTap(buffer);
+      const value = type.readSync(readTap);
+      assertEquals(value, "B");
+    });
+
+    it("throws when writeSync receives invalid value even without validation", () => {
+      const resolved = resolveNames({ name: "Letter" });
+      const type = new EnumType({
+        ...resolved,
+        symbols: ["A", "B"],
+        validate: false,
+      });
+      const buffer = new ArrayBuffer(16);
+      const tap = new SyncWritableTap(buffer);
+      assertThrows(
+        () => type.writeSync(tap, "Z"),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("toBuffer works without validation for valid values", async () => {
+      const resolved = resolveNames({ name: "Letter" });
+      const type = new EnumType({
+        ...resolved,
+        symbols: ["A", "B"],
+        validate: false,
+      });
+      const buffer = await type.toBuffer("A");
+      const value = await type.fromBuffer(buffer);
+      assertEquals(value, "A");
+    });
+
+    it("toBuffer throws for invalid values even without validation", async () => {
+      const resolved = resolveNames({ name: "Letter" });
+      const type = new EnumType({
+        ...resolved,
+        symbols: ["A", "B"],
+        validate: false,
+      });
+      await assertRejects(
+        async () => await type.toBuffer("Z"),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("toSyncBuffer works without validation for valid values", () => {
+      const resolved = resolveNames({ name: "Letter" });
+      const type = new EnumType({
+        ...resolved,
+        symbols: ["A", "B"],
+        validate: false,
+      });
+      const buffer = type.toSyncBuffer("A");
+      const value = type.fromSyncBuffer(buffer);
+      assertEquals(value, "A");
+    });
+
+    it("toSyncBuffer throws for invalid values even without validation", () => {
+      const resolved = resolveNames({ name: "Letter" });
+      const type = new EnumType({
+        ...resolved,
+        symbols: ["A", "B"],
+        validate: false,
+      });
+      assertThrows(
+        () => type.toSyncBuffer("Z"),
+        Error,
+        "Invalid value",
+      );
+    });
+  });
+
+  describe("unchecked write methods", () => {
+    it("writeUnchecked writes valid values", async () => {
+      const type = createEnum({
+        name: "Letter",
+        symbols: ["A", "B", "C"],
+      });
+      const buffer = new ArrayBuffer(16);
+      const writeTap = new Tap(buffer);
+      await type.writeUnchecked(writeTap, "C");
+      const readTap = new Tap(buffer);
+      const value = await type.read(readTap);
+      assertEquals(value, "C");
+    });
+
+    it("writeUnchecked throws for invalid values", async () => {
+      const type = createEnum({
+        name: "Letter",
+        symbols: ["A", "B"],
+      });
+      const buffer = new ArrayBuffer(16);
+      const tap = new Tap(buffer);
+      await assertRejects(
+        async () => await type.writeUnchecked(tap, "Z"),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("writeSyncUnchecked writes valid values", () => {
+      const type = createEnum({
+        name: "Letter",
+        symbols: ["A", "B", "C"],
+      });
+      const buffer = new ArrayBuffer(16);
+      const writeTap = new SyncWritableTap(buffer);
+      type.writeSyncUnchecked(writeTap, "C");
+      const readTap = new SyncReadableTap(buffer);
+      const value = type.readSync(readTap);
+      assertEquals(value, "C");
+    });
+
+    it("writeSyncUnchecked throws for invalid values", () => {
+      const type = createEnum({
+        name: "Letter",
+        symbols: ["A", "B"],
+      });
+      const buffer = new ArrayBuffer(16);
+      const tap = new SyncWritableTap(buffer);
+      assertThrows(
+        () => type.writeSyncUnchecked(tap, "Z"),
+        Error,
+        "Invalid value",
+      );
+    });
+  });
 });

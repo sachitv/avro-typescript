@@ -19,6 +19,10 @@ import { decode, encode } from "../../serialization/text_encoding.ts";
  * String type.
  */
 export class StringType extends PrimitiveType<string> {
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /** Checks if the value is a valid string. */
   public override check(
     value: unknown,
@@ -34,7 +38,9 @@ export class StringType extends PrimitiveType<string> {
 
   /** Converts a string value to its Avro-encoded buffer representation. */
   public override async toBuffer(value: string): Promise<ArrayBuffer> {
-    this.check(value, throwInvalidError, []);
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
     const strBytes = encode(value);
     const lengthSize = calculateVarintSize(strBytes.length);
     const buf = new ArrayBuffer(lengthSize + strBytes.length);
@@ -53,9 +59,20 @@ export class StringType extends PrimitiveType<string> {
     tap: WritableTapLike,
     value: string,
   ): Promise<void> {
+    if (!this.validateWrites) {
+      await this.writeUnchecked(tap, value);
+      return;
+    }
     if (typeof value !== "string") {
       throwInvalidError([], value, this);
     }
+    await tap.writeString(value);
+  }
+
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: string,
+  ): Promise<void> {
     await tap.writeString(value);
   }
 
@@ -116,7 +133,9 @@ export class StringType extends PrimitiveType<string> {
 
   /** Converts a string value to its Avro-encoded buffer representation synchronously. */
   public override toSyncBuffer(value: string): ArrayBuffer {
-    this.check(value, throwInvalidError, []);
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
     const strBytes = encode(value);
     const lengthSize = calculateVarintSize(strBytes.length);
     const buf = new ArrayBuffer(lengthSize + strBytes.length);
@@ -135,9 +154,20 @@ export class StringType extends PrimitiveType<string> {
     tap: SyncWritableTapLike,
     value: string,
   ): void {
+    if (!this.validateWrites) {
+      this.writeSyncUnchecked(tap, value);
+      return;
+    }
     if (typeof value !== "string") {
       throwInvalidError([], value, this);
     }
+    tap.writeString(value);
+  }
+
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: string,
+  ): void {
     tap.writeString(value);
   }
 

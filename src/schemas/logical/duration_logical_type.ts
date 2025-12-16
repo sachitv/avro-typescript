@@ -30,8 +30,8 @@ export class DurationLogicalType
    * Creates a new DurationLogicalType.
    * @param underlying The underlying fixed type (must be 12 bytes).
    */
-  constructor(underlying: FixedType) {
-    super(underlying);
+  constructor(underlying: FixedType, validate = true) {
+    super(underlying, validate);
     if (underlying.getSize() !== 12) {
       throw new Error("Duration logical type requires fixed size of 12 bytes.");
     }

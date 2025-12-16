@@ -15,6 +15,13 @@ import { throwInvalidError } from "../error.ts";
  * Provides optimized serialization for types with known fixed byte sizes.
  */
 export abstract class FixedSizeBaseType<T = unknown> extends BaseType<T> {
+  protected readonly validateWrites: boolean;
+
+  constructor(validate = true) {
+    super();
+    this.validateWrites = validate;
+  }
+
   /**
    * Returns the fixed size in bytes for this type.
    * @returns The exact size in bytes.
@@ -27,7 +34,9 @@ export abstract class FixedSizeBaseType<T = unknown> extends BaseType<T> {
    * @returns The serialized ArrayBuffer.
    */
   public override async toBuffer(value: T): Promise<ArrayBuffer> {
-    this.check(value, throwInvalidError, []);
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
     const size = this.sizeBytes();
     const buf = new ArrayBuffer(size);
     const tap = new WritableTap(buf);
@@ -49,7 +58,9 @@ export abstract class FixedSizeBaseType<T = unknown> extends BaseType<T> {
    * @returns The serialized ArrayBuffer.
    */
   public toSyncBuffer(value: T): ArrayBuffer {
-    this.check(value, throwInvalidError, []);
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
     const size = this.sizeBytes();
     const buf = new ArrayBuffer(size);
     const tap = new SyncWritableTap(buf);

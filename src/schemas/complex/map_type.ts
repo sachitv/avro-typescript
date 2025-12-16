@@ -22,6 +22,8 @@ import { calculateVarintSize } from "../../internal/varint.ts";
 export interface MapTypeParams<T> {
   /** The type of values in the map. */
   values: Type<T>;
+  /** Whether to validate during writes. Defaults to true. */
+  validate?: boolean;
 }
 
 /**
@@ -84,6 +86,7 @@ export function readMapIntoSync<T>(
  */
 export class MapType<T = unknown> extends BaseType<Map<string, T>> {
   readonly #valuesType: Type<T>;
+  readonly #validate: boolean;
 
   /**
    * Creates a new MapType.
@@ -95,6 +98,7 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
       throw new Error("MapType requires a values type.");
     }
     this.#valuesType = params.values;
+    this.#validate = params.validate ?? true;
   }
 
   /**
@@ -152,6 +156,10 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     tap: WritableTapLike,
     value: Map<string, T>,
   ): Promise<void> {
+    if (!this.#validate) {
+      await this.writeUnchecked(tap, value);
+      return;
+    }
     if (!(value instanceof Map)) {
       throwInvalidError([], value, this);
     }
@@ -176,6 +184,10 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     tap: SyncWritableTapLike,
     value: Map<string, T>,
   ): void {
+    if (!this.#validate) {
+      this.writeSyncUnchecked(tap, value);
+      return;
+    }
     if (!(value instanceof Map)) {
       throwInvalidError([], value, this);
     }
@@ -188,6 +200,40 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
         }
         tap.writeString(key);
         this.#valuesType.writeSync(tap, entry);
+      }
+    }
+    tap.writeLong(0n);
+  }
+
+  /**
+   * Writes map without validation.
+   */
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: Map<string, T>,
+  ): Promise<void> {
+    if (value.size > 0) {
+      await tap.writeLong(BigInt(value.size));
+      for (const [key, entry] of value) {
+        await tap.writeString(key);
+        await this.#valuesType.writeUnchecked(tap, entry);
+      }
+    }
+    await tap.writeLong(0n);
+  }
+
+  /**
+   * Writes map without validation synchronously.
+   */
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: Map<string, T>,
+  ): void {
+    if (value.size > 0) {
+      tap.writeLong(BigInt(value.size));
+      for (const [key, entry] of value) {
+        tap.writeString(key);
+        this.#valuesType.writeSyncUnchecked(tap, entry);
       }
     }
     tap.writeLong(0n);
@@ -285,7 +331,7 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
    * @returns The serialized ArrayBuffer.
    */
   public override async toBuffer(value: Map<string, T>): Promise<ArrayBuffer> {
-    if (!(value instanceof Map)) {
+    if (this.#validate && !(value instanceof Map)) {
       throwInvalidError([], value, this);
     }
 
@@ -297,11 +343,13 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     let totalSize = 1; // final zero block terminator
 
     for (const [key, entry] of value.entries()) {
-      if (typeof key !== "string") {
+      if (this.#validate && typeof key !== "string") {
         throwInvalidError([], value, this);
       }
       const keyBytes = encode(key);
-      const valueBytes = new Uint8Array(await this.#valuesType.toBuffer(entry));
+      const valueBytes = new Uint8Array(
+        await this.#valuesType.toBuffer(entry),
+      );
       totalSize += calculateVarintSize(keyBytes.length) + keyBytes.length;
       totalSize += valueBytes.length;
       serializedEntries.push({ keyBytes, valueBytes });
@@ -331,7 +379,7 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
    * Encodes the entire map synchronously into a contiguous buffer.
    */
   public override toSyncBuffer(value: Map<string, T>): ArrayBuffer {
-    if (!(value instanceof Map)) {
+    if (this.#validate && !(value instanceof Map)) {
       throwInvalidError([], value, this);
     }
 
@@ -343,7 +391,7 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     let totalSize = 1; // final zero block terminator
 
     for (const [key, entry] of value.entries()) {
-      if (typeof key !== "string") {
+      if (this.#validate && typeof key !== "string") {
         throwInvalidError([], value, this);
       }
       const keyBytes = encode(key);

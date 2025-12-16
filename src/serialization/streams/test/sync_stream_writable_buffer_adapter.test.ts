@@ -23,6 +23,25 @@ describe("SyncStreamWritableBufferAdapter", () => {
     });
   });
 
+  describe("appendBytesFrom", () => {
+    it("writes a slice to the underlying stream", () => {
+      const writer = new SyncFixedSizeStreamWriter(new Uint8Array(10));
+      const adapter = new SyncStreamWritableBufferAdapter(writer);
+
+      adapter.appendBytesFrom(new Uint8Array([0, 1, 2, 3]), 1, 2);
+      assertEquals(writer.toUint8Array(), new Uint8Array([1, 2]));
+    });
+
+    it("ignores writes after close", () => {
+      const writer = new SyncFixedSizeStreamWriter(new Uint8Array(10));
+      const adapter = new SyncStreamWritableBufferAdapter(writer);
+
+      adapter.close();
+      adapter.appendBytesFrom(new Uint8Array([0, 1, 2, 3]), 1, 2);
+      assertEquals(writer.toUint8Array(), new Uint8Array());
+    });
+  });
+
   describe("isValid and canAppendMore", () => {
     it("reflects closed state", () => {
       const writer = new SyncFixedSizeStreamWriter(new Uint8Array(10));
@@ -42,6 +61,11 @@ describe("SyncStreamWritableBufferAdapter", () => {
       let closeCount = 0;
       const writer = {
         writeBytes: (_data: Uint8Array) => {},
+        writeBytesFrom: (
+          _data: Uint8Array,
+          _offset: number,
+          _length: number,
+        ) => {},
         close: () => {
           closeCount++;
         },

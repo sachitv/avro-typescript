@@ -18,6 +18,10 @@ import { calculateVarintSize } from "../../internal/varint.ts";
  * Bytes type.
  */
 export class BytesType extends PrimitiveType<Uint8Array> {
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /** Checks if the value is a valid bytes array. */
   public override check(
     value: unknown,
@@ -52,9 +56,20 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     tap: WritableTapLike,
     value: Uint8Array,
   ): Promise<void> {
+    if (!this.validateWrites) {
+      await this.writeUnchecked(tap, value);
+      return;
+    }
     if (!(value instanceof Uint8Array)) {
       throwInvalidError([], value, this);
     }
+    await tap.writeBytes(value);
+  }
+
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: Uint8Array,
+  ): Promise<void> {
     await tap.writeBytes(value);
   }
 
@@ -65,9 +80,20 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     tap: SyncWritableTapLike,
     value: Uint8Array,
   ): void {
+    if (!this.validateWrites) {
+      this.writeSyncUnchecked(tap, value);
+      return;
+    }
     if (!(value instanceof Uint8Array)) {
       throwInvalidError([], value, this);
     }
+    tap.writeBytes(value);
+  }
+
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: Uint8Array,
+  ): void {
     tap.writeBytes(value);
   }
 
@@ -89,7 +115,9 @@ export class BytesType extends PrimitiveType<Uint8Array> {
    * Converts a byte array to an ArrayBuffer.
    */
   public override async toBuffer(value: Uint8Array): Promise<ArrayBuffer> {
-    this.check(value, throwInvalidError, []);
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
     // Pre-allocate buffer based on value length for efficiency
     const lengthSize = calculateVarintSize(value.length);
     const totalSize = lengthSize + value.length;
@@ -103,7 +131,9 @@ export class BytesType extends PrimitiveType<Uint8Array> {
    * Converts a byte array to an ArrayBuffer synchronously.
    */
   public override toSyncBuffer(value: Uint8Array): ArrayBuffer {
-    this.check(value, throwInvalidError, []);
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
     // Pre-allocate buffer based on value length for efficiency
     const lengthSize = calculateVarintSize(value.length);
     const totalSize = lengthSize + value.length;

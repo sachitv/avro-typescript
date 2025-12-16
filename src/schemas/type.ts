@@ -73,6 +73,17 @@ export abstract class Type<T = unknown> {
   public abstract write(tap: WritableTapLike, value: T): Promise<void>;
 
   /**
+   * Writes a value to the tap without performing runtime validation.
+   *
+   * This is used to implement `createType(schema, { validate: false })`
+   * efficiently and recursively. The default implementation delegates to
+   * {@link write}.
+   */
+  public async writeUnchecked(tap: WritableTapLike, value: T): Promise<void> {
+    await this.write(tap, value);
+  }
+
+  /**
    * Reads a value from the tap. Must be implemented by subclasses.
    * @param tap The tap to read from.
    * @returns The read value.
@@ -149,6 +160,15 @@ export abstract class Type<T = unknown> {
    * @param value The value to write.
    */
   public abstract writeSync(tap: SyncWritableTapLike, value: T): void;
+
+  /**
+   * Writes a value to the sync tap without performing runtime validation.
+   *
+   * The default implementation delegates to {@link writeSync}.
+   */
+  public writeSyncUnchecked(tap: SyncWritableTapLike, value: T): void {
+    this.writeSync(tap, value);
+  }
 
   /**
    * Reads a value from the sync tap. Must be implemented by subclasses.

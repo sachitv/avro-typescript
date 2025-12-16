@@ -74,6 +74,8 @@ export function readArrayIntoSync<T>(
 export interface ArrayTypeParams<T> {
   /** The type of items in the array. */
   items: Type<T>;
+  /** Whether to validate during writes. Defaults to true. */
+  validate?: boolean;
 }
 
 /**
@@ -81,6 +83,7 @@ export interface ArrayTypeParams<T> {
  */
 export class ArrayType<T = unknown> extends BaseType<T[]> {
   readonly #itemsType: Type<T>;
+  readonly #validate: boolean;
 
   /**
    * Creates a new ArrayType.
@@ -92,6 +95,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
       throw new Error("ArrayType requires an items type.");
     }
     this.#itemsType = params.items;
+    this.#validate = params.validate ?? true;
   }
 
   /**
@@ -148,31 +152,49 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     tap: WritableTapLike,
     value: T[],
   ): Promise<void> {
-    if (!Array.isArray(value)) {
+    if (this.#validate && !Array.isArray(value)) {
       throwInvalidError([], value, this);
     }
-
-    if (value.length > 0) {
-      await tap.writeLong(BigInt(value.length));
-      for (const element of value) {
-        await this.#itemsType.write(tap, element);
-      }
-    }
-    await tap.writeLong(0n);
+    await this.writeUnchecked(tap, value);
   }
 
   /**
    * Serializes the array synchronously to the provided tap.
    */
   public override writeSync(tap: SyncWritableTapLike, value: T[]): void {
-    if (!Array.isArray(value)) {
+    if (this.#validate && !Array.isArray(value)) {
       throwInvalidError([], value, this);
     }
+    this.writeSyncUnchecked(tap, value);
+  }
 
+  /**
+   * Writes array without validation.
+   */
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: T[],
+  ): Promise<void> {
+    if (value.length > 0) {
+      await tap.writeLong(BigInt(value.length));
+      for (const element of value) {
+        await this.#itemsType.writeUnchecked(tap, element);
+      }
+    }
+    await tap.writeLong(0n);
+  }
+
+  /**
+   * Writes array without validation synchronously.
+   */
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: T[],
+  ): void {
     if (value.length > 0) {
       tap.writeLong(BigInt(value.length));
       for (const element of value) {
-        this.#itemsType.writeSync(tap, element);
+        this.#itemsType.writeSyncUnchecked(tap, element);
       }
     }
     tap.writeLong(0n);
@@ -272,7 +294,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
    * @returns The serialized buffer.
    */
   public override async toBuffer(value: T[]): Promise<ArrayBuffer> {
-    if (!Array.isArray(value)) {
+    if (this.#validate && !Array.isArray(value)) {
       throwInvalidError([], value, this);
     }
 
@@ -308,7 +330,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
    * Encodes the array synchronously into a dedicated buffer.
    */
   public override toSyncBuffer(value: T[]): ArrayBuffer {
-    if (!Array.isArray(value)) {
+    if (this.#validate && !Array.isArray(value)) {
       throwInvalidError([], value, this);
     }
 

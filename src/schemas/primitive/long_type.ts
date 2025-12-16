@@ -22,6 +22,10 @@ const MAX_LONG = (1n << 63n) - 1n;
  * Long type (64-bit).
  */
 export class LongType extends PrimitiveType<bigint> {
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /** Checks if the value is a valid long. */
   public override check(
     value: unknown,
@@ -46,9 +50,20 @@ export class LongType extends PrimitiveType<bigint> {
     tap: WritableTapLike,
     value: bigint,
   ): Promise<void> {
+    if (!this.validateWrites) {
+      await this.writeUnchecked(tap, value);
+      return;
+    }
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
+    await tap.writeLong(value);
+  }
+
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: bigint,
+  ): Promise<void> {
     await tap.writeLong(value);
   }
 
@@ -59,7 +74,9 @@ export class LongType extends PrimitiveType<bigint> {
 
   /** Converts a bigint value to its buffer representation. */
   public override async toBuffer(value: bigint): Promise<ArrayBuffer> {
-    this.check(value, throwInvalidError, []);
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
     // For long, allocate exact size based on value
     const size = calculateVarintSize(value);
     const buf = new ArrayBuffer(size);
@@ -70,7 +87,9 @@ export class LongType extends PrimitiveType<bigint> {
 
   /** Converts a bigint value to its buffer representation synchronously. */
   public override toSyncBuffer(value: bigint): ArrayBuffer {
-    this.check(value, throwInvalidError, []);
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
     // For long, allocate exact size based on value
     const size = calculateVarintSize(value);
     const buf = new ArrayBuffer(size);
@@ -152,6 +171,10 @@ export class LongType extends PrimitiveType<bigint> {
     tap: SyncWritableTapLike,
     value: bigint,
   ): void {
+    if (!this.validateWrites) {
+      this.writeSyncUnchecked(tap, value);
+      return;
+    }
     // Fast path: inline validation for performance
     if (
       typeof value !== "bigint" || value < -(1n << 63n) ||
@@ -159,6 +182,13 @@ export class LongType extends PrimitiveType<bigint> {
     ) {
       throwInvalidError([], value, this);
     }
+    tap.writeLong(value);
+  }
+
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: bigint,
+  ): void {
     tap.writeLong(value);
   }
 

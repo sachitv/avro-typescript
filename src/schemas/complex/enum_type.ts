@@ -23,6 +23,8 @@ export interface EnumTypeParams extends ResolvedNames {
   symbols: string[];
   /** Optional default value. */
   default?: string;
+  /** Whether to validate during writes. Defaults to true. */
+  validate?: boolean;
 }
 
 /**
@@ -33,6 +35,7 @@ export class EnumType extends NamedType<string> {
   readonly #symbols: string[];
   readonly #indices: Map<string, number>;
   readonly #default?: string;
+  readonly #validate: boolean;
 
   /**
    * Creates a new EnumType.
@@ -47,6 +50,7 @@ export class EnumType extends NamedType<string> {
     super(nameInfo);
     this.#symbols = symbols.slice();
     this.#indices = new Map<string, number>();
+    this.#validate = params.validate ?? true;
 
     this.#symbols.forEach((symbol, index) => {
       if (!isValidName(symbol)) {
@@ -108,6 +112,10 @@ export class EnumType extends NamedType<string> {
     tap: WritableTapLike,
     value: string,
   ): Promise<void> {
+    if (!this.#validate) {
+      await this.writeUnchecked(tap, value);
+      return;
+    }
     const index = this.#indices.get(value);
     if (index === undefined) {
       throwInvalidError([], value, this);
@@ -119,6 +127,40 @@ export class EnumType extends NamedType<string> {
    * Encodes the enum index synchronously.
    */
   public override writeSync(tap: SyncWritableTapLike, value: string): void {
+    if (!this.#validate) {
+      this.writeSyncUnchecked(tap, value);
+      return;
+    }
+    const index = this.#indices.get(value);
+    if (index === undefined) {
+      throwInvalidError([], value, this);
+    }
+    tap.writeLong(BigInt(index));
+  }
+
+  /**
+   * Writes enum value without type validation.
+   * Still validates that the symbol exists to avoid undefined behavior.
+   */
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: string,
+  ): Promise<void> {
+    const index = this.#indices.get(value);
+    if (index === undefined) {
+      throwInvalidError([], value, this);
+    }
+    await tap.writeLong(BigInt(index));
+  }
+
+  /**
+   * Writes enum value without type validation synchronously.
+   * Still validates that the symbol exists to avoid undefined behavior.
+   */
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: string,
+  ): void {
     const index = this.#indices.get(value);
     if (index === undefined) {
       throwInvalidError([], value, this);
@@ -176,8 +218,13 @@ export class EnumType extends NamedType<string> {
    * Converts the enum value to its binary buffer representation.
    */
   public override async toBuffer(value: string): Promise<ArrayBuffer> {
-    this.check(value, throwInvalidError, []);
-    const index = this.#indices.get(value)!;
+    if (this.#validate) {
+      this.check(value, throwInvalidError, []);
+    }
+    const index = this.#indices.get(value);
+    if (index === undefined) {
+      throwInvalidError([], value, this);
+    }
     const size = calculateVarintSize(index);
     const buffer = new ArrayBuffer(size);
     const tap = new WritableTap(buffer);
@@ -189,8 +236,13 @@ export class EnumType extends NamedType<string> {
    * Emits a buffer containing the enum index synchronously.
    */
   public override toSyncBuffer(value: string): ArrayBuffer {
-    this.check(value, throwInvalidError, []);
-    const index = this.#indices.get(value)!;
+    if (this.#validate) {
+      this.check(value, throwInvalidError, []);
+    }
+    const index = this.#indices.get(value);
+    if (index === undefined) {
+      throwInvalidError([], value, this);
+    }
     const size = calculateVarintSize(index);
     const buffer = new ArrayBuffer(size);
     const tap = new SyncWritableTap(buffer);

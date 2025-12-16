@@ -150,6 +150,26 @@ describe("FixedType", () => {
       );
     });
 
+    it("writes via writeUnchecked without validation", async () => {
+      const resolvedNames = resolveNames({
+        name: "Test",
+        namespace: undefined,
+        aliases: undefined,
+      });
+      const fixedType = new FixedType({
+        ...resolvedNames,
+        size: 4,
+        validate: false,
+      });
+      const buffer = new ArrayBuffer(8);
+      const tap = new Tap(buffer);
+      // Writing a longer array should be handled without throwing
+      await fixedType.write(tap, new Uint8Array([1, 2, 3, 4, 5, 6]));
+      const readTap = new Tap(buffer);
+      const result = await fixedType.read(readTap);
+      assertEquals(result, new Uint8Array([1, 2, 3, 4]));
+    });
+
     it("throws error when reading insufficient data", async () => {
       const fixedType = createFixedType("Test", 4);
       const buf = new ArrayBuffer(2); // Not enough data
@@ -321,6 +341,44 @@ describe("FixedType", () => {
       );
     });
 
+    it("converts values to buffer without validation when validate is false", async () => {
+      const resolvedNames = resolveNames({
+        name: "Test",
+        namespace: undefined,
+        aliases: undefined,
+      });
+      const fixedType = new FixedType({
+        ...resolvedNames,
+        size: 4,
+        validate: false,
+      });
+      const bytes = new Uint8Array([1, 2, 3, 4]);
+      const buffer = await fixedType.toBuffer(bytes);
+
+      assertEquals(buffer.byteLength, 4);
+      const view = new Uint8Array(buffer);
+      assertEquals(view, bytes);
+    });
+
+    it("converts values to sync buffer without validation when validate is false", () => {
+      const resolvedNames = resolveNames({
+        name: "Test",
+        namespace: undefined,
+        aliases: undefined,
+      });
+      const fixedType = new FixedType({
+        ...resolvedNames,
+        size: 4,
+        validate: false,
+      });
+      const bytes = new Uint8Array([1, 2, 3, 4]);
+      const buffer = fixedType.toSyncBuffer(bytes);
+
+      assertEquals(buffer.byteLength, 4);
+      const view = new Uint8Array(buffer);
+      assertEquals(view, bytes);
+    });
+
     it("skips fixed-size values in tap", async () => {
       const fixedType = createFixedType("Test", 4);
       const buf = new ArrayBuffer(8);
@@ -367,6 +425,26 @@ describe("FixedType", () => {
         Error,
         "Invalid value",
       );
+    });
+
+    it("writes via writeSyncUnchecked without validation", () => {
+      const resolvedNames = resolveNames({
+        name: "Test",
+        namespace: undefined,
+        aliases: undefined,
+      });
+      const fixedType = new FixedType({
+        ...resolvedNames,
+        size: 4,
+        validate: false,
+      });
+      const buffer = new ArrayBuffer(8);
+      const tap = new SyncWritableTap(buffer);
+      // Writing a longer array should be truncated to size
+      fixedType.writeSync(tap, new Uint8Array([1, 2, 3, 4, 5, 6]));
+      const readTap = new SyncReadableTap(buffer);
+      const result = fixedType.readSync(readTap);
+      assertEquals(result, new Uint8Array([1, 2, 3, 4]));
     });
 
     it("skips fixed-size values via sync taps", () => {

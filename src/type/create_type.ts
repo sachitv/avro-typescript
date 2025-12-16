@@ -93,6 +93,7 @@ export interface SchemaObject {
 interface CreateTypeContext {
   namespace?: string;
   registry: Map<string, Type>;
+  validate: boolean;
 }
 
 /**
@@ -107,18 +108,36 @@ export interface CreateTypeOptions {
    * Registry of shared named types.
    */
   registry?: Map<string, Type>;
+  /**
+   * Whether to validate values during serialization writes.
+   *
+   * When set to `false`, types may skip runtime type/range checks on hot write
+   * paths for performance. This is unsafe for untrusted input and should only
+   * be used when values are already known to match the schema.
+   */
+  validate?: boolean;
 }
 
-const PRIMITIVE_FACTORIES: Record<PrimitiveTypeName, () => Type> = {
-  "null": () => new NullType(),
-  "boolean": () => new BooleanType(),
-  "int": () => new IntType(),
-  "long": () => new LongType(),
-  "float": () => new FloatType(),
-  "double": () => new DoubleType(),
-  "bytes": () => new BytesType(),
-  "string": () => new StringType(),
-};
+function createPrimitiveType(name: PrimitiveTypeName, validate: boolean): Type {
+  switch (name) {
+    case "null":
+      return new NullType(validate);
+    case "boolean":
+      return new BooleanType(validate);
+    case "int":
+      return new IntType(validate);
+    case "long":
+      return new LongType(validate);
+    case "float":
+      return new FloatType(validate);
+    case "double":
+      return new DoubleType(validate);
+    case "bytes":
+      return new BytesType(validate);
+    case "string":
+      return new StringType(validate);
+  }
+}
 
 /**
  * Constructs an Avro {@link Type} from a schema definition.
@@ -131,6 +150,7 @@ export function createType(
   const context: CreateTypeContext = {
     namespace: options.namespace,
     registry,
+    validate: options.validate ?? true,
   };
   return constructType(schema, context);
 }
@@ -178,11 +198,12 @@ function constructType(schema: SchemaLike, context: CreateTypeContext): Type {
       return createMapType(schema, context);
     }
     if (isPrimitiveTypeName(type)) {
-      return PRIMITIVE_FACTORIES[type]();
+      return createPrimitiveType(type, context.validate);
     }
     return createFromTypeName(type, {
       namespace: extractNamespace(schema, context.namespace),
       registry: context.registry,
+      validate: context.validate,
     });
   }
 
@@ -243,7 +264,7 @@ function createLogicalType(
           const logical = new DecimalLogicalType(underlying, {
             precision,
             scale: scaleValue as number | undefined,
-          });
+          }, context.validate);
           return replaceIfNamed(logical);
         }
         return underlying;
@@ -252,68 +273,77 @@ function createLogicalType(
         if (
           underlying instanceof StringType || underlying instanceof FixedType
         ) {
-          const logical = new UuidLogicalType(underlying);
+          const logical = new UuidLogicalType(underlying, context.validate);
           return replaceIfNamed(logical);
         }
         return underlying;
       }
       case "date": {
         if (underlying instanceof IntType) {
-          return new DateLogicalType(underlying);
+          return new DateLogicalType(underlying, context.validate);
         }
         return underlying;
       }
       case "time-millis": {
         if (underlying instanceof IntType) {
-          return new TimeMillisLogicalType(underlying);
+          return new TimeMillisLogicalType(underlying, context.validate);
         }
         return underlying;
       }
       case "time-micros": {
         if (underlying instanceof LongType) {
-          return new TimeMicrosLogicalType(underlying);
+          return new TimeMicrosLogicalType(underlying, context.validate);
         }
         return underlying;
       }
       case "timestamp-millis": {
         if (underlying instanceof LongType) {
-          return new TimestampMillisLogicalType(underlying);
+          return new TimestampMillisLogicalType(underlying, context.validate);
         }
         return underlying;
       }
       case "timestamp-micros": {
         if (underlying instanceof LongType) {
-          return new TimestampMicrosLogicalType(underlying);
+          return new TimestampMicrosLogicalType(underlying, context.validate);
         }
         return underlying;
       }
       case "timestamp-nanos": {
         if (underlying instanceof LongType) {
-          return new TimestampNanosLogicalType(underlying);
+          return new TimestampNanosLogicalType(underlying, context.validate);
         }
         return underlying;
       }
       case "local-timestamp-millis": {
         if (underlying instanceof LongType) {
-          return new LocalTimestampMillisLogicalType(underlying);
+          return new LocalTimestampMillisLogicalType(
+            underlying,
+            context.validate,
+          );
         }
         return underlying;
       }
       case "local-timestamp-micros": {
         if (underlying instanceof LongType) {
-          return new LocalTimestampMicrosLogicalType(underlying);
+          return new LocalTimestampMicrosLogicalType(
+            underlying,
+            context.validate,
+          );
         }
         return underlying;
       }
       case "local-timestamp-nanos": {
         if (underlying instanceof LongType) {
-          return new LocalTimestampNanosLogicalType(underlying);
+          return new LocalTimestampNanosLogicalType(
+            underlying,
+            context.validate,
+          );
         }
         return underlying;
       }
       case "duration": {
         if (underlying instanceof FixedType) {
-          const logical = new DurationLogicalType(underlying);
+          const logical = new DurationLogicalType(underlying, context.validate);
           return replaceIfNamed(logical);
         }
         return underlying;
@@ -331,7 +361,7 @@ function createFromTypeName(
   context: CreateTypeContext,
 ): Type {
   if (isPrimitiveTypeName(name as PrimitiveTypeName)) {
-    return PRIMITIVE_FACTORIES[name as PrimitiveTypeName]();
+    return createPrimitiveType(name as PrimitiveTypeName, context.validate);
   }
 
   const fullName = qualifyReference(name, context.namespace);
@@ -372,6 +402,7 @@ function createRecordType(
   const childContext: CreateTypeContext = {
     namespace: resolved.namespace || undefined,
     registry: context.registry,
+    validate: context.validate,
   };
 
   const fieldsValue = schema.fields;
@@ -443,6 +474,7 @@ function createRecordType(
   const params: RecordTypeParams = {
     ...resolved,
     fields: buildFields,
+    validate: context.validate,
   };
   const record = new RecordType(params);
 
@@ -489,6 +521,7 @@ function createEnumType(
   const params: EnumTypeParams = {
     ...resolved,
     symbols: symbols.slice() as string[],
+    validate: context.validate,
   };
   if (schema.default !== undefined) {
     params.default = schema.default as string;
@@ -526,6 +559,7 @@ function createFixedType(
   const params: FixedTypeParams = {
     ...resolved,
     size: schema.size as number,
+    validate: context.validate,
   };
 
   const fixed = new FixedType(params);
@@ -543,7 +577,7 @@ function createArrayType(
     );
   }
   const itemsType = constructType(schema.items as SchemaLike, context);
-  return new ArrayType({ items: itemsType });
+  return new ArrayType({ items: itemsType, validate: context.validate });
 }
 
 function createMapType(
@@ -556,7 +590,7 @@ function createMapType(
     );
   }
   const valuesType = constructType(schema.values as SchemaLike, context);
-  return new MapType({ values: valuesType });
+  return new MapType({ values: valuesType, validate: context.validate });
 }
 
 function createUnionType(
@@ -567,11 +601,13 @@ function createUnionType(
     throw new Error("Union schema requires at least one branch type.");
   }
   const types = schemas.map((branch) => constructType(branch, context));
-  return new UnionType({ types });
+  return new UnionType({ types, validate: context.validate });
 }
 
 function isPrimitiveTypeName(value: unknown): value is PrimitiveTypeName {
-  return typeof value === "string" && value in PRIMITIVE_FACTORIES;
+  return value === "null" || value === "boolean" || value === "int" ||
+    value === "long" || value === "float" || value === "double" ||
+    value === "bytes" || value === "string";
 }
 
 function materializeLazyRecordFields(registry: Map<string, Type>): void {
