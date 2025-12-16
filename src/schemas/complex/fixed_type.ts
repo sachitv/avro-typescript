@@ -21,6 +21,8 @@ import { compareUint8Arrays } from "../../serialization/compare_bytes.ts";
 export interface FixedTypeParams extends ResolvedNames {
   /** The size in bytes. */
   size: number;
+  /** Whether to validate during writes. Defaults to true. */
+  validate?: boolean;
 }
 
 /**
@@ -28,6 +30,7 @@ export interface FixedTypeParams extends ResolvedNames {
  */
 export class FixedType extends NamedType<Uint8Array> {
   #size: number;
+  readonly #validate: boolean;
 
   /**
    * Creates a new FixedType.
@@ -44,6 +47,7 @@ export class FixedType extends NamedType<Uint8Array> {
 
     super(names);
     this.#size = size;
+    this.#validate = params.validate ?? true;
   }
 
   /**
@@ -59,7 +63,9 @@ export class FixedType extends NamedType<Uint8Array> {
    * @returns The serialized ArrayBuffer.
    */
   public override async toBuffer(value: Uint8Array): Promise<ArrayBuffer> {
-    this.check(value, throwInvalidError, []);
+    if (this.#validate) {
+      this.check(value, throwInvalidError, []);
+    }
     const size = this.sizeBytes();
     const buf = new ArrayBuffer(size);
     const tap = new WritableTap(buf);
@@ -71,7 +77,9 @@ export class FixedType extends NamedType<Uint8Array> {
    * Builds a synchronous buffer containing the fixed-length data.
    */
   public override toSyncBuffer(value: Uint8Array): ArrayBuffer {
-    this.check(value, throwInvalidError, []);
+    if (this.#validate) {
+      this.check(value, throwInvalidError, []);
+    }
     const size = this.sizeBytes();
     const buf = new ArrayBuffer(size);
     const tap = new SyncWritableTap(buf);
@@ -147,6 +155,10 @@ export class FixedType extends NamedType<Uint8Array> {
     tap: WritableTapLike,
     value: Uint8Array,
   ): Promise<void> {
+    if (!this.#validate) {
+      await this.writeUnchecked(tap, value);
+      return;
+    }
     if (!(value instanceof Uint8Array) || value.length !== this.#size) {
       throwInvalidError([], value, this);
     }
@@ -160,10 +172,34 @@ export class FixedType extends NamedType<Uint8Array> {
     tap: SyncWritableTapLike,
     value: Uint8Array,
   ): void {
+    if (!this.#validate) {
+      this.writeSyncUnchecked(tap, value);
+      return;
+    }
     if (!(value instanceof Uint8Array) || value.length !== this.#size) {
       throwInvalidError([], value, this);
     }
     tap.writeFixed(value);
+  }
+
+  /**
+   * Writes fixed bytes without validation.
+   */
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: Uint8Array,
+  ): Promise<void> {
+    await tap.writeFixed(value, this.#size);
+  }
+
+  /**
+   * Writes fixed bytes without validation synchronously.
+   */
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: Uint8Array,
+  ): void {
+    tap.writeFixed(value.subarray(0, this.#size));
   }
 
   /**

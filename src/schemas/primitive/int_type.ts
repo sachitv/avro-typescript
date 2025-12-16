@@ -17,6 +17,10 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
  * Int type (32-bit).
  */
 export class IntType extends PrimitiveType<number> {
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /** Checks if the value is a valid 32-bit integer. */
   public override check(
     value: unknown,
@@ -41,9 +45,20 @@ export class IntType extends PrimitiveType<number> {
     tap: WritableTapLike,
     value: number,
   ): Promise<void> {
+    if (!this.validateWrites) {
+      await this.writeUnchecked(tap, value);
+      return;
+    }
     if (!this.check(value)) {
       throwInvalidError([], value, this);
     }
+    await tap.writeInt(value);
+  }
+
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: number,
+  ): Promise<void> {
     await tap.writeInt(value);
   }
 
@@ -54,7 +69,9 @@ export class IntType extends PrimitiveType<number> {
 
   /** Converts a 32-bit integer to its buffer representation. */
   public override async toBuffer(value: number): Promise<ArrayBuffer> {
-    this.check(value, throwInvalidError, []);
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
     // For int, allocate exact size based on value
     const size = calculateVarintSize(value);
     const buf = new ArrayBuffer(size);
@@ -92,7 +109,9 @@ export class IntType extends PrimitiveType<number> {
 
   /** Converts a 32-bit integer to its buffer representation synchronously. */
   public override toSyncBuffer(value: number): ArrayBuffer {
-    this.check(value, throwInvalidError, []);
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
     // For int, allocate exact size based on value
     const size = calculateVarintSize(value);
     const buf = new ArrayBuffer(size);
@@ -111,6 +130,10 @@ export class IntType extends PrimitiveType<number> {
     tap: SyncWritableTapLike,
     value: number,
   ): void {
+    if (!this.validateWrites) {
+      this.writeSyncUnchecked(tap, value);
+      return;
+    }
     // Fast path: inline validation for performance
     if (
       typeof value !== "number" || !Number.isInteger(value) ||
@@ -118,6 +141,13 @@ export class IntType extends PrimitiveType<number> {
     ) {
       throwInvalidError([], value, this);
     }
+    tap.writeInt(value);
+  }
+
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: number,
+  ): void {
     tap.writeInt(value);
   }
 

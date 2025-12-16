@@ -107,6 +107,47 @@ describe("SyncInMemoryWritableBuffer", () => {
     );
   });
 
+  it("appendBytesFrom writes a slice without allocating", () => {
+    const buffer = new ArrayBuffer(10);
+    const writable = new SyncInMemoryWritableBuffer(buffer);
+
+    const data = new Uint8Array([9, 8, 7, 6, 5]);
+    writable.appendBytesFrom(data, 1, 3);
+
+    expect(writable._testOnlyOffset()).toBe(3);
+    const readable = new SyncInMemoryReadableBuffer(buffer);
+    expect(readable.read(0, 3)).toEqual(new Uint8Array([8, 7, 6]));
+  });
+
+  it("appendBytesFrom with zero length is a no-op", () => {
+    const buffer = new ArrayBuffer(10);
+    const writable = new SyncInMemoryWritableBuffer(buffer);
+    const data = new Uint8Array([1, 2, 3]);
+
+    writable.appendBytesFrom(data, 1, 0);
+    expect(writable._testOnlyOffset()).toBe(0);
+  });
+
+  it("appendBytesFrom throws on invalid source range", () => {
+    const buffer = new ArrayBuffer(10);
+    const writable = new SyncInMemoryWritableBuffer(buffer);
+    const data = new Uint8Array([1, 2, 3]);
+
+    expect(() => writable.appendBytesFrom(data, -1, 1)).toThrow(RangeError);
+    expect(() => writable.appendBytesFrom(data, 0, -1)).toThrow(RangeError);
+    expect(() => writable.appendBytesFrom(data, 2, 2)).toThrow(RangeError);
+  });
+
+  it("appendBytesFrom throws on write overflow", () => {
+    const buffer = new ArrayBuffer(2);
+    const writable = new SyncInMemoryWritableBuffer(buffer);
+    const data = new Uint8Array([1, 2, 3]);
+
+    expect(() => writable.appendBytesFrom(data, 0, 3)).toThrow(
+      WriteBufferError,
+    );
+  });
+
   it("isValid returns true", () => {
     const buffer = new ArrayBuffer(10);
     const writable = new SyncInMemoryWritableBuffer(buffer);
@@ -184,5 +225,23 @@ describe("SyncInMemoryWritableBuffer", () => {
       .toThrow(
         WriteBufferError,
       );
+  });
+
+  it("checkWriteBoundsSize throws on overflow", () => {
+    const buffer = new ArrayBuffer(2);
+    const writable = new SyncInMemoryWritableBuffer(buffer);
+
+    expect(() => writable._testCheckWriteBoundsSize(0, 3)).toThrow(
+      WriteBufferError,
+    );
+  });
+
+  it("checkWriteBoundsSize throws on negative offset", () => {
+    const buffer = new ArrayBuffer(2);
+    const writable = new SyncInMemoryWritableBuffer(buffer);
+
+    expect(() => writable._testCheckWriteBoundsSize(-1, 1)).toThrow(
+      WriteBufferError,
+    );
   });
 });

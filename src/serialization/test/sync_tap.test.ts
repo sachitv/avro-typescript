@@ -149,8 +149,8 @@ describe("SyncTap primitive round-trips", () => {
       -1,
       42,
       -1234567,
-      Number.MAX_SAFE_INTEGER,
-      Number.MIN_SAFE_INTEGER,
+      2147483647, // INT32_MAX
+      -2147483648, // INT32_MIN
     ],
     reader: (tap) => tap.readInt(),
     skipper: (tap) => tap.skipInt(),
@@ -292,7 +292,7 @@ describe("SyncWritableTap vs WritableTap parity", () => {
 
   it("writeInt encodes identical bytes", async () => {
     const size = 64;
-    const values = [0, -1, 42, -1234567, Number.MAX_SAFE_INTEGER];
+    const values = [0, -1, 42, -1234567, 2147483647, -2147483648];
 
     for (const v of values) {
       const asyncBuf = new ArrayBuffer(size);
@@ -982,5 +982,40 @@ describe("Sync Buffer + Tap integration", () => {
     expect(readableBuffer.canReadMore(pos)).toBe(true); // Can read from current pos
     expect(readableBuffer.canReadMore(7)).toBe(true); // Can read 1 byte at offset 7
     expect(readableBuffer.canReadMore(8)).toBe(false); // Cannot read beyond buffer
+  });
+});
+
+describe("SyncWritableTap internal appendRawBytes", () => {
+  it("supports offset/length writes", () => {
+    const buffer = new ArrayBuffer(8);
+    const writable = new SyncInMemoryWritableBuffer(buffer);
+    const tap = new SyncWritableTap(writable);
+
+    // @ts-ignore: private method access for coverage
+    tap.appendRawBytes(new Uint8Array([1, 2, 3, 4]), 1, 2);
+    expect(new Uint8Array(buffer, 0, tap.getPos())).toEqual(
+      new Uint8Array([2, 3]),
+    );
+  });
+
+  it("treats non-positive length as a no-op", () => {
+    const buffer = new ArrayBuffer(8);
+    const writable = new SyncInMemoryWritableBuffer(buffer);
+    const tap = new SyncWritableTap(writable);
+
+    // @ts-ignore: private method access for coverage
+    tap.appendRawBytes(new Uint8Array([1, 2, 3]), 0, 0);
+    expect(tap.getPos()).toBe(0);
+  });
+});
+
+describe("SyncWritableTap.writeInt validation", () => {
+  it("throws when value is not a 32-bit integer", () => {
+    const buffer = new ArrayBuffer(16);
+    const tap = new SyncWritableTap(new SyncInMemoryWritableBuffer(buffer));
+
+    expect(() => tap.writeInt(3.14)).toThrow(RangeError);
+    expect(() => tap.writeInt(2147483648)).toThrow(RangeError);
+    expect(() => tap.writeInt(-2147483649)).toThrow(RangeError);
   });
 });

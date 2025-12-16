@@ -14,6 +14,10 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
  * Boolean type.
  */
 export class BooleanType extends FixedSizeBaseType<boolean> {
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /**
    * Validates if the value is a boolean.
    */
@@ -43,9 +47,20 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     tap: WritableTapLike,
     value: boolean,
   ): Promise<void> {
+    if (!this.validateWrites) {
+      await this.writeUnchecked(tap, value);
+      return;
+    }
     if (typeof value !== "boolean") {
       throwInvalidError([], value, this);
     }
+    await tap.writeBoolean(value);
+  }
+
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: boolean,
+  ): Promise<void> {
     await tap.writeBoolean(value);
   }
 
@@ -116,9 +131,20 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     tap: SyncWritableTapLike,
     value: boolean,
   ): void {
+    if (!this.validateWrites) {
+      this.writeSyncUnchecked(tap, value);
+      return;
+    }
     if (typeof value !== "boolean") {
       throwInvalidError([], value, this);
     }
+    tap.writeBoolean(value);
+  }
+
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: boolean,
+  ): void {
     tap.writeBoolean(value);
   }
 

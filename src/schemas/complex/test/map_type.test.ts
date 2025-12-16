@@ -157,6 +157,28 @@ describe("MapType", () => {
       assertEquals(result, map);
     });
 
+    it("writes without validation when validate=false", async () => {
+      const noValidateMap = new MapType({ values: intValues, validate: false });
+      const map = new Map([["a", 1], ["b", 2]]);
+      const buffer = new ArrayBuffer(50);
+      const tap = new Tap(buffer);
+      await noValidateMap.write(tap, map);
+      const readTap = new Tap(buffer);
+      const result = await noValidateMap.read(readTap);
+      assertEquals(result, map);
+    });
+
+    it("writes sync without validation when validate=false", () => {
+      const noValidateMap = new MapType({ values: intValues, validate: false });
+      const map = new Map([["a", 1], ["b", 2]]);
+      const buffer = new ArrayBuffer(50);
+      const tap = new SyncWritableTap(buffer);
+      noValidateMap.writeSync(tap, map);
+      const readTap = new SyncReadableTap(buffer);
+      const result = noValidateMap.readSync(readTap);
+      assertEquals(result, map);
+    });
+
     it("round-trips via toBuffer/fromBuffer", async () => {
       const map = new Map([["key1", 4], ["key2", 5]]);
       const buffer = await intMap.toBuffer(map);

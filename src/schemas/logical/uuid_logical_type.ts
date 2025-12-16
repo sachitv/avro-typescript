@@ -20,8 +20,8 @@ export class UuidLogicalType extends LogicalType<string, string | Uint8Array> {
    * Creates a UUID logical type backed by the given underlying type.
    * @param underlying The underlying StringType or FixedType.
    */
-  constructor(underlying: StringType | FixedType) {
-    super(underlying as unknown as Type<string | Uint8Array>);
+  constructor(underlying: StringType | FixedType, validate = true) {
+    super(underlying as unknown as Type<string | Uint8Array>, validate);
     this.#underlying = underlying;
 
     if (underlying instanceof FixedType) {

@@ -19,14 +19,16 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
 export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
   /** The underlying type that this logical type wraps. */
   protected readonly underlyingType: Type<TUnderlying>;
+  readonly #validateWrites: boolean;
 
   /**
    * Constructs a new LogicalType.
    * @param underlyingType - The underlying type to wrap.
    */
-  protected constructor(underlyingType: Type<TUnderlying>) {
+  protected constructor(underlyingType: Type<TUnderlying>, validate = true) {
     super();
     this.underlyingType = underlyingType;
+    this.#validateWrites = validate;
   }
 
   /**
@@ -71,7 +73,9 @@ export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
    * @param value The logical value to serialize.
    */
   public override async toBuffer(value: TValue): Promise<ArrayBuffer> {
-    this.ensureValid(value, []);
+    if (this.#validateWrites) {
+      this.ensureValid(value, []);
+    }
     const underlying = this.toUnderlying(value);
     return await this.underlyingType.toBuffer(underlying);
   }
@@ -89,7 +93,9 @@ export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
    * Delegates synchronous buffer serialization to the underlying type.
    */
   public override toSyncBuffer(value: TValue): ArrayBuffer {
-    this.ensureValid(value, []);
+    if (this.#validateWrites) {
+      this.ensureValid(value, []);
+    }
     const underlying = this.toUnderlying(value);
     return this.underlyingType.toSyncBuffer(underlying);
   }
@@ -181,6 +187,10 @@ export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
     tap: WritableTapLike,
     value: TValue,
   ): Promise<void> {
+    if (!this.#validateWrites) {
+      await this.writeUnchecked(tap, value);
+      return;
+    }
     this.ensureValid(value, []);
     await this.underlyingType.write(tap, this.toUnderlying(value));
   }
@@ -189,8 +199,36 @@ export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
    * Writes the logical value synchronously via the underlying type's writer.
    */
   public override writeSync(tap: SyncWritableTapLike, value: TValue): void {
+    if (!this.#validateWrites) {
+      this.writeSyncUnchecked(tap, value);
+      return;
+    }
     this.ensureValid(value, []);
     this.underlyingType.writeSync(tap, this.toUnderlying(value));
+  }
+
+  /**
+   * Writes logical value without validation.
+   * Applies the logical transform but uses the underlying type's unchecked writer.
+   */
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: TValue,
+  ): Promise<void> {
+    const underlying = this.toUnderlying(value);
+    await this.underlyingType.writeUnchecked(tap, underlying);
+  }
+
+  /**
+   * Writes logical value without validation synchronously.
+   * Applies the logical transform but uses the underlying type's unchecked writer.
+   */
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: TValue,
+  ): void {
+    const underlying = this.toUnderlying(value);
+    this.underlyingType.writeSyncUnchecked(tap, underlying);
   }
 
   /** Reads the value from the tap. */
@@ -318,8 +356,8 @@ export abstract class NamedLogicalType<TValue, TUnderlying>
    * Creates a new NamedLogicalType.
    * @param namedType The underlying named type.
    */
-  protected constructor(namedType: NamedType<TUnderlying>) {
-    super(namedType);
+  protected constructor(namedType: NamedType<TUnderlying>, validate = true) {
+    super(namedType, validate);
     this.namedType = namedType;
   }
 

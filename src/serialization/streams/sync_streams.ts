@@ -30,6 +30,11 @@ export interface ISyncStreamWritableBuffer {
   writeBytes(data: Uint8Array): void;
 
   /**
+   * Writes a slice of bytes to the stream without requiring a subarray view.
+   */
+  writeBytesFrom(data: Uint8Array, offset: number, length: number): void;
+
+  /**
    * Closes the stream and releases any held resources.
    */
   close(): void;

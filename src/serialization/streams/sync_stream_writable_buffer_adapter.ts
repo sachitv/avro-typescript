@@ -29,6 +29,17 @@ export class SyncStreamWritableBufferAdapter implements ISyncWritable {
     this.#streamBuffer.writeBytes(data);
   }
 
+  public appendBytesFrom(
+    data: Uint8Array,
+    offset: number,
+    length: number,
+  ): void {
+    if (this.#isClosed || length === 0) {
+      return;
+    }
+    this.#streamBuffer.writeBytesFrom(data, offset, length);
+  }
+
   /**
    * Returns whether the buffer can continue accepting writes.
    * Stream buffers can always accept writes until explicitly closed.

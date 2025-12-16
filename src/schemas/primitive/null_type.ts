@@ -14,6 +14,10 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
  * Null type.
  */
 export class NullType extends FixedSizeBaseType<null> {
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /**
    * Checks if the value is null.
    */
@@ -43,9 +47,20 @@ export class NullType extends FixedSizeBaseType<null> {
     _tap: WritableTapLike,
     value: null,
   ): Promise<void> {
+    if (!this.validateWrites) {
+      await this.writeUnchecked(_tap, value);
+      return;
+    }
     if (value !== null) {
       throwInvalidError([], value, this);
     }
+    await Promise.resolve();
+  }
+
+  public override async writeUnchecked(
+    _tap: WritableTapLike,
+    _value: null,
+  ): Promise<void> {
     await Promise.resolve();
   }
 
@@ -112,10 +127,19 @@ export class NullType extends FixedSizeBaseType<null> {
     _tap: SyncWritableTapLike,
     value: null,
   ): void {
+    if (!this.validateWrites) {
+      this.writeSyncUnchecked(_tap, value);
+      return;
+    }
     if (value !== null) {
       throwInvalidError([], value, this);
     }
   }
+
+  public override writeSyncUnchecked(
+    _tap: SyncWritableTapLike,
+    _value: null,
+  ): void {}
 
   /**
    * Compares two null values synchronously in the taps.
