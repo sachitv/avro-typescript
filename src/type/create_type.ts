@@ -15,6 +15,7 @@ import {
   type RecordFieldParams,
   RecordType,
   type RecordTypeParams,
+  type RecordWriterStrategy,
 } from "../schemas/complex/record_type.ts";
 import { resolveNames } from "../schemas/complex/resolve_names.ts";
 import { StringType } from "../schemas/primitive/string_type.ts";
@@ -94,6 +95,7 @@ interface CreateTypeContext {
   namespace?: string;
   registry: Map<string, Type>;
   validate: boolean;
+  writerStrategy?: RecordWriterStrategy;
 }
 
 /**
@@ -116,6 +118,17 @@ export interface CreateTypeOptions {
    * be used when values are already known to match the schema.
    */
   validate?: boolean;
+  /**
+   * Optional writer strategy for record types.
+   *
+   * Controls how record field writers are compiled:
+   * - `CompiledWriterStrategy` (default): Inlines primitive tap methods for performance.
+   * - `InterpretedWriterStrategy`: Delegates to type.write() for simplicity.
+   *
+   * Custom strategies can be provided for instrumentation, debugging, or
+   * alternative compilation approaches.
+   */
+  writerStrategy?: RecordWriterStrategy;
 }
 
 function createPrimitiveType(name: PrimitiveTypeName, validate: boolean): Type {
@@ -151,6 +164,7 @@ export function createType(
     namespace: options.namespace,
     registry,
     validate: options.validate ?? true,
+    writerStrategy: options.writerStrategy,
   };
   return constructType(schema, context);
 }
@@ -403,6 +417,7 @@ function createRecordType(
     namespace: resolved.namespace || undefined,
     registry: context.registry,
     validate: context.validate,
+    writerStrategy: context.writerStrategy,
   };
 
   const fieldsValue = schema.fields;
@@ -475,6 +490,7 @@ function createRecordType(
     ...resolved,
     fields: buildFields,
     validate: context.validate,
+    writerStrategy: context.writerStrategy,
   };
   const record = new RecordType(params);
 
