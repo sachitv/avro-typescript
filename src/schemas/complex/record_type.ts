@@ -6,47 +6,47 @@ import { WritableTap } from "../../serialization/tap.ts";
 import { CountingWritableTap } from "../../serialization/counting_writable_tap.ts";
 import { SyncCountingWritableTap } from "../../serialization/sync_counting_writable_tap.ts";
 import { NamedType } from "./named_type.ts";
-import { Resolver } from "../resolver.ts";
-import { type JSONType, Type } from "../type.ts";
+import type { Resolver } from "../resolver.ts";
+import type { JSONType, Type } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
-import { isValidName, type ResolvedNames } from "./resolve_names.ts";
+import type { ResolvedNames } from "./resolve_names.ts";
 import type {
   SyncReadableTapLike,
   SyncWritableTapLike,
 } from "../../serialization/sync_tap.ts";
 import { SyncWritableTap } from "../../serialization/sync_tap.ts";
-import { BooleanType } from "../primitive/boolean_type.ts";
-import { BytesType } from "../primitive/bytes_type.ts";
-import { DoubleType } from "../primitive/double_type.ts";
-import { FloatType } from "../primitive/float_type.ts";
-import { IntType } from "../primitive/int_type.ts";
-import { LongType } from "../primitive/long_type.ts";
-import { NullType } from "../primitive/null_type.ts";
-import { StringType } from "../primitive/string_type.ts";
 
-type CompiledSyncWriter = (tap: SyncWritableTapLike, value: unknown) => void;
-type CompiledWriter = (tap: WritableTapLike, value: unknown) => Promise<void>;
+// Re-export extracted modules for backward compatibility
+export {
+  RecordField,
+  type RecordFieldOrder,
+  type RecordFieldParams,
+} from "./record_field.ts";
+export { type FieldMapping, RecordResolver } from "./record_resolver.ts";
+export {
+  type CompiledSyncWriter,
+  type CompiledWriter,
+  CompiledWriterStrategy,
+  defaultWriterStrategy,
+  InterpretedWriterStrategy,
+  type RecordWriterContext,
+  type RecordWriterStrategy,
+} from "./record_writer_strategy.ts";
+export { RecordWriterCache } from "./record_writer_cache.ts";
 
-/**
- * Specifies the sort order for record fields.
- */
-export type RecordFieldOrder = "ascending" | "descending" | "ignore";
-
-/**
- * Parameters for defining a record field.
- */
-export interface RecordFieldParams {
-  /** The name of the field. */
-  name: string;
-  /** The type of the field. */
-  type: Type;
-  /** Optional aliases for the field. */
-  aliases?: string[];
-  /** Optional ordering for the field. */
-  order?: RecordFieldOrder;
-  /** Optional default value for the field. */
-  default?: unknown;
-}
+import {
+  RecordField,
+  type RecordFieldOrder,
+  type RecordFieldParams,
+} from "./record_field.ts";
+import { type FieldMapping, RecordResolver } from "./record_resolver.ts";
+import type {
+  CompiledSyncWriter,
+  CompiledWriter,
+  RecordWriterStrategy,
+} from "./record_writer_strategy.ts";
+import { defaultWriterStrategy } from "./record_writer_strategy.ts";
+import { RecordWriterCache } from "./record_writer_cache.ts";
 
 /**
  * Parameters for creating a RecordType.
@@ -66,139 +66,27 @@ export interface RecordTypeParams extends ResolvedNames {
    * paths for performance. This is unsafe for untrusted inputs.
    */
   validate?: boolean;
+  /**
+   * Optional writer strategy for customizing how record writers are compiled.
+   *
+   * - \`CompiledWriterStrategy\` (default): Inlines primitive tap methods for performance.
+   * - \`InterpretedWriterStrategy\`: Delegates to type.write() for simplicity.
+   *
+   * Custom strategies can be provided for instrumentation, debugging, or
+   * alternative compilation approaches.
+   */
+  writerStrategy?: RecordWriterStrategy;
 }
 
 /**
- * Represents a field in an Avro record type.
- */
-export class RecordField {
-  #name: string;
-  #type: Type;
-  #aliases: string[];
-  #order: RecordFieldOrder;
-  #hasDefault: boolean;
-  #defaultValue?: unknown;
-
-  /**
-   * Constructs a new RecordField instance.
-   */
-  constructor(params: RecordFieldParams) {
-    const { name, type, aliases = [], order = "ascending" } = params;
-
-    if (typeof name !== "string" || !isValidName(name)) {
-      throw new Error(`Invalid record field name: ${name}`);
-    }
-    if (!(type instanceof Type)) {
-      throw new Error(`Invalid field type for ${name}`);
-    }
-
-    if (!RecordField.#isValidOrder(order)) {
-      throw new Error(`Invalid record field order: ${order}`);
-    }
-
-    this.#name = name;
-    this.#type = type;
-    this.#order = order;
-
-    const aliasSet = new Set<string>();
-    const resolvedAliases: string[] = [];
-    for (const alias of aliases) {
-      if (typeof alias !== "string" || !isValidName(alias)) {
-        throw new Error(`Invalid record field alias: ${alias}`);
-      }
-      if (!aliasSet.has(alias)) {
-        aliasSet.add(alias);
-        resolvedAliases.push(alias);
-      }
-    }
-    this.#aliases = resolvedAliases;
-
-    this.#hasDefault = Object.prototype.hasOwnProperty.call(params, "default");
-    if (this.#hasDefault) {
-      this.#defaultValue = this.#type.cloneFromValue(params.default as unknown);
-    }
-  }
-
-  /**
-   * Gets the name of the field.
-   */
-  public getName(): string {
-    return this.#name;
-  }
-
-  /**
-   * Gets the type of the field.
-   */
-  public getType(): Type {
-    return this.#type;
-  }
-
-  /**
-   * Gets the aliases of the field.
-   */
-  public getAliases(): string[] {
-    return this.#aliases.slice();
-  }
-
-  /**
-   * Gets the order of the field.
-   */
-  public getOrder(): RecordFieldOrder {
-    return this.#order;
-  }
-
-  /**
-   * Returns true if the field has a default value.
-   */
-  public hasDefault(): boolean {
-    return this.#hasDefault;
-  }
-
-  /**
-   * Gets the default value for the field.
-   * @returns The default value.
-   * @throws Error if the field has no default.
-   */
-  public getDefault(): unknown {
-    if (!this.#hasDefault) {
-      throw new Error(`Field '${this.#name}' has no default.`);
-    }
-    return this.#type.cloneFromValue(this.#defaultValue as unknown);
-  }
-
-  /**
-   * Checks if the given name matches the field name or any of its aliases.
-   * @param name The name to check.
-   * @returns True if the name matches, false otherwise.
-   */
-  public nameMatches(name: string): boolean {
-    return name === this.#name || this.#aliases.includes(name);
-  }
-
-  static #isValidOrder(order: string): order is RecordFieldOrder {
-    return order === "ascending" || order === "descending" ||
-      order === "ignore";
-  }
-}
-
-interface FieldMapping {
-  readerIndex: number;
-  writerField: RecordField;
-  resolver?: Resolver;
-}
-
-/**
- * Avro `record` type supporting ordered fields, aliases, and schema evolution.
+ * Avro \`record\` type supporting ordered fields, aliases, and schema evolution.
  */
 export class RecordType extends NamedType<Record<string, unknown>> {
   #fields: RecordField[];
   #fieldNameToIndex: Map<string, number>;
   #fieldsThunk?: () => RecordFieldParams[];
   #validateWrites: boolean;
-  #compiledSyncWriterStrict?: CompiledSyncWriter;
-  #compiledSyncWriterUnchecked?: CompiledSyncWriter;
-  #compiledWriterStrict?: CompiledWriter;
-  #compiledWriterUnchecked?: CompiledWriter;
+  #writerCache: RecordWriterCache;
   #fieldNames: string[];
   #fieldTypes: Type[];
   #fieldHasDefault: boolean[];
@@ -209,7 +97,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
    * @param params The record type parameters.
    */
   constructor(params: RecordTypeParams) {
-    const { fields, validate, ...names } = params;
+    const { fields, validate, writerStrategy, ...names } = params;
     super(names);
 
     this.#fields = [];
@@ -219,6 +107,9 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     this.#fieldHasDefault = [];
     this.#fieldDefaultGetters = [];
     this.#validateWrites = validate ?? true;
+    this.#writerCache = new RecordWriterCache(
+      writerStrategy ?? defaultWriterStrategy,
+    );
 
     if (typeof fields === "function") {
       // Defer field materialization until the first time the record is used.
@@ -228,6 +119,13 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     } else {
       this.#setFields(fields);
     }
+  }
+
+  /**
+   * Gets the writer strategy used by this record type.
+   */
+  public getWriterStrategy(): RecordWriterStrategy {
+    return this.#writerCache.getStrategy();
   }
 
   /**
@@ -291,11 +189,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     value: Record<string, unknown>,
   ): Promise<void> {
     this.#ensureFields();
-    const writer = this.#validateWrites
-      ? (this.#compiledWriterStrict ??= this.#getOrCreateCompiledWriter(true))
-      : (this.#compiledWriterUnchecked ??= this.#getOrCreateCompiledWriter(
-        false,
-      ));
+    const writer = this.#getOrCreateCompiledWriter(this.#validateWrites);
     await writer(tap, value);
   }
 
@@ -307,10 +201,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     value: Record<string, unknown>,
   ): Promise<void> {
     this.#ensureFields();
-    const writer = this.#compiledWriterUnchecked ??= this
-      .#getOrCreateCompiledWriter(
-        false,
-      );
+    const writer = this.#getOrCreateCompiledWriter(false);
     await writer(tap, value);
   }
 
@@ -322,12 +213,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     value: Record<string, unknown>,
   ): void {
     this.#ensureFields();
-    const writer = this.#validateWrites
-      ? (this.#compiledSyncWriterStrict ??= this.#getOrCreateCompiledSyncWriter(
-        true,
-      ))
-      : (this.#compiledSyncWriterUnchecked ??= this
-        .#getOrCreateCompiledSyncWriter(false));
+    const writer = this.#getOrCreateCompiledSyncWriter(this.#validateWrites);
     writer(tap, value);
   }
 
@@ -339,214 +225,60 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     value: Record<string, unknown>,
   ): void {
     this.#ensureFields();
-    const writer = this.#compiledSyncWriterUnchecked ??= this
-      .#getOrCreateCompiledSyncWriter(false);
+    const writer = this.#getOrCreateCompiledSyncWriter(false);
     writer(tap, value);
   }
 
   #getOrCreateCompiledWriter(validate: boolean): CompiledWriter {
     this.#ensureFields();
-    const cached = validate
-      ? this.#compiledWriterStrict
-      : this.#compiledWriterUnchecked;
-    if (cached) {
-      return cached;
-    }
-
-    // Support recursive record types by installing a placeholder before walking
-    // field types; recursive references will see this function and avoid
-    // infinite recursion during compilation. The impl array allows the
-    // placeholder to delegate to the actual writer once it's created.
-    const impl: [CompiledWriter | null] = [null];
-    const placeholder: CompiledWriter = (tap, value) => impl[0]!(tap, value);
-    if (validate) {
-      this.#compiledWriterStrict = placeholder;
-    } else {
-      this.#compiledWriterUnchecked = placeholder;
-    }
-
-    const fieldCount = this.#fieldNames.length;
-    const writers = new Array<CompiledWriter>(fieldCount);
-    for (let i = 0; i < fieldCount; i++) {
-      const fieldType = this.#fieldTypes[i]!;
-      if (!validate) {
-        writers[i] = RecordType.#compileUncheckedWriter(fieldType);
-        continue;
-      }
-      if (fieldType instanceof RecordType) {
-        writers[i] = fieldType.#getOrCreateCompiledWriter(true);
-      } else {
-        writers[i] = (tap, value) => fieldType.write(tap, value as never);
-      }
-    }
-
-    const actualWriter: CompiledWriter = async (tap, value) => {
-      if (validate && !this.#isRecord(value)) {
-        throwInvalidError([], value, this);
-      }
-      const record = value as Record<string, unknown>;
-      for (let i = 0; i < fieldCount; i++) {
-        const name = this.#fieldNames[i]!;
-        const hasValue = Object.hasOwn(record, name);
-        let toWrite: unknown;
-        if (hasValue) {
-          toWrite = record[name];
-        } else {
-          const getter = this.#fieldDefaultGetters[i];
-          if (getter) {
-            toWrite = getter();
-          } else {
-            if (validate) {
-              throwInvalidError([name], undefined, this);
-            }
-            toWrite = undefined;
-          }
+    return this.#writerCache.getOrCreateWriter(
+      validate,
+      {
+        fieldNames: this.#fieldNames,
+        fieldTypes: this.#fieldTypes,
+        fieldDefaultGetters: this.#fieldDefaultGetters,
+        validate,
+        recordType: this,
+        isRecord: this.#isRecord.bind(this),
+      },
+      (type, shouldValidate) => {
+        if (type instanceof RecordType) {
+          return type.#getOrCreateCompiledWriter(shouldValidate);
         }
-        await writers[i]!(tap, toWrite);
-      }
-    };
-
-    if (validate) {
-      this.#compiledWriterStrict = actualWriter;
-    } else {
-      this.#compiledWriterUnchecked = actualWriter;
-    }
-    impl[0] = actualWriter;
-    return placeholder;
+        return (tap, value) => {
+          if (shouldValidate) {
+            return type.write(tap, value as never);
+          }
+          return type.writeUnchecked(tap, value as never);
+        };
+      },
+    );
   }
 
   #getOrCreateCompiledSyncWriter(validate: boolean): CompiledSyncWriter {
     this.#ensureFields();
-    const cached = validate
-      ? this.#compiledSyncWriterStrict
-      : this.#compiledSyncWriterUnchecked;
-    if (cached) {
-      return cached;
-    }
-
-    // Support recursive record types by installing a placeholder before walking
-    // field types; recursive references will see this function and avoid
-    // infinite recursion during compilation. The impl array allows the
-    // placeholder to delegate to the actual writer once it's created.
-    const impl: [CompiledSyncWriter | null] = [null];
-    const placeholder: CompiledSyncWriter = (tap, value) =>
-      impl[0]!(tap, value);
-    if (validate) {
-      this.#compiledSyncWriterStrict = placeholder;
-    } else {
-      this.#compiledSyncWriterUnchecked = placeholder;
-    }
-
-    const fieldCount = this.#fieldNames.length;
-    const writers = new Array<CompiledSyncWriter>(fieldCount);
-    for (let i = 0; i < fieldCount; i++) {
-      const fieldType = this.#fieldTypes[i]!;
-      if (!validate) {
-        writers[i] = RecordType.#compileUncheckedSyncWriter(fieldType);
-        continue;
-      }
-      if (fieldType instanceof RecordType) {
-        writers[i] = fieldType.#getOrCreateCompiledSyncWriter(true);
-      } else {
-        writers[i] = (tap, value) => fieldType.writeSync(tap, value as never);
-      }
-    }
-
-    const actualWriter: CompiledSyncWriter = (tap, value) => {
-      if (validate && !this.#isRecord(value)) {
-        throwInvalidError([], value, this);
-      }
-      const record = value as Record<string, unknown>;
-      for (let i = 0; i < fieldCount; i++) {
-        const name = this.#fieldNames[i]!;
-        const hasValue = Object.hasOwn(record, name);
-        let toWrite: unknown;
-        if (hasValue) {
-          toWrite = record[name];
-        } else {
-          const getter = this.#fieldDefaultGetters[i];
-          if (getter) {
-            toWrite = getter();
-          } else {
-            if (validate) {
-              throwInvalidError([name], undefined, this);
-            }
-            toWrite = undefined;
-          }
+    return this.#writerCache.getOrCreateSyncWriter(
+      validate,
+      {
+        fieldNames: this.#fieldNames,
+        fieldTypes: this.#fieldTypes,
+        fieldDefaultGetters: this.#fieldDefaultGetters,
+        validate,
+        recordType: this,
+        isRecord: this.#isRecord.bind(this),
+      },
+      (type, shouldValidate) => {
+        if (type instanceof RecordType) {
+          return type.#getOrCreateCompiledSyncWriter(shouldValidate);
         }
-        writers[i]!(tap, toWrite);
-      }
-    };
-
-    impl[0] = actualWriter;
-    if (validate) {
-      this.#compiledSyncWriterStrict = actualWriter;
-    } else {
-      this.#compiledSyncWriterUnchecked = actualWriter;
-    }
-    return placeholder;
-  }
-
-  static #compileUncheckedWriter(type: Type): CompiledWriter {
-    if (type instanceof RecordType) {
-      return type.#getOrCreateCompiledWriter(false);
-    }
-    if (type instanceof NullType) {
-      return async () => {};
-    }
-    if (type instanceof BooleanType) {
-      return (tap, value) => tap.writeBoolean(value as boolean);
-    }
-    if (type instanceof IntType) {
-      return (tap, value) => tap.writeInt(value as number);
-    }
-    if (type instanceof LongType) {
-      return (tap, value) => tap.writeLong(value as bigint);
-    }
-    if (type instanceof FloatType) {
-      return (tap, value) => tap.writeFloat(value as number);
-    }
-    if (type instanceof DoubleType) {
-      return (tap, value) => tap.writeDouble(value as number);
-    }
-    if (type instanceof BytesType) {
-      return (tap, value) => tap.writeBytes(value as Uint8Array);
-    }
-    if (type instanceof StringType) {
-      return (tap, value) => tap.writeString(value as string);
-    }
-    return (tap, value) => type.writeUnchecked(tap, value as never);
-  }
-
-  static #compileUncheckedSyncWriter(type: Type): CompiledSyncWriter {
-    if (type instanceof RecordType) {
-      return type.#getOrCreateCompiledSyncWriter(false);
-    }
-    if (type instanceof NullType) {
-      return () => {};
-    }
-    if (type instanceof BooleanType) {
-      return (tap, value) => tap.writeBoolean(value as boolean);
-    }
-    if (type instanceof IntType) {
-      return (tap, value) => tap.writeInt(value as number);
-    }
-    if (type instanceof LongType) {
-      return (tap, value) => tap.writeLong(value as bigint);
-    }
-    if (type instanceof FloatType) {
-      return (tap, value) => tap.writeFloat(value as number);
-    }
-    if (type instanceof DoubleType) {
-      return (tap, value) => tap.writeDouble(value as number);
-    }
-    if (type instanceof BytesType) {
-      return (tap, value) => tap.writeBytes(value as Uint8Array);
-    }
-    if (type instanceof StringType) {
-      return (tap, value) => tap.writeString(value as string);
-    }
-    return (tap, value) => type.writeSyncUnchecked(tap, value as never);
+        return (tap, value) => {
+          if (shouldValidate) {
+            return type.writeSync(tap, value as never);
+          }
+          return type.writeSyncUnchecked(tap, value as never);
+        };
+      },
+    );
   }
 
   /**
@@ -611,11 +343,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
       throwInvalidError([], value, this);
     }
 
-    const writer = this.#validateWrites
-      ? (this.#compiledWriterStrict ??= this.#getOrCreateCompiledWriter(true))
-      : (this.#compiledWriterUnchecked ??= this.#getOrCreateCompiledWriter(
-        false,
-      ));
+    const writer = this.#getOrCreateCompiledWriter(this.#validateWrites);
 
     // Pass 1: measure encoded size without allocating per-field buffers.
     const sizeTap = new CountingWritableTap();
@@ -638,12 +366,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
       throwInvalidError([], value, this);
     }
 
-    const writer = this.#validateWrites
-      ? (this.#compiledSyncWriterStrict ??= this.#getOrCreateCompiledSyncWriter(
-        true,
-      ))
-      : (this.#compiledSyncWriterUnchecked ??= this
-        .#getOrCreateCompiledSyncWriter(false));
+    const writer = this.#getOrCreateCompiledSyncWriter(this.#validateWrites);
 
     // Pass 1: measure encoded size without allocating per-field buffers.
     const sizeTap = new SyncCountingWritableTap();
@@ -826,17 +549,14 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     this.#fieldTypes = [];
     this.#fieldHasDefault = [];
     this.#fieldDefaultGetters = [];
-    this.#compiledSyncWriterStrict = undefined;
-    this.#compiledSyncWriterUnchecked = undefined;
-    this.#compiledWriterStrict = undefined;
-    this.#compiledWriterUnchecked = undefined;
+    this.#writerCache.clear();
 
     candidate.forEach((fieldParams) => {
       const field = new RecordField(fieldParams);
       const name = field.getName();
       if (this.#fieldNameToIndex.has(name)) {
         throw new Error(
-          `Duplicate record field name: ${name}`,
+          `Duplicate record field name: \`${name}\``,
         );
       }
       const type = field.getType();
@@ -929,10 +649,10 @@ export class RecordType extends NamedType<Record<string, unknown>> {
 
       const readerField = readerFields[readerIndex];
       const readerType = readerField.getType();
-      const writerType = writerField.getType();
-      const resolver = readerType === writerType
+      const writerFieldType = writerField.getType();
+      const resolver = readerType === writerFieldType
         ? undefined
-        : readerType.createResolver(writerType);
+        : readerType.createResolver(writerFieldType);
 
       mappings.push({
         readerIndex,
@@ -1018,85 +738,5 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     throw new Error(
       `Missing comparable value for field '${name}' with no default.`,
     );
-  }
-}
-
-class RecordResolver extends Resolver<Record<string, unknown>> {
-  #mappings: FieldMapping[];
-  #readerFields: RecordField[];
-
-  constructor(
-    reader: RecordType,
-    mappings: FieldMapping[],
-    readerFields: RecordField[],
-  ) {
-    super(reader);
-    this.#mappings = mappings;
-    this.#readerFields = readerFields;
-  }
-
-  public override async read(
-    tap: ReadableTapLike,
-  ): Promise<Record<string, unknown>> {
-    const result: Record<string, unknown> = {};
-    const seen = new Array(this.#readerFields.length).fill(false);
-
-    for (const mapping of this.#mappings) {
-      if (mapping.readerIndex === -1) {
-        await mapping.writerField.getType().skip(tap);
-        continue;
-      }
-
-      const value = mapping.resolver
-        ? await mapping.resolver.read(tap)
-        : await mapping.writerField.getType().read(tap);
-
-      const readerField = this.#readerFields[mapping.readerIndex];
-      result[readerField.getName()] = value;
-      seen[mapping.readerIndex] = true;
-    }
-
-    for (let i = 0; i < this.#readerFields.length; i++) {
-      if (!seen[i]) {
-        const field = this.#readerFields[i];
-        result[field.getName()] = field.getDefault();
-      }
-    }
-
-    return result;
-  }
-
-  /**
-   * Resolves incoming data synchronously, applying missing defaults as needed.
-   */
-  public override readSync(
-    tap: SyncReadableTapLike,
-  ): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-    const seen = new Array(this.#readerFields.length).fill(false);
-
-    for (const mapping of this.#mappings) {
-      if (mapping.readerIndex === -1) {
-        mapping.writerField.getType().skipSync(tap);
-        continue;
-      }
-
-      const value = mapping.resolver
-        ? mapping.resolver.readSync(tap)
-        : mapping.writerField.getType().readSync(tap);
-
-      const readerField = this.#readerFields[mapping.readerIndex];
-      result[readerField.getName()] = value;
-      seen[mapping.readerIndex] = true;
-    }
-
-    for (let i = 0; i < this.#readerFields.length; i++) {
-      if (!seen[i]) {
-        const field = this.#readerFields[i];
-        result[field.getName()] = field.getDefault();
-      }
-    }
-
-    return result;
   }
 }
