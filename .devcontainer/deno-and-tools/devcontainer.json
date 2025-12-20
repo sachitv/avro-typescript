@@ -6,10 +6,10 @@
       "version": "2.6.1"
     },
     "ghcr.io/sachitv/devcontainer-features/opencode:latest": {
-      "version": "1.0.152"
+      "version": "1.0.166"
     },
     "ghcr.io/sachitv/devcontainer-features/codex:1": {
-      "release_tag": "rust-v0.72.0"
+      "release_tag": "rust-v0.73.0"
     },
     "ghcr.io/devcontainers/features/github-cli:1": {
       "version": "2.83.2"
