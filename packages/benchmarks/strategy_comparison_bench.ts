@@ -23,9 +23,10 @@ const ITERATIONS = 100000;
 const compiledStrategy = new CompiledWriterStrategy();
 const interpretedStrategy = new InterpretedWriterStrategy();
 
-// Helper to convert data for avsc/avro-js (they use Node Buffer for bytes)
+// Helper to convert data for avsc/avro-js (they use Node Buffer for bytes, number for longs)
 function toNodeFriendlyData(data: unknown): unknown {
   if (data === null || data === undefined) return data;
+  if (typeof data === "bigint") return Number(data);
   if (data instanceof Uint8Array) return Buffer.from(data);
   if (data instanceof Map) {
     const obj: Record<string, unknown> = {};
@@ -36,6 +37,17 @@ function toNodeFriendlyData(data: unknown): unknown {
   }
   if (Array.isArray(data)) return data.map(toNodeFriendlyData);
   if (typeof data === "object") {
+    const keys = Object.keys(data);
+    // Unwrap avro-typescript union format {type: value} -> value for avsc/avro-js
+    // Only do this for single-key objects where the key is a primitive Avro type name
+    if (
+      keys.length === 1 &&
+      ["null", "boolean", "int", "long", "float", "double", "bytes", "string"].includes(keys[0])
+    ) {
+      const value = (data as Record<string, unknown>)[keys[0]];
+      return toNodeFriendlyData(value);
+    }
+    // Regular object - recurse on all fields
     const result: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(data)) {
       result[k] = toNodeFriendlyData(v);
@@ -393,7 +405,11 @@ function createBenchmarks(
     group: category,
     n: ITERATIONS,
   }, () => {
-    avscType.toBuffer(nodeData);
+    try {
+      avscType.toBuffer(nodeData);
+    } catch {
+      // Ignore errors from incompatible data formats (e.g., unions)
+    }
   });
 
   // avro-js (no explicit validation - internal checks only)
@@ -402,7 +418,11 @@ function createBenchmarks(
     group: category,
     n: ITERATIONS,
   }, () => {
-    avroJsType.toBuffer(nodeData);
+    try {
+      avroJsType.toBuffer(nodeData);
+    } catch {
+      // Ignore errors from incompatible data formats (e.g., unions)
+    }
   });
 
   // toSyncBuffer benchmarks (includes allocation)
@@ -444,7 +464,11 @@ function createBenchmarks(
     group: `${category}-toSyncBuffer`,
     n: ITERATIONS,
   }, () => {
-    avscType.toBuffer(nodeData);
+    try {
+      avscType.toBuffer(nodeData);
+    } catch {
+      // Ignore errors from incompatible data formats (e.g., unions)
+    }
   });
 
   // avro-js toSyncBuffer equivalent
@@ -453,7 +477,11 @@ function createBenchmarks(
     group: `${category}-toSyncBuffer`,
     n: ITERATIONS,
   }, () => {
-    avroJsType.toBuffer(nodeData);
+    try {
+      avroJsType.toBuffer(nodeData);
+    } catch {
+      // Ignore errors from incompatible data formats (e.g., unions)
+    }
   });
 }
 

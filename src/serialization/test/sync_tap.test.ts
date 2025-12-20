@@ -10,6 +10,31 @@ import {
 } from "../buffers/sync_in_memory_buffer.ts";
 import { WriteBufferError } from "../buffers/sync_buffer.ts";
 import type { ISyncReadable, ISyncWritable } from "../buffers/sync_buffer.ts";
+import { encoder } from "../text_encoding.ts";
+
+class LenientWritableBuffer implements ISyncWritable {
+  #pos = 0;
+
+  appendBytes(data: Uint8Array): void {
+    this.#pos += data.length;
+  }
+
+  appendBytesFrom(_data: Uint8Array, _offset: number, length: number): void {
+    this.#pos += length;
+  }
+
+  isValid(): boolean {
+    return true;
+  }
+
+  canAppendMore(_size: number): boolean {
+    return true;
+  }
+
+  getPos(): number {
+    return this.#pos;
+  }
+}
 
 const toUint8Array = (values: number[]): Uint8Array =>
   Uint8Array.from(values.map((value) => ((value % 256) + 256) % 256));
@@ -488,6 +513,24 @@ describe("SyncWritableTap vs WritableTap parity", () => {
         // @ts-ignore restore original method
         SyncWritableTap.ensureEncodedStringBuffer = originalEnsure;
       }
+    });
+
+    it("uses writeLong when encoded length exceeds INT_MAX", () => {
+      const writer = new SyncWritableTap(new LenientWritableBuffer());
+      const originalEncodeInto = encoder.encodeInto;
+      const oversized = "😀";
+
+      try {
+        encoder.encodeInto = (_str, _buf) => ({
+          read: oversized.length,
+          written: 2147483648,
+        });
+        expect(() => writer.writeString(oversized)).not.toThrow();
+      } finally {
+        encoder.encodeInto = originalEncodeInto;
+      }
+
+      expect(writer.getPos()).toBeGreaterThan(0);
     });
   });
 

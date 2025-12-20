@@ -29,8 +29,8 @@
     "get-version": "deno run --allow-read scripts/get_version.ts",
     "jsdoc:lint": "find . -name \"*.ts\" | grep -v \"/test/\" | grep -v \"/scripts/\" | grep -v \"/examples/\" | xargs deno doc --lint",
     "bench": "cd packages/benchmarks && deno bench --no-config --allow-write --allow-read",
-    "bench:report": "cd packages/benchmarks && deno run -A generate_benchmark_report.ts",
-    "bench:serialize": "cd packages/benchmarks && deno run -A run_serialize_bench.ts"
+    "bench:report": "cd packages/benchmarks && deno run -A generate_report.ts",
+    "bench:serialize": "cd packages/benchmarks && deno run -A run_serialize_report.ts"
   },
   "exclude": [
     "./packages/benchmarks/"

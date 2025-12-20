@@ -96,6 +96,13 @@ class FsSyncStreamWriter implements ISyncStreamWritableBuffer {
     this.#file.writeSync(data);
   }
 
+  writeBytesFrom(data: Uint8Array, offset: number, length: number): void {
+    if (this.#closed || length === 0) {
+      return;
+    }
+    this.#file.writeSync(data.subarray(offset, offset + length));
+  }
+
   close(): void {
     if (!this.#closed) {
       this.#closed = true;
