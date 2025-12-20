@@ -5,7 +5,7 @@
   "tasks": {
     "bench": "deno bench --allow-read serialization_bench.ts && deno bench --allow-read schema_bench.ts && deno bench --allow-read --allow-write sync_file_bench.ts",
     "bench:profile": "deno bench --allow-read --json | jq",
-    "bench:report": "deno run -A generate_benchmark_report.ts"
+    "bench:report": "deno run -A generate_report.ts"
   },
   "imports": {
     "avro": "../src/mod.ts"

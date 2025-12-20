@@ -320,6 +320,16 @@ describe("MapType", () => {
       );
     });
 
+    it("serializes with toSyncBuffer when validation is disabled", () => {
+      const mapNoValidate = new MapType({
+        values: intValues,
+        validate: false,
+      });
+      const map = new Map([["a", 1]]);
+      const buffer = mapNoValidate.toSyncBuffer(map);
+      assertEquals(mapNoValidate.fromSyncBuffer(buffer), map);
+    });
+
     it("throws when toSyncBuffer map contains non-string key", () => {
       const map = new Map([[1 as unknown as string, 1]]);
       assertThrows(

@@ -386,6 +386,16 @@ describe("ArrayType", () => {
       );
     });
 
+    it("serializes with toSyncBuffer when validation is disabled", () => {
+      const arrayNoValidate = new ArrayType({
+        items: intItems,
+        validate: false,
+      });
+      const values = [4, 5];
+      const buffer = arrayNoValidate.toSyncBuffer(values);
+      assertEquals(arrayNoValidate.fromSyncBuffer(buffer), values);
+    });
+
     it("throws error in toBuffer when value is not array", async () => {
       await assertRejects(
         () => intArray.toBuffer("not an array" as unknown as number[]),

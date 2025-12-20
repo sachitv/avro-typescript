@@ -14,6 +14,7 @@ import {
   SyncWritableTap,
   type SyncWritableTapLike,
 } from "../../serialization/sync_tap.ts";
+import { SyncCountingWritableTap } from "../../serialization/sync_counting_writable_tap.ts";
 
 /**
  * Helper function to read an array from a tap.
@@ -176,12 +177,12 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     value: T[],
   ): Promise<void> {
     if (value.length > 0) {
-      await tap.writeLong(BigInt(value.length));
+      await tap.writeInt(value.length);
       for (const element of value) {
         await this.#itemsType.writeUnchecked(tap, element);
       }
     }
-    await tap.writeLong(0n);
+    await tap.writeInt(0);
   }
 
   /**
@@ -192,12 +193,12 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     value: T[],
   ): void {
     if (value.length > 0) {
-      tap.writeLong(BigInt(value.length));
+      tap.writeInt(value.length);
       for (const element of value) {
         this.#itemsType.writeSyncUnchecked(tap, element);
       }
     }
-    tap.writeLong(0n);
+    tap.writeInt(0);
   }
 
   /**
@@ -328,37 +329,31 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
 
   /**
    * Encodes the array synchronously into a dedicated buffer.
+   * Uses a 2-pass approach (CountingTap) to avoid per-element allocations:
+   * - Pass 1: Measure encoded size without allocating buffers
+   * - Pass 2: Allocate once and serialize directly
    */
   public override toSyncBuffer(value: T[]): ArrayBuffer {
     if (this.#validate && !Array.isArray(value)) {
       throwInvalidError([], value, this);
     }
 
-    const elementBuffers = value.length === 0
-      ? []
-      : value.map((element) =>
-        new Uint8Array(this.#itemsType.toSyncBuffer(element))
-      );
+    // Pass 1: Count bytes without allocation
+    const sizeTap = new SyncCountingWritableTap();
+    this.writeSyncUnchecked(
+      sizeTap as unknown as SyncWritableTapLike,
+      value,
+    );
+    const size = sizeTap.getPos();
 
-    let totalSize = 1; // final zero block terminator
-    if (value.length > 0) {
-      totalSize += calculateVarintSize(value.length);
-      for (const buf of elementBuffers) {
-        totalSize += buf.byteLength;
-      }
-    }
-
-    const buffer = new ArrayBuffer(totalSize);
+    // Pass 2: Allocate once and write
+    const buffer = new ArrayBuffer(size);
     const tap = new SyncWritableTap(buffer);
-
-    if (value.length > 0) {
-      tap.writeLong(BigInt(value.length));
-      for (const buf of elementBuffers) {
-        tap.writeFixed(buf);
-      }
+    if (this.#validate) {
+      this.writeSync(tap, value);
+    } else {
+      this.writeSyncUnchecked(tap, value);
     }
-    tap.writeLong(0n);
-
     return buffer;
   }
 

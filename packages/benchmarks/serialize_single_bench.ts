@@ -229,6 +229,17 @@ function toNodeFormat(data: any): any {
   }
   if (Array.isArray(data)) return data.map(toNodeFormat);
   if (typeof data === "object") {
+    const keys = Object.keys(data);
+    // Unwrap avro-typescript union format {type: value} -> value for avsc/avro-js
+    // Only do this for single-key objects where the key is a primitive Avro type name
+    if (
+      keys.length === 1 &&
+      ["null", "boolean", "int", "long", "float", "double", "bytes", "string"].includes(keys[0])
+    ) {
+      const value = data[keys[0]];
+      return toNodeFormat(value);
+    }
+    // Regular object - recurse on all fields
     const result: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(data)) {
       result[k] = toNodeFormat(v);
@@ -508,37 +519,12 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
   const avroTsData = types.avroTs.random() as Map<string, number>;
   const nodeData = Object.fromEntries(avroTsData.entries());
 
-  Deno.bench({
-    name: "complex: map<int> (avsc)",
-    group: "complex: map<int>",
-    baseline: true,
-    n: 100000,
-  }, () => {
-    types.avsc.toBuffer(nodeData);
-  });
-
-  Deno.bench({
-    name: "complex: map<int> (avro-js)",
-    group: "complex: map<int>",
-    n: 100000,
-  }, () => {
-    types.avroJs.toBuffer(nodeData);
-  });
-
-  Deno.bench({
-    name: "complex: map<int> (avro-ts, validate=true)",
-    group: "complex: map<int>",
-    n: 100000,
-  }, () => {
-    types.avroTs.toSyncBuffer(avroTsData);
-  });
-
-  Deno.bench({
-    name: "complex: map<int> (avro-ts, validate=false)",
-    group: "complex: map<int>",
-    n: 100000,
-  }, () => {
-    types.avroTsUnchecked.toSyncBuffer(avroTsData);
+  runFullComparisonBenchmark({
+    groupName: "complex: map<int>",
+    types,
+    avroTsData,
+    nodeData,
+    bufferSize: 512,
   });
 }
 
@@ -548,37 +534,12 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
   const avroTsData = types.avroTs.random() as Map<string, string>;
   const nodeData = Object.fromEntries(avroTsData.entries());
 
-  Deno.bench({
-    name: "complex: map<string> (avsc)",
-    group: "complex: map<string>",
-    baseline: true,
-    n: 100000,
-  }, () => {
-    types.avsc.toBuffer(nodeData);
-  });
-
-  Deno.bench({
-    name: "complex: map<string> (avro-js)",
-    group: "complex: map<string>",
-    n: 100000,
-  }, () => {
-    types.avroJs.toBuffer(nodeData);
-  });
-
-  Deno.bench({
-    name: "complex: map<string> (avro-ts, validate=true)",
-    group: "complex: map<string>",
-    n: 100000,
-  }, () => {
-    types.avroTs.toSyncBuffer(avroTsData);
-  });
-
-  Deno.bench({
-    name: "complex: map<string> (avro-ts, validate=false)",
-    group: "complex: map<string>",
-    n: 100000,
-  }, () => {
-    types.avroTsUnchecked.toSyncBuffer(avroTsData);
+  runFullComparisonBenchmark({
+    groupName: "complex: map<string>",
+    types,
+    avroTsData,
+    nodeData,
+    bufferSize: 512,
   });
 }
 

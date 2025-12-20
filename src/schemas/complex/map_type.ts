@@ -8,6 +8,7 @@ import {
   SyncWritableTap,
   type SyncWritableTapLike,
 } from "../../serialization/sync_tap.ts";
+import { SyncCountingWritableTap } from "../../serialization/sync_counting_writable_tap.ts";
 import { encode } from "../../serialization/text_encoding.ts";
 import { bigIntToSafeNumber } from "../../serialization/conversion.ts";
 import { BaseType } from "../base_type.ts";
@@ -193,7 +194,7 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     }
 
     if (value.size > 0) {
-      tap.writeLong(BigInt(value.size));
+      tap.writeInt(value.size);
       for (const [key, entry] of value) {
         if (typeof key !== "string") {
           throwInvalidError([], value, this);
@@ -202,7 +203,7 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
         this.#valuesType.writeSync(tap, entry);
       }
     }
-    tap.writeLong(0n);
+    tap.writeInt(0);
   }
 
   /**
@@ -213,13 +214,13 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     value: Map<string, T>,
   ): Promise<void> {
     if (value.size > 0) {
-      await tap.writeLong(BigInt(value.size));
+      await tap.writeInt(value.size);
       for (const [key, entry] of value) {
         await tap.writeString(key);
         await this.#valuesType.writeUnchecked(tap, entry);
       }
     }
-    await tap.writeLong(0n);
+    await tap.writeInt(0);
   }
 
   /**
@@ -230,13 +231,13 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     value: Map<string, T>,
   ): void {
     if (value.size > 0) {
-      tap.writeLong(BigInt(value.size));
+      tap.writeInt(value.size);
       for (const [key, entry] of value) {
         tap.writeString(key);
         this.#valuesType.writeSyncUnchecked(tap, entry);
       }
     }
-    tap.writeLong(0n);
+    tap.writeInt(0);
   }
 
   /**
@@ -377,47 +378,31 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
 
   /**
    * Encodes the entire map synchronously into a contiguous buffer.
+   * Uses a 2-pass approach (CountingTap) to avoid per-entry allocations:
+   * - Pass 1: Measure encoded size without allocating buffers
+   * - Pass 2: Allocate once and serialize directly
    */
   public override toSyncBuffer(value: Map<string, T>): ArrayBuffer {
     if (this.#validate && !(value instanceof Map)) {
       throwInvalidError([], value, this);
     }
 
-    const serializedEntries: Array<{
-      keyBytes: Uint8Array;
-      valueBytes: Uint8Array;
-    }> = [];
+    // Pass 1: Count bytes without allocation
+    const sizeTap = new SyncCountingWritableTap();
+    this.writeSyncUnchecked(
+      sizeTap as unknown as SyncWritableTapLike,
+      value,
+    );
+    const size = sizeTap.getPos();
 
-    let totalSize = 1; // final zero block terminator
-
-    for (const [key, entry] of value.entries()) {
-      if (this.#validate && typeof key !== "string") {
-        throwInvalidError([], value, this);
-      }
-      const keyBytes = encode(key);
-      const valueBytes = new Uint8Array(this.#valuesType.toSyncBuffer(entry));
-      totalSize += calculateVarintSize(keyBytes.length) + keyBytes.length;
-      totalSize += valueBytes.length;
-      serializedEntries.push({ keyBytes, valueBytes });
-    }
-
-    if (serializedEntries.length > 0) {
-      totalSize += calculateVarintSize(serializedEntries.length);
-    }
-
-    const buffer = new ArrayBuffer(totalSize);
+    // Pass 2: Allocate once and write
+    const buffer = new ArrayBuffer(size);
     const tap = new SyncWritableTap(buffer);
-
-    if (serializedEntries.length > 0) {
-      tap.writeLong(BigInt(serializedEntries.length));
-      for (const { keyBytes, valueBytes } of serializedEntries) {
-        tap.writeLong(BigInt(keyBytes.length));
-        tap.writeFixed(keyBytes);
-        tap.writeFixed(valueBytes);
-      }
+    if (this.#validate) {
+      this.writeSync(tap, value);
+    } else {
+      this.writeSyncUnchecked(tap, value);
     }
-    tap.writeLong(0n);
-
     return buffer;
   }
 

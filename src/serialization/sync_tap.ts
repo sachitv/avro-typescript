@@ -502,7 +502,8 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
       if (i === strLen) {
         // Fast ASCII path: direct charCodeAt() encoding
         // Avoids TextEncoder overhead for common ASCII strings
-        this.writeLong(BigInt(strLen));
+        // In this path, encoded length == strLen, so it can fit in an int.
+        this.writeInt(strLen);
         if (strLen > 0) {
           this.appendRawBytes(buf, 0, strLen);
         }
@@ -525,7 +526,11 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
         );
       }
     }
-    this.writeLong(BigInt(result.written));
+    if (result.written > SyncWritableTap.INT_MAX) {
+      this.writeLong(BigInt(result.written));
+    } else {
+      this.writeInt(result.written);
+    }
     this.appendRawBytes(encodedBuffer, 0, result.written);
   }
 

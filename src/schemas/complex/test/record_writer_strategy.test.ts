@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { IntType } from "../../primitive/int_type.ts";
@@ -15,10 +15,68 @@ import {
   CompiledWriterStrategy,
   defaultWriterStrategy,
   InterpretedWriterStrategy,
+  type RecordWriterStrategy,
 } from "../record_writer_strategy.ts";
 import { RecordWriterCache } from "../record_writer_cache.ts";
 import { createRecord } from "./record_test_utils.ts";
 import { createType } from "../../../type/create_type.ts";
+import type { Type } from "../../type.ts";
+import { TestTap } from "../../../serialization/test/test_tap.ts";
+import { SyncWritableTap } from "../../../serialization/sync_tap.ts";
+
+class GreedyWriterStrategy implements RecordWriterStrategy {
+  public compileFieldWriter(
+    fieldType: Type,
+    validate: boolean,
+    getRecordWriter: (type: Type, validate: boolean) => (
+      tap: unknown,
+      value: unknown,
+    ) => Promise<void>,
+  ) {
+    return getRecordWriter(fieldType, validate);
+  }
+
+  public compileSyncFieldWriter(
+    fieldType: Type,
+    validate: boolean,
+    getRecordWriter: (type: Type, validate: boolean) => (
+      tap: unknown,
+      value: unknown,
+    ) => void,
+  ) {
+    return getRecordWriter(fieldType, validate);
+  }
+
+  public assembleRecordWriter(
+    context: {
+      fieldNames: string[];
+    },
+    fieldWriters: Array<(tap: unknown, value: unknown) => Promise<void>>,
+  ) {
+    const { fieldNames } = context;
+    return async (tap: unknown, value: unknown) => {
+      const record = value as Record<string, unknown>;
+      for (let i = 0; i < fieldNames.length; i++) {
+        await fieldWriters[i]!(tap, record[fieldNames[i]!]);
+      }
+    };
+  }
+
+  public assembleSyncRecordWriter(
+    context: {
+      fieldNames: string[];
+    },
+    fieldWriters: Array<(tap: unknown, value: unknown) => void>,
+  ) {
+    const { fieldNames } = context;
+    return (tap: unknown, value: unknown) => {
+      const record = value as Record<string, unknown>;
+      for (let i = 0; i < fieldNames.length; i++) {
+        fieldWriters[i]!(tap, record[fieldNames[i]!]);
+      }
+    };
+  }
+}
 
 describe("RecordWriterStrategy", () => {
   describe("CompiledWriterStrategy", () => {
@@ -93,6 +151,48 @@ describe("RecordWriterStrategy", () => {
       assertEquals(decoded.items, [1, 2, 3]);
       assertEquals(decoded.optional, null);
     });
+
+    it("skips default lookup when validate=false and no defaults", async () => {
+      const type = createRecord({
+        name: "example.NoDefaultsCompiled",
+        writerStrategy: new CompiledWriterStrategy(),
+        validate: false,
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+        ],
+      });
+
+      const value = { id: 7, name: "fast" };
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
+      assertEquals(decoded, value);
+
+      const syncBuffer = type.toSyncBuffer(value);
+      const syncDecoded = type.fromSyncBuffer(syncBuffer);
+      assertEquals(syncDecoded, value);
+    });
+
+    it("writes missing fields as undefined when defaults exist", async () => {
+      const type = createRecord({
+        name: "example.DefaultsCompiled",
+        writerStrategy: new CompiledWriterStrategy(),
+        validate: false,
+        fields: [
+          { name: "id", type: new IntType(), default: 1 },
+          { name: "note", type: new NullType() },
+        ],
+      });
+
+      const value = { id: 9 };
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
+      assertEquals(decoded, { id: 9, note: null });
+
+      const syncBuffer = type.toSyncBuffer(value);
+      const syncDecoded = type.fromSyncBuffer(syncBuffer);
+      assertEquals(syncDecoded, { id: 9, note: null });
+    });
   });
 
   describe("InterpretedWriterStrategy", () => {
@@ -159,6 +259,104 @@ describe("RecordWriterStrategy", () => {
         new Uint8Array(interpretedBuffer),
       );
     });
+
+    it("handles unchecked records without defaults in sync and async modes", async () => {
+      const type = createRecord({
+        name: "example.NoDefaultsInterpreted",
+        writerStrategy: new InterpretedWriterStrategy(),
+        validate: false,
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+        ],
+      });
+
+      const value = { id: 12, name: "lean" };
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
+      assertEquals(decoded, value);
+
+      const syncBuffer = type.toSyncBuffer(value);
+      const syncDecoded = type.fromSyncBuffer(syncBuffer);
+      assertEquals(syncDecoded, value);
+    });
+
+    it("throws on non-record values when validate=true", async () => {
+      const type = createRecord({
+        name: "example.ValidateInterpreted",
+        writerStrategy: new InterpretedWriterStrategy(),
+        fields: [{ name: "id", type: new IntType() }],
+      });
+
+      const asyncTap = new TestTap(new ArrayBuffer(16));
+      await assertRejects(() =>
+        type.write(asyncTap, 123 as unknown as Record<string, unknown>)
+      );
+
+      const syncTap = new SyncWritableTap(new ArrayBuffer(16));
+      assertThrows(() =>
+        type.writeSync(syncTap, 123 as unknown as Record<string, unknown>)
+      );
+    });
+
+    it("writes missing fields as undefined when defaults exist", async () => {
+      const type = createRecord({
+        name: "example.DefaultsInterpreted",
+        writerStrategy: new InterpretedWriterStrategy(),
+        validate: false,
+        fields: [
+          { name: "id", type: new IntType(), default: 1 },
+          { name: "note", type: new NullType() },
+        ],
+      });
+
+      const value = { id: 4 };
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
+      assertEquals(decoded, { id: 4, note: null });
+
+      const syncBuffer = type.toSyncBuffer(value);
+      const syncDecoded = type.fromSyncBuffer(syncBuffer);
+      assertEquals(syncDecoded, { id: 4, note: null });
+    });
+
+    it("applies default values when fields are missing", async () => {
+      const type = createRecord({
+        name: "example.MissingDefaultInterpreted",
+        writerStrategy: new InterpretedWriterStrategy(),
+        fields: [
+          { name: "id", type: new IntType(), default: 10 },
+          { name: "name", type: new StringType() },
+        ],
+      });
+
+      const value = { name: "defaulted" };
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
+      assertEquals(decoded, { id: 10, name: "defaulted" });
+
+      const syncBuffer = type.toSyncBuffer(value);
+      const syncDecoded = type.fromSyncBuffer(syncBuffer);
+      assertEquals(syncDecoded, { id: 10, name: "defaulted" });
+    });
+
+    it("throws when required fields are missing", async () => {
+      const type = createRecord({
+        name: "example.MissingRequiredInterpreted",
+        writerStrategy: new InterpretedWriterStrategy(),
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+        ],
+      });
+
+      await assertRejects(() =>
+        type.toBuffer({ id: 1 } as Record<string, unknown>)
+      );
+      assertThrows(() =>
+        type.toSyncBuffer({ id: 1 } as Record<string, unknown>)
+      );
+    });
   });
 
   describe("getWriterStrategy", () => {
@@ -192,6 +390,43 @@ describe("RecordWriterStrategy", () => {
         record.getWriterStrategy() instanceof CompiledWriterStrategy,
         true,
       );
+    });
+  });
+
+  describe("custom strategy behavior", () => {
+    it("routes non-record fields through getRecordWriter (validate=true)", async () => {
+      const type = createRecord({
+        name: "example.GreedyValidated",
+        writerStrategy: new GreedyWriterStrategy(),
+        fields: [{ name: "id", type: new IntType() }],
+      });
+
+      const value = { id: 11 };
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
+      assertEquals(decoded, value);
+
+      const syncBuffer = type.toSyncBuffer(value);
+      const syncDecoded = type.fromSyncBuffer(syncBuffer);
+      assertEquals(syncDecoded, value);
+    });
+
+    it("routes non-record fields through getRecordWriter (validate=false)", async () => {
+      const type = createRecord({
+        name: "example.GreedyUnchecked",
+        writerStrategy: new GreedyWriterStrategy(),
+        validate: false,
+        fields: [{ name: "id", type: new IntType() }],
+      });
+
+      const value = { id: 22 };
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
+      assertEquals(decoded, value);
+
+      const syncBuffer = type.toSyncBuffer(value);
+      const syncDecoded = type.fromSyncBuffer(syncBuffer);
+      assertEquals(syncDecoded, value);
     });
   });
 });

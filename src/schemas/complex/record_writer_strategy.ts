@@ -37,6 +37,8 @@ export interface RecordWriterContext {
   fieldTypes: Type[];
   /** Default value getters for each field (undefined if no default). */
   fieldDefaultGetters: Array<(() => unknown) | undefined>;
+  /** Whether each field has a default value. */
+  fieldHasDefault: boolean[];
   /** Whether to validate values during writes. */
   validate: boolean;
   /** Reference to the parent RecordType for error reporting. */
@@ -162,17 +164,26 @@ export class CompiledWriterStrategy implements RecordWriterStrategy {
     const {
       fieldNames,
       fieldDefaultGetters,
+      fieldHasDefault,
       validate,
       recordType,
       isRecord,
     } = context;
     const fieldCount = fieldNames.length;
+    const hasAnyDefaults = fieldHasDefault.some((hasDefault) => hasDefault);
 
     return async (tap, value) => {
       if (validate && !isRecord(value)) {
         throwInvalidError([], value, recordType);
       }
       const record = value as Record<string, unknown>;
+      if (!validate && !hasAnyDefaults) {
+        for (let i = 0; i < fieldCount; i++) {
+          const name = fieldNames[i]!;
+          await fieldWriters[i]!(tap, record[name]);
+        }
+        return;
+      }
       for (let i = 0; i < fieldCount; i++) {
         const name = fieldNames[i]!;
         const hasValue = Object.hasOwn(record, name);
@@ -205,17 +216,26 @@ export class CompiledWriterStrategy implements RecordWriterStrategy {
     const {
       fieldNames,
       fieldDefaultGetters,
+      fieldHasDefault,
       validate,
       recordType,
       isRecord,
     } = context;
     const fieldCount = fieldNames.length;
+    const hasAnyDefaults = fieldHasDefault.some((hasDefault) => hasDefault);
 
     return (tap, value) => {
       if (validate && !isRecord(value)) {
         throwInvalidError([], value, recordType);
       }
       const record = value as Record<string, unknown>;
+      if (!validate && !hasAnyDefaults) {
+        for (let i = 0; i < fieldCount; i++) {
+          const name = fieldNames[i]!;
+          fieldWriters[i]!(tap, record[name]);
+        }
+        return;
+      }
       for (let i = 0; i < fieldCount; i++) {
         const name = fieldNames[i]!;
         const hasValue = Object.hasOwn(record, name);
@@ -343,17 +363,26 @@ export class InterpretedWriterStrategy implements RecordWriterStrategy {
     const {
       fieldNames,
       fieldDefaultGetters,
+      fieldHasDefault,
       validate,
       recordType,
       isRecord,
     } = context;
     const fieldCount = fieldNames.length;
+    const hasAnyDefaults = fieldHasDefault.some((hasDefault) => hasDefault);
 
     return async (tap, value) => {
       if (validate && !isRecord(value)) {
         throwInvalidError([], value, recordType);
       }
       const record = value as Record<string, unknown>;
+      if (!validate && !hasAnyDefaults) {
+        for (let i = 0; i < fieldCount; i++) {
+          const name = fieldNames[i]!;
+          await fieldWriters[i]!(tap, record[name]);
+        }
+        return;
+      }
       for (let i = 0; i < fieldCount; i++) {
         const name = fieldNames[i]!;
         const hasValue = Object.hasOwn(record, name);
@@ -386,17 +415,26 @@ export class InterpretedWriterStrategy implements RecordWriterStrategy {
     const {
       fieldNames,
       fieldDefaultGetters,
+      fieldHasDefault,
       validate,
       recordType,
       isRecord,
     } = context;
     const fieldCount = fieldNames.length;
+    const hasAnyDefaults = fieldHasDefault.some((hasDefault) => hasDefault);
 
     return (tap, value) => {
       if (validate && !isRecord(value)) {
         throwInvalidError([], value, recordType);
       }
       const record = value as Record<string, unknown>;
+      if (!validate && !hasAnyDefaults) {
+        for (let i = 0; i < fieldCount; i++) {
+          const name = fieldNames[i]!;
+          fieldWriters[i]!(tap, record[name]);
+        }
+        return;
+      }
       for (let i = 0; i < fieldCount; i++) {
         const name = fieldNames[i]!;
         const hasValue = Object.hasOwn(record, name);
