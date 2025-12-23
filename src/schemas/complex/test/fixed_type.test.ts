@@ -36,7 +36,6 @@ describe("FixedType", () => {
         "org.example.types.Checksum",
       ]);
       assertEquals(fixedType.getSize(), 16);
-      assertEquals(fixedType.sizeBytes(), 16);
     });
 
     it("validates size parameter in constructor", () => {
@@ -578,7 +577,7 @@ describe("FixedType", () => {
 
       const buf = new ArrayBuffer(16);
       const tap = new Tap(buf);
-      await tap.writeFixed(testData, 16);
+      await tap.writeFixed(testData);
 
       const tap2 = new Tap(buf);
       const readData = await resolver.read(tap2);

@@ -261,6 +261,18 @@ interface BenchmarkConfig {
   bufferSize?: number;
 }
 
+const sharedWriteSyncBuffers = new Map<number, ArrayBuffer>();
+
+function getSharedWriteSyncBuffer(size: number): ArrayBuffer {
+  const existing = sharedWriteSyncBuffers.get(size);
+  if (existing) {
+    return existing;
+  }
+  const buffer = new ArrayBuffer(size);
+  sharedWriteSyncBuffers.set(size, buffer);
+  return buffer;
+}
+
 function runFullComparisonBenchmark(config: BenchmarkConfig) {
   const { groupName, types, avroTsData, nodeData, bufferSize = 1024 } = config;
 
@@ -350,6 +362,33 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
     const buffer = new ArrayBuffer(bufferSize);
     Deno.bench({
       name: `${groupName} (avro-ts, writeSync, validate=false)`,
+      group: groupName,
+      n: 100000,
+    }, () => {
+      const writable = new SyncInMemoryWritableBuffer(buffer);
+      const tap = new SyncWritableTap(writable);
+      types.avroTsUnchecked.writeSync(tap, avroTsData);
+    });
+  }
+
+  // --- avro-typescript: writeSync (shared pre-allocated buffer) variants ---
+  {
+    const buffer = getSharedWriteSyncBuffer(bufferSize);
+    Deno.bench({
+      name: `${groupName} (avro-ts, writeSync, reuse buffer, validate=true)`,
+      group: groupName,
+      n: 100000,
+    }, () => {
+      const writable = new SyncInMemoryWritableBuffer(buffer);
+      const tap = new SyncWritableTap(writable);
+      types.avroTs.writeSync(tap, avroTsData);
+    });
+  }
+
+  {
+    const buffer = getSharedWriteSyncBuffer(bufferSize);
+    Deno.bench({
+      name: `${groupName} (avro-ts, writeSync, reuse buffer, validate=false)`,
       group: groupName,
       n: 100000,
     }, () => {
@@ -598,20 +637,4 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
   });
 }
 
-// =============================================================================
-// ADDITIONAL: TAP-LEVEL STRING WRITING
-// =============================================================================
 
-{
-  const stringData = createType(primitiveSchemas.string).random() as string;
-  Deno.bench({
-    name: "tap: string writing (avro-ts)",
-    group: "tap operations",
-    n: 100000,
-  }, () => {
-    const buffer = new ArrayBuffer(1024);
-    const writable = new SyncInMemoryWritableBuffer(buffer);
-    const tap = new SyncWritableTap(writable);
-    tap.writeString(stringData);
-  });
-}

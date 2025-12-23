@@ -40,23 +40,6 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     return await tap.readBoolean();
   }
 
-  /**
-   * Writes a boolean value to the tap.
-   */
-  public async write(
-    tap: WritableTapLike,
-    value: boolean,
-  ): Promise<void> {
-    if (!this.validateWrites) {
-      await this.writeUnchecked(tap, value);
-      return;
-    }
-    if (typeof value !== "boolean") {
-      throwInvalidError([], value, this);
-    }
-    await tap.writeBoolean(value);
-  }
-
   public override async writeUnchecked(
     tap: WritableTapLike,
     value: boolean,
@@ -122,23 +105,6 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
    */
   public override readSync(tap: SyncReadableTapLike): boolean {
     return tap.readBoolean();
-  }
-
-  /**
-   * Writes a boolean value synchronously to the tap.
-   */
-  public override writeSync(
-    tap: SyncWritableTapLike,
-    value: boolean,
-  ): void {
-    if (!this.validateWrites) {
-      this.writeSyncUnchecked(tap, value);
-      return;
-    }
-    if (typeof value !== "boolean") {
-      throwInvalidError([], value, this);
-    }
-    tap.writeBoolean(value);
   }
 
   public override writeSyncUnchecked(

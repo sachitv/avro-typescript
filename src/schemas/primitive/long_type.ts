@@ -1,12 +1,10 @@
-import {
-  type ReadableTapLike,
-  WritableTap,
-  type WritableTapLike,
+import type {
+  ReadableTapLike,
+  WritableTapLike,
 } from "../../serialization/tap.ts";
-import {
-  type SyncReadableTapLike,
-  SyncWritableTap,
-  type SyncWritableTapLike,
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
 } from "../../serialization/sync_tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import type { JSONType, Type } from "../type.ts";
@@ -45,21 +43,6 @@ export class LongType extends PrimitiveType<bigint> {
     return await tap.readLong();
   }
 
-  /** Writes a long value to the tap. */
-  public override async write(
-    tap: WritableTapLike,
-    value: bigint,
-  ): Promise<void> {
-    if (!this.validateWrites) {
-      await this.writeUnchecked(tap, value);
-      return;
-    }
-    if (!this.check(value)) {
-      throwInvalidError([], value, this);
-    }
-    await tap.writeLong(value);
-  }
-
   public override async writeUnchecked(
     tap: WritableTapLike,
     value: bigint,
@@ -67,35 +50,13 @@ export class LongType extends PrimitiveType<bigint> {
     await tap.writeLong(value);
   }
 
+  protected override byteLength(value: bigint): number {
+    return calculateVarintSize(value);
+  }
+
   /** Skips a long value in the tap. */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipLong();
-  }
-
-  /** Converts a bigint value to its buffer representation. */
-  public override async toBuffer(value: bigint): Promise<ArrayBuffer> {
-    if (this.validateWrites) {
-      this.check(value, throwInvalidError, []);
-    }
-    // For long, allocate exact size based on value
-    const size = calculateVarintSize(value);
-    const buf = new ArrayBuffer(size);
-    const tap = new WritableTap(buf);
-    await this.write(tap, value);
-    return buf;
-  }
-
-  /** Converts a bigint value to its buffer representation synchronously. */
-  public override toSyncBuffer(value: bigint): ArrayBuffer {
-    if (this.validateWrites) {
-      this.check(value, throwInvalidError, []);
-    }
-    // For long, allocate exact size based on value
-    const size = calculateVarintSize(value);
-    const buf = new ArrayBuffer(size);
-    const tap = new SyncWritableTap(buf);
-    this.writeSync(tap, value);
-    return buf;
   }
 
   /**
@@ -164,25 +125,6 @@ export class LongType extends PrimitiveType<bigint> {
   /** Reads a long value synchronously from the tap. */
   public override readSync(tap: SyncReadableTapLike): bigint {
     return tap.readLong();
-  }
-
-  /** Writes a long value synchronously to the tap. */
-  public override writeSync(
-    tap: SyncWritableTapLike,
-    value: bigint,
-  ): void {
-    if (!this.validateWrites) {
-      this.writeSyncUnchecked(tap, value);
-      return;
-    }
-    // Fast path: inline validation for performance
-    if (
-      typeof value !== "bigint" || value < -(1n << 63n) ||
-      value > (1n << 63n) - 1n
-    ) {
-      throwInvalidError([], value, this);
-    }
-    tap.writeLong(value);
   }
 
   public override writeSyncUnchecked(

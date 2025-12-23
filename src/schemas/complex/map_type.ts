@@ -1,21 +1,16 @@
-import {
-  type ReadableTapLike,
-  WritableTap,
-  type WritableTapLike,
+import type {
+  ReadableTapLike,
+  WritableTapLike,
 } from "../../serialization/tap.ts";
-import {
-  type SyncReadableTapLike,
-  SyncWritableTap,
-  type SyncWritableTapLike,
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
 } from "../../serialization/sync_tap.ts";
-import { SyncCountingWritableTap } from "../../serialization/sync_counting_writable_tap.ts";
-import { encode } from "../../serialization/text_encoding.ts";
 import { bigIntToSafeNumber } from "../../serialization/conversion.ts";
 import { BaseType } from "../base_type.ts";
 import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
-import { type ErrorHook, throwInvalidError } from "../error.ts";
-import { calculateVarintSize } from "../../internal/varint.ts";
+import type { ErrorHook } from "../error.ts";
 
 /**
  * Parameters for creating a MapType.
@@ -87,19 +82,17 @@ export function readMapIntoSync<T>(
  */
 export class MapType<T = unknown> extends BaseType<Map<string, T>> {
   readonly #valuesType: Type<T>;
-  readonly #validate: boolean;
 
   /**
    * Creates a new MapType.
    * @param params The map type parameters.
    */
   constructor(params: MapTypeParams<T>) {
-    super();
+    super(params.validate ?? true);
     if (!params.values) {
       throw new Error("MapType requires a values type.");
     }
     this.#valuesType = params.values;
-    this.#validate = params.validate ?? true;
   }
 
   /**
@@ -146,64 +139,6 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     }
 
     return isValid;
-  }
-
-  /**
-   * Writes the map value to the tap.
-   * @param tap The writable tap to write to.
-   * @param value The map value to write.
-   */
-  public override async write(
-    tap: WritableTapLike,
-    value: Map<string, T>,
-  ): Promise<void> {
-    if (!this.#validate) {
-      await this.writeUnchecked(tap, value);
-      return;
-    }
-    if (!(value instanceof Map)) {
-      throwInvalidError([], value, this);
-    }
-
-    if (value.size > 0) {
-      await tap.writeLong(BigInt(value.size));
-      for (const [key, entry] of value) {
-        if (typeof key !== "string") {
-          throwInvalidError([], value, this);
-        }
-        await tap.writeString(key);
-        await this.#valuesType.write(tap, entry);
-      }
-    }
-    await tap.writeLong(0n);
-  }
-
-  /**
-   * Serializes the map synchronously on the supplied tap.
-   */
-  public override writeSync(
-    tap: SyncWritableTapLike,
-    value: Map<string, T>,
-  ): void {
-    if (!this.#validate) {
-      this.writeSyncUnchecked(tap, value);
-      return;
-    }
-    if (!(value instanceof Map)) {
-      throwInvalidError([], value, this);
-    }
-
-    if (value.size > 0) {
-      tap.writeInt(value.size);
-      for (const [key, entry] of value) {
-        if (typeof key !== "string") {
-          throwInvalidError([], value, this);
-        }
-        tap.writeString(key);
-        this.#valuesType.writeSync(tap, entry);
-      }
-    }
-    tap.writeInt(0);
   }
 
   /**
@@ -324,86 +259,6 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
         this.#valuesType.skipSync(tap);
       }
     }
-  }
-
-  /**
-   * Serializes the map value to an ArrayBuffer.
-   * @param value The map value to serialize.
-   * @returns The serialized ArrayBuffer.
-   */
-  public override async toBuffer(value: Map<string, T>): Promise<ArrayBuffer> {
-    if (this.#validate && !(value instanceof Map)) {
-      throwInvalidError([], value, this);
-    }
-
-    const serializedEntries: Array<{
-      keyBytes: Uint8Array;
-      valueBytes: Uint8Array;
-    }> = [];
-
-    let totalSize = 1; // final zero block terminator
-
-    for (const [key, entry] of value.entries()) {
-      if (this.#validate && typeof key !== "string") {
-        throwInvalidError([], value, this);
-      }
-      const keyBytes = encode(key);
-      const valueBytes = new Uint8Array(
-        await this.#valuesType.toBuffer(entry),
-      );
-      totalSize += calculateVarintSize(keyBytes.length) + keyBytes.length;
-      totalSize += valueBytes.length;
-      serializedEntries.push({ keyBytes, valueBytes });
-    }
-
-    if (serializedEntries.length > 0) {
-      totalSize += calculateVarintSize(serializedEntries.length);
-    }
-
-    const buffer = new ArrayBuffer(totalSize);
-    const tap = new WritableTap(buffer);
-
-    if (serializedEntries.length > 0) {
-      await tap.writeLong(BigInt(serializedEntries.length));
-      for (const { keyBytes, valueBytes } of serializedEntries) {
-        await tap.writeLong(BigInt(keyBytes.length));
-        await tap.writeFixed(keyBytes);
-        await tap.writeFixed(valueBytes);
-      }
-    }
-    await tap.writeLong(0n);
-
-    return buffer;
-  }
-
-  /**
-   * Encodes the entire map synchronously into a contiguous buffer.
-   * Uses a 2-pass approach (CountingTap) to avoid per-entry allocations:
-   * - Pass 1: Measure encoded size without allocating buffers
-   * - Pass 2: Allocate once and serialize directly
-   */
-  public override toSyncBuffer(value: Map<string, T>): ArrayBuffer {
-    if (this.#validate && !(value instanceof Map)) {
-      throwInvalidError([], value, this);
-    }
-
-    // Pass 1: Count bytes without allocation
-    const sizeTap = new SyncCountingWritableTap();
-    this.writeSyncUnchecked(
-      sizeTap as unknown as SyncWritableTapLike,
-      value,
-    );
-    const size = sizeTap.getPos();
-
-    // Pass 2: Allocate once and write
-    const buffer = new ArrayBuffer(size);
-    const tap = new SyncWritableTap(buffer);
-    if (this.#validate) {
-      this.writeSync(tap, value);
-    } else {
-      this.writeSyncUnchecked(tap, value);
-    }
-    return buffer;
   }
 
   /**

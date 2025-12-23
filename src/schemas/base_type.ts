@@ -30,6 +30,10 @@ export type IsValidOptions = { errorHook?: ErrorHook };
  * Subclasses must implement the remaining abstract methods.
  */
 export abstract class BaseType<T = unknown> extends Type<T> {
+  protected constructor(validate = true) {
+    super(validate);
+  }
+
   /**
    * Deserializes an ArrayBuffer into a value using the schema.
    * @param buffer The ArrayBuffer to deserialize.

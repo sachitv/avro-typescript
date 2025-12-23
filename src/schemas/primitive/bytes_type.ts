@@ -1,12 +1,10 @@
-import {
-  type ReadableTapLike,
-  WritableTap,
-  type WritableTapLike,
+import type {
+  ReadableTapLike,
+  WritableTapLike,
 } from "../../serialization/tap.ts";
-import {
-  type SyncReadableTapLike,
-  SyncWritableTap,
-  type SyncWritableTapLike,
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
 } from "../../serialization/sync_tap.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import type { JSONType, Type } from "./../type.ts";
@@ -49,23 +47,6 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     return tap.readBytes();
   }
 
-  /**
-   * Writes a byte array to the tap.
-   */
-  public override async write(
-    tap: WritableTapLike,
-    value: Uint8Array,
-  ): Promise<void> {
-    if (!this.validateWrites) {
-      await this.writeUnchecked(tap, value);
-      return;
-    }
-    if (!(value instanceof Uint8Array)) {
-      throwInvalidError([], value, this);
-    }
-    await tap.writeBytes(value);
-  }
-
   public override async writeUnchecked(
     tap: WritableTapLike,
     value: Uint8Array,
@@ -73,21 +54,8 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     await tap.writeBytes(value);
   }
 
-  /**
-   * Writes a byte array to the sync tap.
-   */
-  public override writeSync(
-    tap: SyncWritableTapLike,
-    value: Uint8Array,
-  ): void {
-    if (!this.validateWrites) {
-      this.writeSyncUnchecked(tap, value);
-      return;
-    }
-    if (!(value instanceof Uint8Array)) {
-      throwInvalidError([], value, this);
-    }
-    tap.writeBytes(value);
+  protected override byteLength(value: Uint8Array): number {
+    return calculateVarintSize(value.length) + value.length;
   }
 
   public override writeSyncUnchecked(
@@ -109,38 +77,6 @@ export class BytesType extends PrimitiveType<Uint8Array> {
    */
   public override skipSync(tap: SyncReadableTapLike): void {
     tap.skipBytes();
-  }
-
-  /**
-   * Converts a byte array to an ArrayBuffer.
-   */
-  public override async toBuffer(value: Uint8Array): Promise<ArrayBuffer> {
-    if (this.validateWrites) {
-      this.check(value, throwInvalidError, []);
-    }
-    // Pre-allocate buffer based on value length for efficiency
-    const lengthSize = calculateVarintSize(value.length);
-    const totalSize = lengthSize + value.length;
-    const buf = new ArrayBuffer(totalSize);
-    const tap = new WritableTap(buf);
-    await this.write(tap, value);
-    return buf;
-  }
-
-  /**
-   * Converts a byte array to an ArrayBuffer synchronously.
-   */
-  public override toSyncBuffer(value: Uint8Array): ArrayBuffer {
-    if (this.validateWrites) {
-      this.check(value, throwInvalidError, []);
-    }
-    // Pre-allocate buffer based on value length for efficiency
-    const lengthSize = calculateVarintSize(value.length);
-    const totalSize = lengthSize + value.length;
-    const buf = new ArrayBuffer(totalSize);
-    const tap = new SyncWritableTap(buf);
-    this.writeSync(tap, value);
-    return buf;
   }
 
   /**

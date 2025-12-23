@@ -1,12 +1,10 @@
-import {
-  type ReadableTapLike,
-  WritableTap,
-  type WritableTapLike,
+import type {
+  ReadableTapLike,
+  WritableTapLike,
 } from "../../serialization/tap.ts";
-import {
-  type SyncReadableTapLike,
-  SyncWritableTap,
-  type SyncWritableTapLike,
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
 } from "../../serialization/sync_tap.ts";
 import { NamedType } from "./named_type.ts";
 import { Resolver } from "../resolver.ts";
@@ -30,7 +28,6 @@ export interface FixedTypeParams extends ResolvedNames {
  */
 export class FixedType extends NamedType<Uint8Array> {
   #size: number;
-  readonly #validate: boolean;
 
   /**
    * Creates a new FixedType.
@@ -45,46 +42,8 @@ export class FixedType extends NamedType<Uint8Array> {
       );
     }
 
-    super(names);
+    super(names, params.validate ?? true);
     this.#size = size;
-    this.#validate = params.validate ?? true;
-  }
-
-  /**
-   * Gets the size in bytes.
-   */
-  public sizeBytes(): number {
-    return this.#size;
-  }
-
-  /**
-   * Serializes a value into an ArrayBuffer using the exact fixed size.
-   * @param value The value to serialize.
-   * @returns The serialized ArrayBuffer.
-   */
-  public override async toBuffer(value: Uint8Array): Promise<ArrayBuffer> {
-    if (this.#validate) {
-      this.check(value, throwInvalidError, []);
-    }
-    const size = this.sizeBytes();
-    const buf = new ArrayBuffer(size);
-    const tap = new WritableTap(buf);
-    await this.write(tap, value);
-    return buf;
-  }
-
-  /**
-   * Builds a synchronous buffer containing the fixed-length data.
-   */
-  public override toSyncBuffer(value: Uint8Array): ArrayBuffer {
-    if (this.#validate) {
-      this.check(value, throwInvalidError, []);
-    }
-    const size = this.sizeBytes();
-    const buf = new ArrayBuffer(size);
-    const tap = new SyncWritableTap(buf);
-    tap.writeFixed(value);
-    return buf;
   }
 
   /**
@@ -92,18 +51,19 @@ export class FixedType extends NamedType<Uint8Array> {
    * @param tap The tap to skip from.
    */
   public override async skip(tap: ReadableTapLike): Promise<void> {
-    await tap.skipFixed(this.sizeBytes());
+    await tap.skipFixed(this.#size);
   }
 
   /**
    * Advances a sync tap past the fixed payload without reading.
    */
   public override skipSync(tap: SyncReadableTapLike): void {
-    tap.skipFixed(this.sizeBytes());
+    tap.skipFixed(this.#size);
   }
 
   /**
-   * Gets the size in bytes.
+   * Gets the size in bytes. 
+   * This is a public method so that it can be called in the resolver.
    */
   public getSize(): number {
     return this.#size;
@@ -151,37 +111,6 @@ export class FixedType extends NamedType<Uint8Array> {
    * @param tap The tap to write to.
    * @param value The byte array to write.
    */
-  public override async write(
-    tap: WritableTapLike,
-    value: Uint8Array,
-  ): Promise<void> {
-    if (!this.#validate) {
-      await this.writeUnchecked(tap, value);
-      return;
-    }
-    if (!(value instanceof Uint8Array) || value.length !== this.#size) {
-      throwInvalidError([], value, this);
-    }
-    await tap.writeFixed(value, this.#size);
-  }
-
-  /**
-   * Writes the fixed bytes synchronously without awaiting.
-   */
-  public override writeSync(
-    tap: SyncWritableTapLike,
-    value: Uint8Array,
-  ): void {
-    if (!this.#validate) {
-      this.writeSyncUnchecked(tap, value);
-      return;
-    }
-    if (!(value instanceof Uint8Array) || value.length !== this.#size) {
-      throwInvalidError([], value, this);
-    }
-    tap.writeFixed(value);
-  }
-
   /**
    * Writes fixed bytes without validation.
    */
@@ -189,7 +118,7 @@ export class FixedType extends NamedType<Uint8Array> {
     tap: WritableTapLike,
     value: Uint8Array,
   ): Promise<void> {
-    await tap.writeFixed(value, this.#size);
+    await tap.writeFixed(value);
   }
 
   /**
@@ -199,7 +128,11 @@ export class FixedType extends NamedType<Uint8Array> {
     tap: SyncWritableTapLike,
     value: Uint8Array,
   ): void {
-    tap.writeFixed(value.subarray(0, this.#size));
+    tap.writeFixed(value);
+  }
+
+  protected override byteLength(_value: Uint8Array): number {
+    return this.#size;
   }
 
   /**

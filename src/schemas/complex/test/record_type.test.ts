@@ -1977,7 +1977,7 @@ describe("RecordType", () => {
       const tap = new Tap(buffer);
       await assertRejects(
         async () => await type.writeUnchecked(tap, { id: 1 }),
-        TypeError,
+        RangeError,
         "undefined",
       );
     });

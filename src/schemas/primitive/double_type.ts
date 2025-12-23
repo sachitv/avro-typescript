@@ -40,21 +40,6 @@ export class DoubleType extends FixedSizeBaseType<number> {
     return await tap.readDouble();
   }
 
-  /** Writes a double value to the tap. */
-  public override async write(
-    tap: WritableTapLike,
-    value: number,
-  ): Promise<void> {
-    if (!this.validateWrites) {
-      await this.writeUnchecked(tap, value);
-      return;
-    }
-    if (!this.check(value)) {
-      throwInvalidError([], value, this);
-    }
-    await tap.writeDouble(value);
-  }
-
   public override async writeUnchecked(
     tap: WritableTapLike,
     value: number,
@@ -70,19 +55,6 @@ export class DoubleType extends FixedSizeBaseType<number> {
   /** Reads a double value from the sync tap. */
   public readSync(tap: SyncReadableTapLike): number {
     return tap.readDouble();
-  }
-
-  /** Writes a double value to the sync tap. */
-  public writeSync(tap: SyncWritableTapLike, value: number): void {
-    if (!this.validateWrites) {
-      this.writeSyncUnchecked(tap, value);
-      return;
-    }
-    // Fast path: inline validation for performance
-    if (typeof value !== "number") {
-      throwInvalidError([], value, this);
-    }
-    tap.writeDouble(value);
   }
 
   public override writeSyncUnchecked(

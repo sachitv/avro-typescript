@@ -1,10 +1,17 @@
-import type { ReadableTapLike, WritableTapLike } from "../serialization/tap.ts";
-import type {
-  SyncReadableTapLike,
-  SyncWritableTapLike,
+import {
+  type ReadableTapLike,
+  WritableTap,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
+import {
+  type SyncReadableTapLike,
+  SyncWritableTap,
+  type SyncWritableTapLike,
 } from "../serialization/sync_tap.ts";
+import { CountingWritableTap } from "../serialization/counting_writable_tap.ts";
+import { SyncCountingWritableTap } from "../serialization/sync_counting_writable_tap.ts";
 import type { Resolver } from "./resolver.ts";
-import type { ErrorHook } from "./error.ts";
+import { type ErrorHook, throwInvalidError } from "./error.ts";
 
 /**
  * Options for validation, including an optional error hook.
@@ -29,12 +36,35 @@ export type JSONType =
  * Provides the common interface for serialization, deserialization, validation, and cloning.
  */
 export abstract class Type<T = unknown> {
+  protected readonly validateWrites: boolean;
+
+  protected constructor(validate = true) {
+    this.validateWrites = validate;
+  }
+
   /**
    * Serializes a value into an ArrayBuffer using the schema.
    * @param value The value to serialize.
    * @returns The serialized ArrayBuffer.
    */
-  public abstract toBuffer(value: T): Promise<ArrayBuffer>;
+  public async toBuffer(value: T): Promise<ArrayBuffer> {
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
+    const sizeHint = this.byteLength(value);
+    if (sizeHint !== undefined) {
+      const buffer = new ArrayBuffer(assertValidSize(sizeHint));
+      const tap = new WritableTap(buffer);
+      await this.writeUnchecked(tap, value);
+      return buffer;
+    }
+    const countingTap = new CountingWritableTap();
+    await this.writeUnchecked(countingTap, value);
+    const buffer = new ArrayBuffer(countingTap.getPos());
+    const tap = new WritableTap(buffer);
+    await this.writeUnchecked(tap, value);
+    return buffer;
+  }
 
   /**
    * Deserializes an ArrayBuffer into a value using the schema.
@@ -70,7 +100,12 @@ export abstract class Type<T = unknown> {
    * @param tap The tap to write to.
    * @param value The value to write.
    */
-  public abstract write(tap: WritableTapLike, value: T): Promise<void>;
+  public async write(tap: WritableTapLike, value: T): Promise<void> {
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
+    await this.writeUnchecked(tap, value);
+  }
 
   /**
    * Writes a value to the tap without performing runtime validation.
@@ -79,9 +114,10 @@ export abstract class Type<T = unknown> {
    * efficiently and recursively. The default implementation delegates to
    * {@link write}.
    */
-  public async writeUnchecked(tap: WritableTapLike, value: T): Promise<void> {
-    await this.write(tap, value);
-  }
+  public abstract writeUnchecked(
+    tap: WritableTapLike,
+    value: T,
+  ): Promise<void>;
 
   /**
    * Reads a value from the tap. Must be implemented by subclasses.
@@ -145,7 +181,24 @@ export abstract class Type<T = unknown> {
    * @param value The value to serialize.
    * @returns The serialized ArrayBuffer.
    */
-  public abstract toSyncBuffer(value: T): ArrayBuffer;
+  public toSyncBuffer(value: T): ArrayBuffer {
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
+    const sizeHint = this.byteLength(value);
+    if (sizeHint !== undefined) {
+      const buffer = new ArrayBuffer(assertValidSize(sizeHint));
+      const tap = new SyncWritableTap(buffer);
+      this.writeSyncUnchecked(tap, value);
+      return buffer;
+    }
+    const countingTap = new SyncCountingWritableTap();
+    this.writeSyncUnchecked(countingTap, value);
+    const buffer = new ArrayBuffer(countingTap.getPos());
+    const tap = new SyncWritableTap(buffer);
+    this.writeSyncUnchecked(tap, value);
+    return buffer;
+  }
 
   /**
    * Deserializes an ArrayBuffer into a value synchronously using the schema.
@@ -159,16 +212,22 @@ export abstract class Type<T = unknown> {
    * @param tap The sync tap to write to.
    * @param value The value to write.
    */
-  public abstract writeSync(tap: SyncWritableTapLike, value: T): void;
+  public writeSync(tap: SyncWritableTapLike, value: T): void {
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
+    this.writeSyncUnchecked(tap, value);
+  }
 
   /**
    * Writes a value to the sync tap without performing runtime validation.
    *
    * The default implementation delegates to {@link writeSync}.
    */
-  public writeSyncUnchecked(tap: SyncWritableTapLike, value: T): void {
-    this.writeSync(tap, value);
-  }
+  public abstract writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: T,
+  ): void;
 
   /**
    * Reads a value from the sync tap. Must be implemented by subclasses.
@@ -193,4 +252,19 @@ export abstract class Type<T = unknown> {
     tap1: SyncReadableTapLike,
     tap2: SyncReadableTapLike,
   ): number;
+
+  /**
+   * Returns the encoded byte length for the value when it is cheap to compute.
+   * Override in types with fixed or easily derived sizes to skip counting taps.
+   */
+  protected byteLength(_value: T): number | undefined {
+    return undefined;
+  }
+}
+
+function assertValidSize(size: number): number {
+  if (!Number.isFinite(size) || !Number.isInteger(size) || size < 0) {
+    throw new RangeError(`Invalid byte length: ${size}`);
+  }
+  return size;
 }

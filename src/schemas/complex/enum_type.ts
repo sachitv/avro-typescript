@@ -1,12 +1,10 @@
-import {
-  type ReadableTapLike,
-  WritableTap,
-  type WritableTapLike,
+import type {
+  ReadableTapLike,
+  WritableTapLike,
 } from "../../serialization/tap.ts";
-import {
-  type SyncReadableTapLike,
-  SyncWritableTap,
-  type SyncWritableTapLike,
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
 } from "../../serialization/sync_tap.ts";
 import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
@@ -35,7 +33,6 @@ export class EnumType extends NamedType<string> {
   readonly #symbols: string[];
   readonly #indices: Map<string, number>;
   readonly #default?: string;
-  readonly #validate: boolean;
 
   /**
    * Creates a new EnumType.
@@ -47,10 +44,9 @@ export class EnumType extends NamedType<string> {
     }
 
     const { symbols, default: defaultValue, ...nameInfo } = params;
-    super(nameInfo);
+    super(nameInfo, params.validate ?? true);
     this.#symbols = symbols.slice();
     this.#indices = new Map<string, number>();
-    this.#validate = params.validate ?? true;
 
     this.#symbols.forEach((symbol, index) => {
       if (!isValidName(symbol)) {
@@ -104,41 +100,6 @@ export class EnumType extends NamedType<string> {
   }
 
   /**
-   * Serializes the enum value by writing its index.
-   * @param tap The tap to write to.
-   * @param value The enum value to write.
-   */
-  public override async write(
-    tap: WritableTapLike,
-    value: string,
-  ): Promise<void> {
-    if (!this.#validate) {
-      await this.writeUnchecked(tap, value);
-      return;
-    }
-    const index = this.#indices.get(value);
-    if (index === undefined) {
-      throwInvalidError([], value, this);
-    }
-    await tap.writeLong(BigInt(index));
-  }
-
-  /**
-   * Encodes the enum index synchronously.
-   */
-  public override writeSync(tap: SyncWritableTapLike, value: string): void {
-    if (!this.#validate) {
-      this.writeSyncUnchecked(tap, value);
-      return;
-    }
-    const index = this.#indices.get(value);
-    if (index === undefined) {
-      throwInvalidError([], value, this);
-    }
-    tap.writeLong(BigInt(index));
-  }
-
-  /**
    * Writes enum value without type validation.
    * Still validates that the symbol exists to avoid undefined behavior.
    */
@@ -166,6 +127,14 @@ export class EnumType extends NamedType<string> {
       throwInvalidError([], value, this);
     }
     tap.writeLong(BigInt(index));
+  }
+
+  protected override byteLength(value: string): number {
+    const index = this.#indices.get(value);
+    if (index === undefined) {
+      throwInvalidError([], value, this);
+    }
+    return calculateVarintSize(index);
   }
 
   /**
@@ -212,42 +181,6 @@ export class EnumType extends NamedType<string> {
       );
     }
     return this.#symbols[index];
-  }
-
-  /**
-   * Converts the enum value to its binary buffer representation.
-   */
-  public override async toBuffer(value: string): Promise<ArrayBuffer> {
-    if (this.#validate) {
-      this.check(value, throwInvalidError, []);
-    }
-    const index = this.#indices.get(value);
-    if (index === undefined) {
-      throwInvalidError([], value, this);
-    }
-    const size = calculateVarintSize(index);
-    const buffer = new ArrayBuffer(size);
-    const tap = new WritableTap(buffer);
-    await this.write(tap, value);
-    return buffer;
-  }
-
-  /**
-   * Emits a buffer containing the enum index synchronously.
-   */
-  public override toSyncBuffer(value: string): ArrayBuffer {
-    if (this.#validate) {
-      this.check(value, throwInvalidError, []);
-    }
-    const index = this.#indices.get(value);
-    if (index === undefined) {
-      throwInvalidError([], value, this);
-    }
-    const size = calculateVarintSize(index);
-    const buffer = new ArrayBuffer(size);
-    const tap = new SyncWritableTap(buffer);
-    tap.writeLong(BigInt(index));
-    return buffer;
   }
 
   /** Clones a value into a string. */

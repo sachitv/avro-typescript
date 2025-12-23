@@ -19,16 +19,14 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
 export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
   /** The underlying type that this logical type wraps. */
   protected readonly underlyingType: Type<TUnderlying>;
-  readonly #validateWrites: boolean;
 
   /**
    * Constructs a new LogicalType.
    * @param underlyingType - The underlying type to wrap.
    */
   protected constructor(underlyingType: Type<TUnderlying>, validate = true) {
-    super();
+    super(validate);
     this.underlyingType = underlyingType;
-    this.#validateWrites = validate;
   }
 
   /**
@@ -69,35 +67,12 @@ export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
   }
 
   /**
-   * Serializes the logical value to an ArrayBuffer.
-   * @param value The logical value to serialize.
-   */
-  public override async toBuffer(value: TValue): Promise<ArrayBuffer> {
-    if (this.#validateWrites) {
-      this.ensureValid(value, []);
-    }
-    const underlying = this.toUnderlying(value);
-    return await this.underlyingType.toBuffer(underlying);
-  }
-
-  /**
    * Deserializes a logical value from an ArrayBuffer.
    * @param buffer The buffer to deserialize from.
    */
   public override async fromBuffer(buffer: ArrayBuffer): Promise<TValue> {
     const underlying = await this.underlyingType.fromBuffer(buffer);
     return this.fromUnderlying(underlying);
-  }
-
-  /**
-   * Delegates synchronous buffer serialization to the underlying type.
-   */
-  public override toSyncBuffer(value: TValue): ArrayBuffer {
-    if (this.#validateWrites) {
-      this.ensureValid(value, []);
-    }
-    const underlying = this.toUnderlying(value);
-    return this.underlyingType.toSyncBuffer(underlying);
   }
 
   /**
@@ -178,33 +153,6 @@ export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
   public override random(): TValue {
     const underlying = this.underlyingType.random();
     return this.fromUnderlying(underlying);
-  }
-
-  /**
-   * Writes the value to the tap by writing the underlying value.
-   */
-  public override async write(
-    tap: WritableTapLike,
-    value: TValue,
-  ): Promise<void> {
-    if (!this.#validateWrites) {
-      await this.writeUnchecked(tap, value);
-      return;
-    }
-    this.ensureValid(value, []);
-    await this.underlyingType.write(tap, this.toUnderlying(value));
-  }
-
-  /**
-   * Writes the logical value synchronously via the underlying type's writer.
-   */
-  public override writeSync(tap: SyncWritableTapLike, value: TValue): void {
-    if (!this.#validateWrites) {
-      this.writeSyncUnchecked(tap, value);
-      return;
-    }
-    this.ensureValid(value, []);
-    this.underlyingType.writeSync(tap, this.toUnderlying(value));
   }
 
   /**

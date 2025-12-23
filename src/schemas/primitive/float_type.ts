@@ -44,36 +44,11 @@ export class FloatType extends FixedSizeBaseType<number> {
     return tap.readFloat();
   }
 
-  /** Writes a float value to the tap. */
-  public async write(tap: WritableTapLike, value: number): Promise<void> {
-    if (!this.validateWrites) {
-      await this.writeUnchecked(tap, value);
-      return;
-    }
-    if (!this.check(value)) {
-      throwInvalidError([], value, this);
-    }
-    await tap.writeFloat(value);
-  }
-
   public override async writeUnchecked(
     tap: WritableTapLike,
     value: number,
   ): Promise<void> {
     await tap.writeFloat(value);
-  }
-
-  /** Writes a float value to the sync tap. */
-  public writeSync(tap: SyncWritableTapLike, value: number): void {
-    if (!this.validateWrites) {
-      this.writeSyncUnchecked(tap, value);
-      return;
-    }
-    // Fast path: inline validation for performance
-    if (typeof value !== "number") {
-      throwInvalidError([], value, this);
-    }
-    tap.writeFloat(value);
   }
 
   public override writeSyncUnchecked(

@@ -2,19 +2,15 @@ import type {
   ReadableTapLike,
   WritableTapLike,
 } from "../../serialization/tap.ts";
-import { WritableTap } from "../../serialization/tap.ts";
-import { CountingWritableTap } from "../../serialization/counting_writable_tap.ts";
-import { SyncCountingWritableTap } from "../../serialization/sync_counting_writable_tap.ts";
 import { NamedType } from "./named_type.ts";
 import type { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
-import { type ErrorHook, throwInvalidError } from "../error.ts";
+import type { ErrorHook } from "../error.ts";
 import type { ResolvedNames } from "./resolve_names.ts";
 import type {
   SyncReadableTapLike,
   SyncWritableTapLike,
 } from "../../serialization/sync_tap.ts";
-import { SyncWritableTap } from "../../serialization/sync_tap.ts";
 
 // Re-export extracted modules for backward compatibility
 export {
@@ -85,7 +81,6 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   #fields: RecordField[];
   #fieldNameToIndex: Map<string, number>;
   #fieldsThunk?: () => RecordFieldParams[];
-  #validateWrites: boolean;
   #writerCache: RecordWriterCache;
   #fieldNames: string[];
   #fieldTypes: Type[];
@@ -98,7 +93,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
    */
   constructor(params: RecordTypeParams) {
     const { fields, validate, writerStrategy, ...names } = params;
-    super(names);
+    super(names, validate ?? true);
 
     this.#fields = [];
     this.#fieldNameToIndex = new Map();
@@ -106,7 +101,6 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     this.#fieldTypes = [];
     this.#fieldHasDefault = [];
     this.#fieldDefaultGetters = [];
-    this.#validateWrites = validate ?? true;
     this.#writerCache = new RecordWriterCache(
       writerStrategy ?? defaultWriterStrategy,
     );
@@ -180,20 +174,6 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   }
 
   /**
-   * Writes the given record value to the tap.
-   * @param tap The writable tap to write to.
-   * @param value The record value to write.
-   */
-  public override async write(
-    tap: WritableTapLike,
-    value: Record<string, unknown>,
-  ): Promise<void> {
-    this.#ensureFields();
-    const writer = this.#getOrCreateCompiledWriter(this.#validateWrites);
-    await writer(tap, value);
-  }
-
-  /**
    * Writes the record without runtime validation.
    */
   public override async writeUnchecked(
@@ -203,18 +183,6 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     this.#ensureFields();
     const writer = this.#getOrCreateCompiledWriter(false);
     await writer(tap, value);
-  }
-
-  /**
-   * Serializes every field synchronously onto the tap, honoring defaults.
-   */
-  public override writeSync(
-    tap: SyncWritableTapLike,
-    value: Record<string, unknown>,
-  ): void {
-    this.#ensureFields();
-    const writer = this.#getOrCreateCompiledSyncWriter(this.#validateWrites);
-    writer(tap, value);
   }
 
   /**
@@ -330,56 +298,6 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     for (const field of this.#fields) {
       field.getType().skipSync(tap);
     }
-  }
-
-  /**
-   * Converts the given record value to a buffer.
-   * @param value The record value to convert.
-   * @returns The buffer representation of the value.
-   */
-  public override async toBuffer(
-    value: Record<string, unknown>,
-  ): Promise<ArrayBuffer> {
-    this.#ensureFields();
-    if (this.#validateWrites && !this.#isRecord(value)) {
-      throwInvalidError([], value, this);
-    }
-
-    const writer = this.#getOrCreateCompiledWriter(this.#validateWrites);
-
-    // Pass 1: measure encoded size without allocating per-field buffers.
-    const sizeTap = new CountingWritableTap();
-    await writer(sizeTap as unknown as WritableTapLike, value);
-    const size = sizeTap.getPos();
-
-    // Pass 2: allocate exactly once and serialize into it.
-    const buffer = new ArrayBuffer(size);
-    const tap = new WritableTap(buffer);
-    await writer(tap, value);
-    return buffer;
-  }
-
-  /**
-   * Encodes every field synchronously into a single buffer.
-   */
-  public override toSyncBuffer(value: Record<string, unknown>): ArrayBuffer {
-    this.#ensureFields();
-    if (this.#validateWrites && !this.#isRecord(value)) {
-      throwInvalidError([], value, this);
-    }
-
-    const writer = this.#getOrCreateCompiledSyncWriter(this.#validateWrites);
-
-    // Pass 1: measure encoded size without allocating per-field buffers.
-    const sizeTap = new SyncCountingWritableTap();
-    writer(sizeTap as unknown as SyncWritableTapLike, value);
-    const size = sizeTap.getPos();
-
-    // Pass 2: allocate exactly once and serialize into it.
-    const buffer = new ArrayBuffer(size);
-    const tap = new SyncWritableTap(buffer);
-    writer(tap, value);
-    return buffer;
   }
 
   /**
