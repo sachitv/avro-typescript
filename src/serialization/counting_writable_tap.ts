@@ -61,8 +61,8 @@ export class CountingWritableTap extends TapBase implements WritableTapLike {
     return Promise.resolve();
   }
 
-  writeFixed(buf: Uint8Array, len?: number): Promise<void> {
-    this.pos += len ?? buf.length;
+  writeFixed(buf: Uint8Array): Promise<void> {
+    this.pos += buf.length;
     return Promise.resolve();
   }
 
@@ -87,9 +87,4 @@ export class CountingWritableTap extends TapBase implements WritableTapLike {
     return Promise.resolve();
   }
 
-  packLongBytes(_arr: Uint8Array): Promise<void> {
-    // 8-byte long packs to at most 10 varint bytes
-    this.pos += 10;
-    return Promise.resolve();
-  }
 }

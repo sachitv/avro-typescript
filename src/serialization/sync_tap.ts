@@ -393,6 +393,7 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
 
   /**
    * Writes a 32-bit integer using zigzag + varint encoding.
+   * Uses 32-bit math to avoid BigInt casts for performance.
    */
   writeInt(value: number): void {
     if (

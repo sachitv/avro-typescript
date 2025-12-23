@@ -1,10 +1,9 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../../serialization/test/test_tap.ts";
-import {
-  SyncReadableTap,
-  SyncWritableTap,
-} from "../../serialization/sync_tap.ts";
+import { SyncReadableTap } from "../../serialization/sync_tap.ts";
+import type { WritableTapLike } from "../../serialization/tap.ts";
+import type { SyncWritableTapLike } from "../../serialization/sync_tap.ts";
 import { ReadBufferError } from "../../serialization/buffers/sync_buffer.ts";
 import type { JSONType, Type } from "../type.ts";
 import { Resolver } from "../resolver.ts";
@@ -16,18 +15,18 @@ import { FixedSizeBaseType } from "../primitive/fixed_size_base_type.ts";
  * Handles string values.
  */
 class TestType extends BaseType<string> {
+  constructor() {
+    super();
+  }
+
   public override toJSON(): JSONType {
     return "test";
   }
 
-  public override async toBuffer(value: string): Promise<ArrayBuffer> {
-    const buf = new ArrayBuffer(value.length + 10); // extra space for length encoding
-    const tap = new Tap(buf);
-    await this.write(tap, value);
-    return buf.slice(0, tap.getPos());
-  }
-
-  public override async write(tap: Tap, value: string): Promise<void> {
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: string,
+  ): Promise<void> {
     await tap.writeString(value);
   }
 
@@ -73,14 +72,10 @@ class TestType extends BaseType<string> {
     return await tap1.matchString(tap2);
   }
 
-  public override toSyncBuffer(value: string): ArrayBuffer {
-    const buf = new ArrayBuffer(value.length + 10); // extra space for length encoding
-    const tap = new SyncWritableTap(buf);
-    this.writeSync(tap, value);
-    return buf.slice(0, tap.getPos());
-  }
-
-  public override writeSync(tap: SyncWritableTap, value: string): void {
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: string,
+  ): void {
     tap.writeString(value);
   }
 
@@ -113,7 +108,10 @@ class OtherType extends FixedSizeBaseType<number> {
     return 8;
   }
 
-  public override async write(tap: Tap, value: number): Promise<void> {
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: number,
+  ): Promise<void> {
     await tap.writeDouble(value);
   }
 
@@ -148,14 +146,10 @@ class OtherType extends FixedSizeBaseType<number> {
     return await tap1.matchDouble(tap2);
   }
 
-  public override toSyncBuffer(value: number): ArrayBuffer {
-    const buf = new ArrayBuffer(8); // double is 8 bytes
-    const tap = new SyncWritableTap(buf);
-    this.writeSync(tap, value);
-    return buf;
-  }
-
-  public override writeSync(tap: SyncWritableTap, value: number): void {
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: number,
+  ): void {
     tap.writeDouble(value);
   }
 
@@ -247,7 +241,11 @@ describe("Type", () => {
       let capturedType: Type | undefined;
 
       type.isValid(123, {
-        errorHook: (path, value, schemaType) => {
+        errorHook: (
+          path: string[],
+          value: unknown,
+          schemaType: Type,
+        ) => {
           called = true;
           capturedPath = path;
           capturedValue = value;

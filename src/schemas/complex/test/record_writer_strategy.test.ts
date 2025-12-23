@@ -15,6 +15,7 @@ import {
   CompiledWriterStrategy,
   defaultWriterStrategy,
   InterpretedWriterStrategy,
+  type RecordWriterContext,
   type RecordWriterStrategy,
 } from "../record_writer_strategy.ts";
 import { RecordWriterCache } from "../record_writer_cache.ts";
@@ -22,7 +23,8 @@ import { createRecord } from "./record_test_utils.ts";
 import { createType } from "../../../type/create_type.ts";
 import type { Type } from "../../type.ts";
 import { TestTap } from "../../../serialization/test/test_tap.ts";
-import { SyncWritableTap } from "../../../serialization/sync_tap.ts";
+import { SyncReadableTap, SyncWritableTap } from "../../../serialization/sync_tap.ts";
+import { ValidationError } from "../../error.ts";
 
 class GreedyWriterStrategy implements RecordWriterStrategy {
   public compileFieldWriter(
@@ -45,6 +47,60 @@ class GreedyWriterStrategy implements RecordWriterStrategy {
     ) => void,
   ) {
     return getRecordWriter(fieldType, validate);
+  }
+
+  public assembleRecordWriter(
+    context: {
+      fieldNames: string[];
+    },
+    fieldWriters: Array<(tap: unknown, value: unknown) => Promise<void>>,
+  ) {
+    const { fieldNames } = context;
+    return async (tap: unknown, value: unknown) => {
+      const record = value as Record<string, unknown>;
+      for (let i = 0; i < fieldNames.length; i++) {
+        await fieldWriters[i]!(tap, record[fieldNames[i]!]);
+      }
+    };
+  }
+
+  public assembleSyncRecordWriter(
+    context: {
+      fieldNames: string[];
+    },
+    fieldWriters: Array<(tap: unknown, value: unknown) => void>,
+  ) {
+    const { fieldNames } = context;
+    return (tap: unknown, value: unknown) => {
+      const record = value as Record<string, unknown>;
+      for (let i = 0; i < fieldNames.length; i++) {
+        fieldWriters[i]!(tap, record[fieldNames[i]!]);
+      }
+    };
+  }
+}
+
+class ForceValidateWriterStrategy implements RecordWriterStrategy {
+  public compileFieldWriter(
+    fieldType: Type,
+    _validate: boolean,
+    getRecordWriter: (type: Type, validate: boolean) => (
+      tap: unknown,
+      value: unknown,
+    ) => Promise<void>,
+  ) {
+    return getRecordWriter(fieldType, true);
+  }
+
+  public compileSyncFieldWriter(
+    fieldType: Type,
+    _validate: boolean,
+    getRecordWriter: (type: Type, validate: boolean) => (
+      tap: unknown,
+      value: unknown,
+    ) => void,
+  ) {
+    return getRecordWriter(fieldType, true);
   }
 
   public assembleRecordWriter(
@@ -192,6 +248,73 @@ describe("RecordWriterStrategy", () => {
       const syncBuffer = type.toSyncBuffer(value);
       const syncDecoded = type.fromSyncBuffer(syncBuffer);
       assertEquals(syncDecoded, { id: 9, note: null });
+    });
+
+    it("validates record writes when validate=true", async () => {
+      const strategy = new CompiledWriterStrategy();
+      const fieldType = new IntType();
+      const recordType = createRecord({
+        name: "example.CompiledValidatedContext",
+        fields: [{ name: "id", type: fieldType }],
+      });
+      const context: RecordWriterContext = {
+        fieldNames: ["id"],
+        fieldTypes: [fieldType],
+        fieldDefaultGetters: [undefined],
+        fieldHasDefault: [false],
+        validate: true,
+        recordType,
+        isRecord: (value): value is Record<string, unknown> =>
+          typeof value === "object" && value !== null,
+      };
+
+      const fieldWriter = strategy.compileFieldWriter(
+        fieldType,
+        true,
+        () => {
+          throw new Error("Unexpected nested writer request.");
+        },
+      );
+      const recordWriter = strategy.assembleRecordWriter(context, [fieldWriter]);
+      const tap = new TestTap(new ArrayBuffer(16));
+      await recordWriter(tap, { id: 42 });
+      tap._testOnlyResetPos();
+      assertEquals(await tap.readInt(), 42);
+
+      await assertRejects(
+        () => recordWriter(new TestTap(new ArrayBuffer(16)), 123 as unknown),
+        ValidationError,
+      );
+      await assertRejects(
+        () => recordWriter(new TestTap(new ArrayBuffer(16)), {} as unknown),
+        ValidationError,
+      );
+
+      const syncFieldWriter = strategy.compileSyncFieldWriter(
+        fieldType,
+        true,
+        () => {
+          throw new Error("Unexpected nested writer request.");
+        },
+      );
+      const syncWriter = strategy.assembleSyncRecordWriter(
+        context,
+        [syncFieldWriter],
+      );
+      const syncBuffer = new ArrayBuffer(16);
+      const syncTap = new SyncWritableTap(syncBuffer);
+      syncWriter(syncTap, { id: 7 });
+      const syncReadTap = new SyncReadableTap(syncBuffer);
+      assertEquals(syncReadTap.readInt(), 7);
+
+      assertThrows(
+        () => syncWriter(new SyncWritableTap(new ArrayBuffer(16)), 123 as unknown),
+        ValidationError,
+      );
+      assertThrows(
+        () => syncWriter(new SyncWritableTap(new ArrayBuffer(16)), {} as unknown),
+        ValidationError,
+      );
     });
   });
 
@@ -357,6 +480,73 @@ describe("RecordWriterStrategy", () => {
         type.toSyncBuffer({ id: 1 } as Record<string, unknown>)
       );
     });
+
+    it("validates record writes when validate=true", async () => {
+      const strategy = new InterpretedWriterStrategy();
+      const fieldType = new IntType();
+      const recordType = createRecord({
+        name: "example.InterpretedValidatedContext",
+        fields: [{ name: "id", type: fieldType }],
+      });
+      const context: RecordWriterContext = {
+        fieldNames: ["id"],
+        fieldTypes: [fieldType],
+        fieldDefaultGetters: [undefined],
+        fieldHasDefault: [false],
+        validate: true,
+        recordType,
+        isRecord: (value): value is Record<string, unknown> =>
+          typeof value === "object" && value !== null,
+      };
+
+      const fieldWriter = strategy.compileFieldWriter(
+        fieldType,
+        true,
+        () => {
+          throw new Error("Unexpected nested writer request.");
+        },
+      );
+      const recordWriter = strategy.assembleRecordWriter(context, [fieldWriter]);
+      const tap = new TestTap(new ArrayBuffer(16));
+      await recordWriter(tap, { id: 55 });
+      tap._testOnlyResetPos();
+      assertEquals(await tap.readInt(), 55);
+
+      await assertRejects(
+        () => recordWriter(new TestTap(new ArrayBuffer(16)), 456 as unknown),
+        ValidationError,
+      );
+      await assertRejects(
+        () => recordWriter(new TestTap(new ArrayBuffer(16)), {} as unknown),
+        ValidationError,
+      );
+
+      const syncFieldWriter = strategy.compileSyncFieldWriter(
+        fieldType,
+        true,
+        () => {
+          throw new Error("Unexpected nested writer request.");
+        },
+      );
+      const syncWriter = strategy.assembleSyncRecordWriter(
+        context,
+        [syncFieldWriter],
+      );
+      const syncBuffer = new ArrayBuffer(16);
+      const syncTap = new SyncWritableTap(syncBuffer);
+      syncWriter(syncTap, { id: 8 });
+      const syncReadTap = new SyncReadableTap(syncBuffer);
+      assertEquals(syncReadTap.readInt(), 8);
+
+      assertThrows(
+        () => syncWriter(new SyncWritableTap(new ArrayBuffer(16)), 456 as unknown),
+        ValidationError,
+      );
+      assertThrows(
+        () => syncWriter(new SyncWritableTap(new ArrayBuffer(16)), {} as unknown),
+        ValidationError,
+      );
+    });
   });
 
   describe("getWriterStrategy", () => {
@@ -420,6 +610,23 @@ describe("RecordWriterStrategy", () => {
       });
 
       const value = { id: 22 };
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
+      assertEquals(decoded, value);
+
+      const syncBuffer = type.toSyncBuffer(value);
+      const syncDecoded = type.fromSyncBuffer(syncBuffer);
+      assertEquals(syncDecoded, value);
+    });
+
+    it("forces validated nested writers for non-record fields", async () => {
+      const type = createRecord({
+        name: "example.ForcedValidation",
+        writerStrategy: new ForceValidateWriterStrategy(),
+        fields: [{ name: "id", type: new IntType() }],
+      });
+
+      const value = { id: 33 };
       const buffer = await type.toBuffer(value);
       const decoded = await type.fromBuffer(buffer);
       assertEquals(decoded, value);
@@ -493,6 +700,94 @@ describe("RecordWriterCache", () => {
 
       assertEquals(decoded1, { id: 1 });
       assertEquals(decoded2, { id: 2 });
+    });
+
+    it("caches validated writers when validate=true", async () => {
+      const fieldType = new IntType();
+      const recordType = createRecord({
+        name: "example.StrictCache",
+        fields: [{ name: "id", type: fieldType }],
+      });
+      const context: RecordWriterContext = {
+        fieldNames: ["id"],
+        fieldTypes: [fieldType],
+        fieldDefaultGetters: [undefined],
+        fieldHasDefault: [false],
+        validate: true,
+        recordType,
+        isRecord: (value): value is Record<string, unknown> =>
+          typeof value === "object" && value !== null,
+      };
+
+      const cache = new RecordWriterCache();
+      const writer = cache.getOrCreateWriter(
+        true,
+        context,
+        () => {
+          throw new Error("Unexpected nested writer request.");
+        },
+      );
+      const tap = new TestTap(new ArrayBuffer(16));
+      await writer(tap, { id: 1 });
+      tap._testOnlyResetPos();
+      assertEquals(await tap.readInt(), 1);
+
+      const cachedWriter = cache.getOrCreateWriter(
+        true,
+        context,
+        () => {
+          throw new Error("Unexpected nested writer request.");
+        },
+      );
+      const cachedTap = new TestTap(new ArrayBuffer(16));
+      await cachedWriter(cachedTap, { id: 2 });
+      cachedTap._testOnlyResetPos();
+      assertEquals(await cachedTap.readInt(), 2);
+    });
+
+    it("caches validated sync writers when validate=true", () => {
+      const fieldType = new IntType();
+      const recordType = createRecord({
+        name: "example.StrictCacheSync",
+        fields: [{ name: "id", type: fieldType }],
+      });
+      const context: RecordWriterContext = {
+        fieldNames: ["id"],
+        fieldTypes: [fieldType],
+        fieldDefaultGetters: [undefined],
+        fieldHasDefault: [false],
+        validate: true,
+        recordType,
+        isRecord: (value): value is Record<string, unknown> =>
+          typeof value === "object" && value !== null,
+      };
+
+      const cache = new RecordWriterCache();
+      const writer = cache.getOrCreateSyncWriter(
+        true,
+        context,
+        () => {
+          throw new Error("Unexpected nested writer request.");
+        },
+      );
+      const buffer = new ArrayBuffer(16);
+      const tap = new SyncWritableTap(buffer);
+      writer(tap, { id: 3 });
+      const readTap = new SyncReadableTap(buffer);
+      assertEquals(readTap.readInt(), 3);
+
+      const cachedWriter = cache.getOrCreateSyncWriter(
+        true,
+        context,
+        () => {
+          throw new Error("Unexpected nested writer request.");
+        },
+      );
+      const cachedBuffer = new ArrayBuffer(16);
+      const cachedTap = new SyncWritableTap(cachedBuffer);
+      cachedWriter(cachedTap, { id: 4 });
+      const cachedReadTap = new SyncReadableTap(cachedBuffer);
+      assertEquals(cachedReadTap.readInt(), 4);
     });
   });
 

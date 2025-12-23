@@ -1,20 +1,16 @@
-import {
-  type ReadableTapLike,
-  WritableTap,
-  type WritableTapLike,
+import type {
+  ReadableTapLike,
+  WritableTapLike,
 } from "../../serialization/tap.ts";
 import { bigIntToSafeNumber } from "../../serialization/conversion.ts";
 import { BaseType } from "../base_type.ts";
 import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
-import { type ErrorHook, throwInvalidError } from "../error.ts";
-import { calculateVarintSize } from "../../internal/varint.ts";
-import {
-  type SyncReadableTapLike,
-  SyncWritableTap,
-  type SyncWritableTapLike,
+import type { ErrorHook } from "../error.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
 } from "../../serialization/sync_tap.ts";
-import { SyncCountingWritableTap } from "../../serialization/sync_counting_writable_tap.ts";
 
 /**
  * Helper function to read an array from a tap.
@@ -84,19 +80,17 @@ export interface ArrayTypeParams<T> {
  */
 export class ArrayType<T = unknown> extends BaseType<T[]> {
   readonly #itemsType: Type<T>;
-  readonly #validate: boolean;
 
   /**
    * Creates a new ArrayType.
    * @param params The array type parameters.
    */
   constructor(params: ArrayTypeParams<T>) {
-    super();
+    super(params.validate ?? true);
     if (!params.items) {
       throw new Error("ArrayType requires an items type.");
     }
     this.#itemsType = params.items;
-    this.#validate = params.validate ?? true;
   }
 
   /**
@@ -142,31 +136,6 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
       }
     }
     return isValid;
-  }
-
-  /**
-   * Overrides the base write method to serialize an array.
-   * @param tap The tap to write to.
-   * @param value The array to write.
-   */
-  public override async write(
-    tap: WritableTapLike,
-    value: T[],
-  ): Promise<void> {
-    if (this.#validate && !Array.isArray(value)) {
-      throwInvalidError([], value, this);
-    }
-    await this.writeUnchecked(tap, value);
-  }
-
-  /**
-   * Serializes the array synchronously to the provided tap.
-   */
-  public override writeSync(tap: SyncWritableTapLike, value: T[]): void {
-    if (this.#validate && !Array.isArray(value)) {
-      throwInvalidError([], value, this);
-    }
-    this.writeSyncUnchecked(tap, value);
   }
 
   /**
@@ -287,74 +256,6 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
       },
     );
     return result;
-  }
-
-  /**
-   * Overrides the base toBuffer method to serialize an array to a buffer.
-   * @param value The array to serialize.
-   * @returns The serialized buffer.
-   */
-  public override async toBuffer(value: T[]): Promise<ArrayBuffer> {
-    if (this.#validate && !Array.isArray(value)) {
-      throwInvalidError([], value, this);
-    }
-
-    const elementBuffers = value.length === 0 ? [] : await Promise.all(
-      value.map(async (element) =>
-        new Uint8Array(await this.#itemsType.toBuffer(element))
-      ),
-    );
-
-    let totalSize = 1; // final zero block terminator
-    if (value.length > 0) {
-      totalSize += calculateVarintSize(value.length);
-      for (const buf of elementBuffers) {
-        totalSize += buf.byteLength;
-      }
-    }
-
-    const buffer = new ArrayBuffer(totalSize);
-    const tap = new WritableTap(buffer);
-
-    if (value.length > 0) {
-      await tap.writeLong(BigInt(value.length));
-      for (const buf of elementBuffers) {
-        await tap.writeFixed(buf);
-      }
-    }
-    await tap.writeLong(0n);
-
-    return buffer;
-  }
-
-  /**
-   * Encodes the array synchronously into a dedicated buffer.
-   * Uses a 2-pass approach (CountingTap) to avoid per-element allocations:
-   * - Pass 1: Measure encoded size without allocating buffers
-   * - Pass 2: Allocate once and serialize directly
-   */
-  public override toSyncBuffer(value: T[]): ArrayBuffer {
-    if (this.#validate && !Array.isArray(value)) {
-      throwInvalidError([], value, this);
-    }
-
-    // Pass 1: Count bytes without allocation
-    const sizeTap = new SyncCountingWritableTap();
-    this.writeSyncUnchecked(
-      sizeTap as unknown as SyncWritableTapLike,
-      value,
-    );
-    const size = sizeTap.getPos();
-
-    // Pass 2: Allocate once and write
-    const buffer = new ArrayBuffer(size);
-    const tap = new SyncWritableTap(buffer);
-    if (this.#validate) {
-      this.writeSync(tap, value);
-    } else {
-      this.writeSyncUnchecked(tap, value);
-    }
-    return buffer;
   }
 
   /**

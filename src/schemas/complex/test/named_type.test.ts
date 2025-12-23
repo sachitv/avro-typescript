@@ -2,6 +2,7 @@ import { assert, assertEquals } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
+import type { WritableTapLike } from "../../../serialization/tap.ts";
 import type {
   SyncReadableTapLike,
   SyncWritableTapLike,
@@ -26,7 +27,16 @@ class DummyNamedType extends NamedType<string> {
     return value;
   }
 
-  public override async write(_tap: Tap, _value: string): Promise<void> {}
+  public override async write(
+    _tap: WritableTapLike,
+    _value: string,
+  ): Promise<void> {}
+
+  public override async writeUnchecked(
+    _tap: WritableTapLike,
+    _value: string,
+  ): Promise<void> {
+  }
 
   // deno-lint-ignore require-await
   public override async read(_tap: Tap): Promise<string> {
@@ -69,6 +79,11 @@ class DummyNamedType extends NamedType<string> {
   }
 
   public override writeSync(
+    _tap: SyncWritableTapLike,
+    _value: string,
+  ): void {}
+
+  public override writeSyncUnchecked(
     _tap: SyncWritableTapLike,
     _value: string,
   ): void {}

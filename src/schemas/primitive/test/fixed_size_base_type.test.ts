@@ -2,9 +2,10 @@ import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { FixedSizeBaseType } from "../fixed_size_base_type.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
+import type { WritableTapLike } from "../../../serialization/tap.ts";
 import {
   SyncReadableTap,
-  type SyncWritableTap,
+  type SyncWritableTapLike,
 } from "../../../serialization/sync_tap.ts";
 import { type ErrorHook, ValidationError } from "../../error.ts";
 import type { JSONType } from "../../type.ts";
@@ -31,7 +32,10 @@ class TestFixedSizeType extends FixedSizeBaseType<number> {
     return (await tap.readInt()) || 0;
   }
 
-  public async write(tap: Tap, value: number): Promise<void> {
+  public async writeUnchecked(
+    tap: WritableTapLike,
+    value: number,
+  ): Promise<void> {
     await tap.writeInt(value);
   }
 
@@ -59,7 +63,10 @@ class TestFixedSizeType extends FixedSizeBaseType<number> {
     return tap.readInt() || 0;
   }
 
-  public override writeSync(tap: SyncWritableTap, value: number): void {
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: number,
+  ): void {
     tap.writeInt(value);
   }
 

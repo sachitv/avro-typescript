@@ -40,23 +40,6 @@ export class NullType extends FixedSizeBaseType<null> {
     return await Promise.resolve(null);
   }
 
-  /**
-   * Writes a null value to the tap.
-   */
-  public override async write(
-    _tap: WritableTapLike,
-    value: null,
-  ): Promise<void> {
-    if (!this.validateWrites) {
-      await this.writeUnchecked(_tap, value);
-      return;
-    }
-    if (value !== null) {
-      throwInvalidError([], value, this);
-    }
-    await Promise.resolve();
-  }
-
   public override async writeUnchecked(
     _tap: WritableTapLike,
     _value: null,
@@ -118,22 +101,6 @@ export class NullType extends FixedSizeBaseType<null> {
    */
   public override readSync(_tap: SyncReadableTapLike): null {
     return null;
-  }
-
-  /**
-   * Writes a null value synchronously to the tap.
-   */
-  public override writeSync(
-    _tap: SyncWritableTapLike,
-    value: null,
-  ): void {
-    if (!this.validateWrites) {
-      this.writeSyncUnchecked(_tap, value);
-      return;
-    }
-    if (value !== null) {
-      throwInvalidError([], value, this);
-    }
   }
 
   public override writeSyncUnchecked(

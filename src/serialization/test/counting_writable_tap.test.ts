@@ -72,12 +72,6 @@ describe("CountingWritableTap", () => {
       expect(tap.getPos()).toBe(5);
     });
 
-    it("writeFixed uses explicit length when provided", async () => {
-      const tap = new CountingWritableTap();
-      const data = new Uint8Array([1, 2, 3, 4, 5]);
-      await tap.writeFixed(data, 3);
-      expect(tap.getPos()).toBe(3);
-    });
 
     it("writeBytes counts length prefix + data", async () => {
       const tap = new CountingWritableTap();
@@ -114,11 +108,6 @@ describe("CountingWritableTap", () => {
       expect(tap.getPos()).toBe(0);
     });
 
-    it("packLongBytes counts 10 bytes", async () => {
-      const tap = new CountingWritableTap();
-      await tap.packLongBytes(new Uint8Array(8));
-      expect(tap.getPos()).toBe(10);
-    });
   });
 
   describe("parity with WritableTap", () => {

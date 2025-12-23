@@ -14,8 +14,8 @@ export abstract class NamedType<T = unknown> extends BaseType<T> {
    * Creates a new NamedType.
    * @param resolvedNames The resolved names (full name, namespace, aliases).
    */
-  protected constructor(resolvedNames: ResolvedNames) {
-    super();
+  protected constructor(resolvedNames: ResolvedNames, validate = true) {
+    super(validate);
     this.#fullName = resolvedNames.fullName;
     this.#namespace = resolvedNames.namespace;
     this.#aliases = resolvedNames.aliases;

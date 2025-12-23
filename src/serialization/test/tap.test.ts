@@ -35,19 +35,6 @@ const newTap = (size: number, seed?: Uint8Array): Tap => {
 
 const tapFromBytes = (bytes: number[]): Tap => new Tap(arrayBufferFrom(bytes));
 
-const readInt32LE = (bytes: Uint8Array): number =>
-  new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getInt32(
-    0,
-    true,
-  );
-
-const writeInt32LE = (bytes: Uint8Array, offset: number, value: number): void =>
-  new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setInt32(
-    offset,
-    value,
-    true,
-  );
-
 const expectUint8ArrayEqual = (
   actual: Uint8Array | undefined,
   expected: Uint8Array,
@@ -180,8 +167,8 @@ describe("Tap primitive round-trips", () => {
       -1,
       42,
       -1234567,
-      Number.MAX_SAFE_INTEGER,
-      Number.MIN_SAFE_INTEGER,
+      2147483647,
+      -2147483648,
     ],
     reader: async (tap) => await tap.readInt(),
     skipper: async (tap) => await tap.skipInt(),
@@ -240,7 +227,7 @@ describe("Tap primitive round-trips", () => {
     elems: [toUint8Array([1, 5, 255])],
     reader: async (tap) => await tap.readFixed(3),
     skipper: async (tap) => await tap.skipFixed(3),
-    writer: async (tap, value) => await tap.writeFixed(value, 3),
+    writer: async (tap, value) => await tap.writeFixed(value.subarray(0, 3)),
     equals: expectUint8ArrayEqual,
     size: 3,
   });
@@ -519,90 +506,6 @@ describe("WritableTap byte emission", () => {
   });
 });
 
-describe("Long pack & unpack", () => {
-  it("unpack single byte", async () => {
-    const tap = newTap(10);
-    await tap.writeLong(5n);
-    tap._testOnlyResetPos();
-    expectUint8ArrayEqual(
-      await tap.unpackLongBytes(),
-      toUint8Array([5, 0, 0, 0, 0, 0, 0, 0]),
-    );
-    tap._testOnlyResetPos();
-    await tap.writeLong(-5n);
-    tap._testOnlyResetPos();
-    expectUint8ArrayEqual(
-      await tap.unpackLongBytes(),
-      toUint8Array([-5, -1, -1, -1, -1, -1, -1, -1]),
-    );
-    tap._testOnlyResetPos();
-  });
-
-  it("unpack multiple bytes", async () => {
-    const tap = newTap(10);
-    let value = 18932;
-    await tap.writeLong(BigInt(value));
-    tap._testOnlyResetPos();
-    expect(readInt32LE(await tap.unpackLongBytes())).toBe(value);
-    tap._testOnlyResetPos();
-    value = -3210984;
-    await tap.writeLong(BigInt(value));
-    tap._testOnlyResetPos();
-    expect(readInt32LE(await tap.unpackLongBytes())).toBe(value);
-  });
-
-  it("pack single byte", async () => {
-    const tap = newTap(10);
-    const buffer = new Uint8Array(8);
-    buffer.fill(0);
-    writeInt32LE(buffer, 0, 12);
-    await tap.packLongBytes(buffer);
-    expect(tap.getPos()).toBe(1);
-    tap._testOnlyResetPos();
-    expect(await tap.readLong()).toBe(12n);
-    tap._testOnlyResetPos();
-    writeInt32LE(buffer, 0, -37);
-    writeInt32LE(buffer, 4, -1);
-    await tap.packLongBytes(buffer);
-    expect(tap.getPos()).toBe(1);
-    tap._testOnlyResetPos();
-    expect(await tap.readLong()).toBe(-37n);
-    tap._testOnlyResetPos();
-    writeInt32LE(buffer, 0, -1);
-    writeInt32LE(buffer, 4, -1);
-    await tap.packLongBytes(buffer);
-    const buf = await tap._testOnlyBuf();
-    expectUint8ArrayEqual(
-      buf.subarray(0, tap.getPos()),
-      toUint8Array([1]),
-    );
-    tap._testOnlyResetPos();
-    expect(await tap.readLong()).toBe(-1n);
-  });
-
-  it("roundtrip", async () => {
-    const cases = [
-      1231514n,
-      -123n,
-      124124n,
-      109283109271n,
-      BigInt(Number.MAX_SAFE_INTEGER),
-      BigInt(Number.MIN_SAFE_INTEGER),
-      0n,
-      -1n,
-    ];
-
-    for (const value of cases) {
-      const tap1 = newTap(10);
-      const tap2 = newTap(10);
-      await tap1.writeLong(value);
-      tap1._testOnlyResetPos();
-      await tap2.packLongBytes(await tap1.unpackLongBytes());
-      await expectTapEqual(tap2, tap1);
-    }
-  });
-});
-
 describe("Numeric guard rails", () => {
   it("readInt throws when value exceeds safe integer range", async () => {
     const tap = newTap(16);
@@ -629,6 +532,12 @@ describe("Numeric guard rails", () => {
     expect(await tap.readInt()).toBe(42);
     await tap.skipInt();
     expect(tap.getPos()).toBe(afterWrites);
+  });
+
+  it("writeInt throws when value exceeds 32-bit range", async () => {
+    const tap = newTap(16);
+    await assertRejects(async () => await tap.writeInt(2147483648), RangeError);
+    await assertRejects(async () => await tap.writeInt(-2147483649), RangeError);
   });
 });
 

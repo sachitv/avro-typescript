@@ -3,18 +3,15 @@ import { NamedType } from "./named_type.ts";
 import { Resolver } from "../resolver.ts";
 import { type JSONType, Type } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
-import {
-  type ReadableTapLike,
-  WritableTap,
-  type WritableTapLike,
+import type {
+  ReadableTapLike,
+  WritableTapLike,
 } from "../../serialization/tap.ts";
-import {
-  type SyncReadableTapLike,
-  SyncWritableTap,
-  type SyncWritableTapLike,
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
 } from "../../serialization/sync_tap.ts";
 import { bigIntToSafeNumber } from "../../serialization/conversion.ts";
-import { calculateVarintSize } from "../../internal/varint.ts";
 
 /**
  * Represents a wrapped value for a union type.
@@ -80,14 +77,13 @@ export class UnionType extends BaseType<UnionValue> {
   readonly #types: Type[];
   readonly #branches: BranchInfo[];
   readonly #indices: Map<string, number>;
-  readonly #validate: boolean;
 
   /**
    * Creates a new UnionType.
    * @param params The union type parameters.
    */
   constructor(params: UnionTypeParams) {
-    super();
+    super(params.validate ?? true);
 
     const { types } = params;
     if (!Array.isArray(types)) {
@@ -100,7 +96,6 @@ export class UnionType extends BaseType<UnionValue> {
     this.#types = [];
     this.#branches = [];
     this.#indices = new Map();
-    this.#validate = params.validate ?? true;
 
     types.forEach((type, index) => {
       if (!(type instanceof Type)) {
@@ -203,45 +198,6 @@ export class UnionType extends BaseType<UnionValue> {
   }
 
   /**
-   * Serializes the union value to the writable tap.
-   * Writes the branch index as a long, followed by the branch value if not null.
-   * @param tap The writable tap to write to.
-   * @param value The union value to serialize.
-   */
-  public override async write(
-    tap: WritableTapLike,
-    value: UnionValue,
-  ): Promise<void> {
-    if (!this.#validate) {
-      await this.writeUnchecked(tap, value);
-      return;
-    }
-    const { index, branchValue } = this.#resolveBranch(value as UnionValue);
-    await tap.writeLong(BigInt(index));
-    if (branchValue !== undefined) {
-      await this.#branches[index].type.write(tap, branchValue as never);
-    }
-  }
-
-  /**
-   * Writes the union branch index and payload through sync taps.
-   */
-  public override writeSync(
-    tap: SyncWritableTapLike,
-    value: UnionValue,
-  ): void {
-    if (!this.#validate) {
-      this.writeSyncUnchecked(tap, value);
-      return;
-    }
-    const { index, branchValue } = this.#resolveBranch(value);
-    tap.writeLong(BigInt(index));
-    if (branchValue !== undefined) {
-      this.#branches[index].type.writeSync(tap, branchValue as never);
-    }
-  }
-
-  /**
    * Writes union value without validation.
    */
   public override async writeUnchecked(
@@ -329,57 +285,6 @@ export class UnionType extends BaseType<UnionValue> {
     if (!branch.isNull) {
       branch.type.skipSync(tap);
     }
-  }
-
-  /**
-   * Converts the union value to an ArrayBuffer.
-   * Calculates the size needed for the index and branch value, then writes them to a new buffer.
-   * @param value The union value to convert.
-   * @returns The ArrayBuffer containing the serialized value.
-   */
-  public override async toBuffer(value: UnionValue): Promise<ArrayBuffer> {
-    const { index, branchValue } = this.#resolveBranch(value);
-    const indexSize = calculateVarintSize(index);
-    let totalSize = indexSize;
-    let branchBytes: Uint8Array | undefined;
-    if (branchValue !== undefined) {
-      branchBytes = new Uint8Array(
-        await this.#branches[index].type.toBuffer(branchValue),
-      );
-      totalSize += branchBytes.byteLength;
-    }
-
-    const buffer = new ArrayBuffer(totalSize);
-    const tap = new WritableTap(buffer);
-    await tap.writeLong(BigInt(index));
-    if (branchBytes) {
-      await tap.writeFixed(branchBytes);
-    }
-    return buffer;
-  }
-
-  /**
-   * Encodes a union value synchronously into an ArrayBuffer.
-   */
-  public override toSyncBuffer(value: UnionValue): ArrayBuffer {
-    const { index, branchValue } = this.#resolveBranch(value);
-    const indexSize = calculateVarintSize(index);
-    let totalSize = indexSize;
-    let branchBytes: Uint8Array | undefined;
-    if (branchValue !== undefined) {
-      branchBytes = new Uint8Array(
-        this.#branches[index].type.toSyncBuffer(branchValue),
-      );
-      totalSize += branchBytes.byteLength;
-    }
-
-    const buffer = new ArrayBuffer(totalSize);
-    const tap = new SyncWritableTap(buffer);
-    tap.writeLong(BigInt(index));
-    if (branchBytes) {
-      tap.writeFixed(branchBytes);
-    }
-    return buffer;
   }
 
   /**
