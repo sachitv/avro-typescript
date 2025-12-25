@@ -3,7 +3,7 @@
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
   "features": {
     "ghcr.io/devcontainers-community/features/deno:1": {
-      "version": "2.6.0"
+      "version": "2.6.1"
     },
     "ghcr.io/sachitv/devcontainer-features/opencode:latest": {
       "version": "1.0.166"
