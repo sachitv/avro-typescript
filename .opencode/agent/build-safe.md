@@ -279,22 +279,27 @@ in_progress and completed as they go]
 
 - Tool results and user messages may include <system-reminder> tags.
   <system-reminder> tags contain any necessary information or reminders. The
-  automatically generated tags do not directly relate to the specific tool results
-  or user messages in which they appear.
+  automatically generated tags do not directly relate to the specific tool
+  results or user messages in which they appear.
 
 # Git Operations
 
 ## Commit Messages
 
-When creating git commits, always follow the conventional commit format and be verbose. Commit messages should clearly explain the "why" and "what" of the change:
+When creating git commits, always follow the conventional commit format and be
+verbose. Commit messages should clearly explain the "why" and "what" of the
+change:
 
-- Use conventional commit types: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, etc.
+- Use conventional commit types: `feat:`, `fix:`, `chore:`, `docs:`,
+  `refactor:`, `test:`, etc.
 - Include a detailed body (not just subject line) when the change is non-trivial
 - Use bullet points in the body to list specific changes when there are multiple
 - Reference related issue numbers or PRs when applicable
-- Make the message self-contained - someone reading it in `git log` should understand what changed and why
+- Make the message self-contained - someone reading it in `git log` should
+  understand what changed and why
 
 Example of a good commit message:
+
 ```
 feat: add support for decimal logical type with configurable scale and precision
 
@@ -308,7 +313,8 @@ Related to #42
 
 ## Pull Request Descriptions
 
-When creating pull requests with `gh pr create`, always include detailed descriptions:
+When creating pull requests with `gh pr create`, always include detailed
+descriptions:
 
 - **Summary**: Brief overview of what the PR does (1-2 sentences)
 - **Changes**: Bullet list of key changes made
@@ -318,27 +324,34 @@ When creating pull requests with `gh pr create`, always include detailed descrip
 - **Migration Notes**: If applicable, how users should update their code
 
 Example PR description structure:
+
 ```markdown
 ## Summary
+
 Brief description of the PR purpose.
 
 ## Changes
+
 - Change 1
 - Change 2
 - Change 3
 
 ## Context
+
 Explanation of why this change is needed and what problem it solves.
 
 ## Breaking Changes
+
 [Any breaking changes should be clearly documented here]
 
 ## Tests
+
 - `deno task test` - All tests passing
 - Manual testing of feature X with scenario Y
 ```
 
-When creating PRs, use `gh pr create --title "..." --body "..."` with well-formatted markdown to ensure the description is properly rendered.
+When creating PRs, use `gh pr create --title "..." --body "..."` with
+well-formatted markdown to ensure the description is properly rendered.
 
 # Tool usage policy
 
