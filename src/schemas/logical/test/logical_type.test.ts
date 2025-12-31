@@ -12,7 +12,7 @@ import { ReadableTap, WritableTap } from "../../../serialization/tap.ts";
 import {
   SyncReadableTap,
   SyncWritableTap,
-} from "../../../serialization/sync_tap.ts";
+} from "../../../serialization/tap_sync.ts";
 import { ValidationError } from "../../error.ts";
 
 // A simple test logical type that wraps strings

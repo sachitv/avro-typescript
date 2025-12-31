@@ -1,8 +1,8 @@
 import { describe, it } from "@std/testing/bdd";
 import { expect } from "@std/expect";
 
-import { ReadBufferError } from "../sync_buffer.ts";
-import { SyncBlobReadableBuffer } from "../sync_blob_readable_buffer.ts";
+import { ReadBufferError } from "../buffer_sync.ts";
+import { SyncBlobReadableBuffer } from "../blob_readable_buffer_sync.ts";
 
 describe("SyncBlobReadableBuffer", () => {
   it("reads data from Uint8Array", () => {

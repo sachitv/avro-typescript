@@ -1,16 +1,16 @@
-import type { ISyncWritable } from "./serialization/buffers/sync_buffer.ts";
+import type { ISyncWritable } from "./serialization/buffers/buffer_sync.ts";
 import {
   SyncAvroFileWriter,
   type SyncAvroWriterOptions,
-} from "./serialization/sync_avro_file_writer.ts";
+} from "./serialization/avro_file_writer_sync.ts";
 import {
   SyncStreamWritableBufferAdapter,
-} from "./serialization/streams/sync_stream_writable_buffer_adapter.ts";
+} from "./serialization/streams/stream_writable_buffer_adapter_sync.ts";
 import type {
   ISyncStreamWritableBuffer,
-} from "./serialization/streams/sync_streams.ts";
+} from "./serialization/streams/streams_sync.ts";
 
-export type { SyncAvroWriterOptions } from "./serialization/sync_avro_file_writer.ts";
+export type { SyncAvroWriterOptions } from "./serialization/avro_file_writer_sync.ts";
 
 /**
  * Interface exposed by synchronous Avro writer instances.

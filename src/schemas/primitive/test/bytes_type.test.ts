@@ -5,7 +5,7 @@ import type { ReadableTapLike } from "../../../serialization/tap.ts";
 import {
   SyncReadableTap,
   SyncWritableTap,
-} from "../../../serialization/sync_tap.ts";
+} from "../../../serialization/tap_sync.ts";
 import { BytesType } from "../bytes_type.ts";
 import { StringType } from "../string_type.ts";
 import { ValidationError } from "../../error.ts";

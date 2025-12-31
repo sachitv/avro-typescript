@@ -2,7 +2,7 @@ import { assertEquals } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { WritableTap } from "../../serialization/tap.ts";
-import { SyncWritableTap } from "../../serialization/sync_tap.ts";
+import { SyncWritableTap } from "../../serialization/tap_sync.ts";
 import { createType, type SchemaLike } from "../create_type.ts";
 
 describe("createType validate option", () => {

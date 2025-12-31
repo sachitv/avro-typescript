@@ -1,6 +1,6 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { SyncFixedSizeStreamWriter } from "../sync_fixed_size_stream_writer.ts";
+import { SyncFixedSizeStreamWriter } from "../fixed_size_stream_writer_sync.ts";
 
 describe("SyncFixedSizeStreamWriter", () => {
   it("writes sequential data", () => {

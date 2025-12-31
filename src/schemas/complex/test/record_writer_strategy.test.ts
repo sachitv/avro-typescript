@@ -23,7 +23,10 @@ import { createRecord } from "./record_test_utils.ts";
 import { createType } from "../../../type/create_type.ts";
 import type { Type } from "../../type.ts";
 import { TestTap } from "../../../serialization/test/test_tap.ts";
-import { SyncReadableTap, SyncWritableTap } from "../../../serialization/sync_tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/tap_sync.ts";
 import { ValidationError } from "../../error.ts";
 
 class GreedyWriterStrategy implements RecordWriterStrategy {
@@ -275,7 +278,9 @@ describe("RecordWriterStrategy", () => {
           throw new Error("Unexpected nested writer request.");
         },
       );
-      const recordWriter = strategy.assembleRecordWriter(context, [fieldWriter]);
+      const recordWriter = strategy.assembleRecordWriter(context, [
+        fieldWriter,
+      ]);
       const tap = new TestTap(new ArrayBuffer(16));
       await recordWriter(tap, { id: 42 });
       tap._testOnlyResetPos();
@@ -308,11 +313,13 @@ describe("RecordWriterStrategy", () => {
       assertEquals(syncReadTap.readInt(), 7);
 
       assertThrows(
-        () => syncWriter(new SyncWritableTap(new ArrayBuffer(16)), 123 as unknown),
+        () =>
+          syncWriter(new SyncWritableTap(new ArrayBuffer(16)), 123 as unknown),
         ValidationError,
       );
       assertThrows(
-        () => syncWriter(new SyncWritableTap(new ArrayBuffer(16)), {} as unknown),
+        () =>
+          syncWriter(new SyncWritableTap(new ArrayBuffer(16)), {} as unknown),
         ValidationError,
       );
     });
@@ -506,7 +513,9 @@ describe("RecordWriterStrategy", () => {
           throw new Error("Unexpected nested writer request.");
         },
       );
-      const recordWriter = strategy.assembleRecordWriter(context, [fieldWriter]);
+      const recordWriter = strategy.assembleRecordWriter(context, [
+        fieldWriter,
+      ]);
       const tap = new TestTap(new ArrayBuffer(16));
       await recordWriter(tap, { id: 55 });
       tap._testOnlyResetPos();
@@ -539,11 +548,13 @@ describe("RecordWriterStrategy", () => {
       assertEquals(syncReadTap.readInt(), 8);
 
       assertThrows(
-        () => syncWriter(new SyncWritableTap(new ArrayBuffer(16)), 456 as unknown),
+        () =>
+          syncWriter(new SyncWritableTap(new ArrayBuffer(16)), 456 as unknown),
         ValidationError,
       );
       assertThrows(
-        () => syncWriter(new SyncWritableTap(new ArrayBuffer(16)), {} as unknown),
+        () =>
+          syncWriter(new SyncWritableTap(new ArrayBuffer(16)), {} as unknown),
         ValidationError,
       );
     });

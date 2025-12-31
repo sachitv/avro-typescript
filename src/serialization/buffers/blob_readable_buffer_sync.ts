@@ -1,4 +1,4 @@
-import { type ISyncReadable, ReadBufferError } from "./sync_buffer.ts";
+import { type ISyncReadable, ReadBufferError } from "./buffer_sync.ts";
 
 /**
  * A read-only buffer implementation that provides random access read operations

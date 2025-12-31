@@ -5,13 +5,13 @@ import { ReadableTap } from "../../../serialization/tap.ts";
 import {
   SyncReadableTap,
   SyncWritableTap,
-} from "../../../serialization/sync_tap.ts";
+} from "../../../serialization/tap_sync.ts";
 import { FloatType } from "../float_type.ts";
 import { IntType } from "../int_type.ts";
 import { LongType } from "../long_type.ts";
 import { ValidationError } from "../../error.ts";
 import { BooleanType } from "../boolean_type.ts";
-import { ReadBufferError } from "../../../serialization/buffers/sync_buffer.ts";
+import { ReadBufferError } from "../../../serialization/buffers/buffer_sync.ts";
 
 describe("FloatType", () => {
   const type = new FloatType();

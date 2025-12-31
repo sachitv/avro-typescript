@@ -1,8 +1,8 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { ReadBufferError } from "../../buffers/sync_buffer.ts";
-import { SyncFixedSizeStreamReader } from "../sync_fixed_size_stream_reader.ts";
-import { SyncStreamReadableBufferAdapter } from "../sync_stream_readable_buffer_adapter.ts";
+import { ReadBufferError } from "../../buffers/buffer_sync.ts";
+import { SyncFixedSizeStreamReader } from "../fixed_size_stream_reader_sync.ts";
+import { SyncStreamReadableBufferAdapter } from "../stream_readable_buffer_adapter_sync.ts";
 
 describe("SyncStreamReadableBufferAdapter", () => {
   describe("read", () => {

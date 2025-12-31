@@ -7,4 +7,4 @@
 
 export * from "./serialization_bench.ts";
 export * from "./schema_bench.ts";
-export * from "./sync_file_bench.ts";
+export * from "./file_sync_bench.ts";

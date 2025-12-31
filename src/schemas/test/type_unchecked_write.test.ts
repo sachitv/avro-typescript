@@ -1,10 +1,13 @@
 import { describe, it } from "@std/testing/bdd";
 import { expect } from "@std/expect";
-import type { ReadableTapLike, WritableTapLike } from "../../serialization/tap.ts";
+import type {
+  ReadableTapLike,
+  WritableTapLike,
+} from "../../serialization/tap.ts";
 import type {
   SyncReadableTapLike,
   SyncWritableTapLike,
-} from "../../serialization/sync_tap.ts";
+} from "../../serialization/tap_sync.ts";
 import { Type } from "../type.ts";
 
 class TestType extends Type<number> {

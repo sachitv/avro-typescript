@@ -585,7 +585,6 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
     const bytes2 = await tap.readFixed(l2);
     return compareUint8Arrays(bytes1, bytes2);
   }
-
 }
 
 /**
@@ -760,5 +759,4 @@ export class WritableTap extends TapBase implements WritableTapLike {
     }
     await this.appendRawBytes(bytes);
   }
-
 }

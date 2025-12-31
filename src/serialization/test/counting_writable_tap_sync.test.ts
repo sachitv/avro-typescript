@@ -1,8 +1,8 @@
 import { describe, it } from "@std/testing/bdd";
 import { expect } from "@std/expect";
-import { SyncCountingWritableTap } from "../sync_counting_writable_tap.ts";
-import { SyncWritableTap } from "../sync_tap.ts";
-import { SyncInMemoryWritableBuffer } from "../buffers/sync_in_memory_buffer.ts";
+import { SyncCountingWritableTap } from "../counting_writable_tap_sync.ts";
+import { SyncWritableTap } from "../tap_sync.ts";
+import { SyncInMemoryWritableBuffer } from "../buffers/in_memory_buffer_sync.ts";
 
 describe("SyncCountingWritableTap", () => {
   describe("construction", () => {

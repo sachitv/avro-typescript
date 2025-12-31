@@ -1,8 +1,8 @@
 // Example: synchronously read an Avro file using the SyncAvroReader and a Deno FsFile.
-import { SyncAvroReader } from "../src/sync_avro_reader.ts";
+import { SyncAvroReader } from "../src/avro_reader_sync.ts";
 import type {
   ISyncStreamReadableBuffer,
-} from "../src/serialization/streams/sync_streams.ts";
+} from "../src/serialization/streams/streams_sync.ts";
 
 /**
  * Minimal synchronous stream reader backed by a Deno.FsFile.

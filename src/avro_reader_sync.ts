@@ -1,18 +1,18 @@
-import type { ISyncReadable } from "./serialization/buffers/sync_buffer.ts";
+import type { ISyncReadable } from "./serialization/buffers/buffer_sync.ts";
 import {
   SyncAvroFileParser,
   type SyncAvroFileParserOptions,
-} from "./serialization/sync_avro_file_parser.ts";
+} from "./serialization/avro_file_parser_sync.ts";
 import type { ParsedAvroHeader } from "./serialization/avro_file_parser.ts";
 import type {
   SyncDecoderRegistry,
-} from "./serialization/decoders/sync_decoder.ts";
+} from "./serialization/decoders/decoder_sync.ts";
 import {
   SyncStreamReadableBufferAdapter,
-} from "./serialization/streams/sync_stream_readable_buffer_adapter.ts";
+} from "./serialization/streams/stream_readable_buffer_adapter_sync.ts";
 import type {
   ISyncStreamReadableBuffer,
-} from "./serialization/streams/sync_streams.ts";
+} from "./serialization/streams/streams_sync.ts";
 
 /**
  * Options shared by all SyncAvroReader factories.

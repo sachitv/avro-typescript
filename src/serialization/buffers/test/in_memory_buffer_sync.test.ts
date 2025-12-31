@@ -5,8 +5,8 @@ import {
   SyncInMemoryBufferBase,
   SyncInMemoryReadableBuffer,
   SyncInMemoryWritableBuffer,
-} from "../sync_in_memory_buffer.ts";
-import { ReadBufferError, WriteBufferError } from "../sync_buffer.ts";
+} from "../in_memory_buffer_sync.ts";
+import { ReadBufferError, WriteBufferError } from "../buffer_sync.ts";
 
 class TestSyncInMemoryBuffer extends SyncInMemoryBufferBase {
   public exposeBuffer(): ArrayBuffer {

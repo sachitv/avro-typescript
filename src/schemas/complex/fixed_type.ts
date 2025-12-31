@@ -5,7 +5,7 @@ import type {
 import type {
   SyncReadableTapLike,
   SyncWritableTapLike,
-} from "../../serialization/sync_tap.ts";
+} from "../../serialization/tap_sync.ts";
 import { NamedType } from "./named_type.ts";
 import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
@@ -62,7 +62,7 @@ export class FixedType extends NamedType<Uint8Array> {
   }
 
   /**
-   * Gets the size in bytes. 
+   * Gets the size in bytes.
    * This is a public method so that it can be called in the resolver.
    */
   public getSize(): number {

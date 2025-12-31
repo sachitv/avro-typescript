@@ -5,7 +5,7 @@ import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import {
   SyncReadableTap,
   SyncWritableTap,
-} from "../../../serialization/sync_tap.ts";
+} from "../../../serialization/tap_sync.ts";
 import { ReadableTap } from "../../../serialization/tap.ts";
 import type { Type } from "../../type.ts";
 import { ValidationError } from "../../error.ts";

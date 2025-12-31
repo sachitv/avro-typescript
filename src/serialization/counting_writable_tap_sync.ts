@@ -1,5 +1,5 @@
 import { TapBase } from "./tap.ts";
-import type { SyncWritableTapLike } from "./sync_tap.ts";
+import type { SyncWritableTapLike } from "./tap_sync.ts";
 import { utf8ByteLength } from "./text_encoding.ts";
 
 /**

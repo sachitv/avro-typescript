@@ -1,9 +1,9 @@
-import type { SyncEncoder } from "./sync_encoder.ts";
+import type { SyncEncoder } from "./encoder_sync.ts";
 
 /**
  * Built-in sync null encoder (no compression).
  */
-export class NullSyncEncoder implements SyncEncoder {
+export class NullEncoderSync implements SyncEncoder {
   /**
    * Encodes data by returning the buffer unchanged.
    * @param uncompressedData The data to encode.

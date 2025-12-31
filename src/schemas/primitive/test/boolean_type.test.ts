@@ -4,8 +4,8 @@ import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import {
   SyncReadableTap,
   SyncWritableTap,
-} from "../../../serialization/sync_tap.ts";
-import { ReadBufferError } from "../../../serialization/buffers/sync_buffer.ts";
+} from "../../../serialization/tap_sync.ts";
+import { ReadBufferError } from "../../../serialization/buffers/buffer_sync.ts";
 import { BooleanType } from "../boolean_type.ts";
 import { ValidationError } from "../../error.ts";
 

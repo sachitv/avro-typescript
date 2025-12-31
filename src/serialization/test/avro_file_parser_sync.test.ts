@@ -4,13 +4,13 @@ import { createType } from "../../type/create_type.ts";
 import {
   SyncInMemoryReadableBuffer,
   SyncInMemoryWritableBuffer,
-} from "../buffers/sync_in_memory_buffer.ts";
-import { SyncAvroFileParser } from "../sync_avro_file_parser.ts";
-import type { SyncAvroFileParserOptions } from "../sync_avro_file_parser.ts";
-import { SyncWritableTap } from "../sync_tap.ts";
+} from "../buffers/in_memory_buffer_sync.ts";
+import { SyncAvroFileParser } from "../avro_file_parser_sync.ts";
+import type { SyncAvroFileParserOptions } from "../avro_file_parser_sync.ts";
+import { SyncWritableTap } from "../tap_sync.ts";
 import { BLOCK_TYPE, HEADER_TYPE, MAGIC_BYTES } from "../avro_constants.ts";
-import { SyncFixedSizeStreamReader } from "../streams/sync_fixed_size_stream_reader.ts";
-import { SyncStreamReadableBufferAdapter } from "../streams/sync_stream_readable_buffer_adapter.ts";
+import { SyncFixedSizeStreamReader } from "../streams/fixed_size_stream_reader_sync.ts";
+import { SyncStreamReadableBufferAdapter } from "../streams/stream_readable_buffer_adapter_sync.ts";
 
 const WEATHER_RECORDS = [
   { station: "011990-99999", time: -619524000000n, temp: 0 },

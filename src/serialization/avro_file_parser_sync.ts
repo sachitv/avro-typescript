@@ -3,13 +3,13 @@ import type { Resolver } from "../schemas/resolver.ts";
 import { Type } from "../schemas/type.ts";
 import { BLOCK_TYPE, HEADER_TYPE, MAGIC_BYTES } from "./avro_constants.ts";
 import type { AvroHeader, ParsedAvroHeader } from "./avro_file_parser.ts";
-import type { ISyncReadable } from "./buffers/sync_buffer.ts";
+import type { ISyncReadable } from "./buffers/buffer_sync.ts";
 import type {
   SyncDecoder,
   SyncDecoderRegistry,
-} from "./decoders/sync_decoder.ts";
-import { NullSyncDecoder } from "./decoders/null_sync_decoder.ts";
-import { SyncReadableTap } from "./sync_tap.ts";
+} from "./decoders/decoder_sync.ts";
+import { NullDecoderSync } from "./decoders/decoder_null_sync.ts";
+import { SyncReadableTap } from "./tap_sync.ts";
 
 /**
  * Options for configuring the synchronous Avro file parser.
@@ -40,7 +40,7 @@ export class SyncAvroFileParser {
     this.#buffer = buffer;
     this.#readerSchema = options?.readerSchema;
     this.#builtInDecoders = {
-      "null": new NullSyncDecoder(),
+      "null": new NullDecoderSync(),
     };
 
     const custom = options?.decoders ?? {};

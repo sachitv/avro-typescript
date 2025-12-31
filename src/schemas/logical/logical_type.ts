@@ -5,7 +5,7 @@ import type {
 import type {
   SyncReadableTapLike,
   SyncWritableTapLike,
-} from "../../serialization/sync_tap.ts";
+} from "../../serialization/tap_sync.ts";
 import { Resolver } from "../resolver.ts";
 import type { NamedType } from "../complex/named_type.ts";
 import { Type } from "../type.ts";

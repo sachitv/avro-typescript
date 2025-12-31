@@ -1,10 +1,10 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../../serialization/test/test_tap.ts";
-import { SyncReadableTap } from "../../serialization/sync_tap.ts";
+import { SyncReadableTap } from "../../serialization/tap_sync.ts";
 import type { WritableTapLike } from "../../serialization/tap.ts";
-import type { SyncWritableTapLike } from "../../serialization/sync_tap.ts";
-import { ReadBufferError } from "../../serialization/buffers/sync_buffer.ts";
+import type { SyncWritableTapLike } from "../../serialization/tap_sync.ts";
+import { ReadBufferError } from "../../serialization/buffers/buffer_sync.ts";
 import type { JSONType, Type } from "../type.ts";
 import { Resolver } from "../resolver.ts";
 import { BaseType } from "../base_type.ts";

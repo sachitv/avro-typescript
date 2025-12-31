@@ -1,6 +1,6 @@
 import { assertEquals, assertExists } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import type { SyncDecoder, SyncDecoderRegistry } from "../sync_decoder.ts";
+import type { SyncDecoder, SyncDecoderRegistry } from "../decoder_sync.ts";
 
 describe("SyncDecoder interface and types", () => {
   it("should implement the interface", () => {

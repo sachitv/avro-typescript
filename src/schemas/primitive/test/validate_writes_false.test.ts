@@ -1,7 +1,7 @@
 import { describe, it } from "@std/testing/bdd";
 import { expect } from "@std/expect";
-import { SyncWritableTap } from "../../../serialization/sync_tap.ts";
-import { SyncInMemoryWritableBuffer } from "../../../serialization/buffers/sync_in_memory_buffer.ts";
+import { SyncWritableTap } from "../../../serialization/tap_sync.ts";
+import { SyncInMemoryWritableBuffer } from "../../../serialization/buffers/in_memory_buffer_sync.ts";
 import { WritableTap } from "../../../serialization/tap.ts";
 import { BooleanType } from "../boolean_type.ts";
 import { BytesType } from "../bytes_type.ts";

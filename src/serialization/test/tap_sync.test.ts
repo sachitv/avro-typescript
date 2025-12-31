@@ -3,13 +3,13 @@ import { expect } from "@std/expect";
 import { assertRejects, assertThrows } from "@std/assert";
 
 import { ReadableTap, WritableTap } from "../tap.ts";
-import { SyncReadableTap, SyncWritableTap } from "../sync_tap.ts";
+import { SyncReadableTap, SyncWritableTap } from "../tap_sync.ts";
 import {
   SyncInMemoryReadableBuffer,
   SyncInMemoryWritableBuffer,
-} from "../buffers/sync_in_memory_buffer.ts";
-import { WriteBufferError } from "../buffers/sync_buffer.ts";
-import type { ISyncReadable, ISyncWritable } from "../buffers/sync_buffer.ts";
+} from "../buffers/in_memory_buffer_sync.ts";
+import { WriteBufferError } from "../buffers/buffer_sync.ts";
+import type { ISyncReadable, ISyncWritable } from "../buffers/buffer_sync.ts";
 import { encoder } from "../text_encoding.ts";
 
 class LenientWritableBuffer implements ISyncWritable {

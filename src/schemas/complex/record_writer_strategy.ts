@@ -1,5 +1,5 @@
 import type { WritableTapLike } from "../../serialization/tap.ts";
-import type { SyncWritableTapLike } from "../../serialization/sync_tap.ts";
+import type { SyncWritableTapLike } from "../../serialization/tap_sync.ts";
 import type { Type } from "../type.ts";
 import { throwInvalidError } from "../error.ts";
 import { BooleanType } from "../primitive/boolean_type.ts";

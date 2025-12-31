@@ -3,15 +3,15 @@ import { describe, it } from "@std/testing/bdd";
 import {
   SyncInMemoryReadableBuffer,
   SyncInMemoryWritableBuffer,
-} from "../buffers/sync_in_memory_buffer.ts";
+} from "../buffers/in_memory_buffer_sync.ts";
 import {
   SyncAvroFileWriter,
   type SyncAvroWriterOptions,
-} from "../sync_avro_file_writer.ts";
-import { SyncAvroFileParser } from "../sync_avro_file_parser.ts";
-import type { SyncAvroFileParserOptions } from "../sync_avro_file_parser.ts";
-import { SyncStreamWritableBufferAdapter } from "../streams/sync_stream_writable_buffer_adapter.ts";
-import { SyncFixedSizeStreamWriter } from "../streams/sync_fixed_size_stream_writer.ts";
+} from "../avro_file_writer_sync.ts";
+import { SyncAvroFileParser } from "../avro_file_parser_sync.ts";
+import type { SyncAvroFileParserOptions } from "../avro_file_parser_sync.ts";
+import { SyncStreamWritableBufferAdapter } from "../streams/stream_writable_buffer_adapter_sync.ts";
+import { SyncFixedSizeStreamWriter } from "../streams/fixed_size_stream_writer_sync.ts";
 
 const SIMPLE_SCHEMA = {
   type: "record",

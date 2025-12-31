@@ -6,7 +6,7 @@ import type { WritableTapLike } from "../../../serialization/tap.ts";
 import type {
   SyncReadableTapLike,
   SyncWritableTapLike,
-} from "../../../serialization/sync_tap.ts";
+} from "../../../serialization/tap_sync.ts";
 import { NamedType } from "../named_type.ts";
 import { type ResolvedNames, resolveNames } from "../resolve_names.ts";
 import type { JSONType } from "../../type.ts";

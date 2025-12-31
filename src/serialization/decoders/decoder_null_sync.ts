@@ -1,9 +1,9 @@
-import type { SyncDecoder } from "./sync_decoder.ts";
+import type { SyncDecoder } from "./decoder_sync.ts";
 
 /**
  * Built-in sync null decoder that returns data unchanged.
  */
-export class NullSyncDecoder implements SyncDecoder {
+export class NullDecoderSync implements SyncDecoder {
   /**
    * Decodes data by returning the same buffer.
    * @param compressedData The input data.

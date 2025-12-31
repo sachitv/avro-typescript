@@ -7,9 +7,9 @@ import {
   type SyncReadableTapLike,
   SyncWritableTap,
   type SyncWritableTapLike,
-} from "../serialization/sync_tap.ts";
+} from "../serialization/tap_sync.ts";
 import { CountingWritableTap } from "../serialization/counting_writable_tap.ts";
-import { SyncCountingWritableTap } from "../serialization/sync_counting_writable_tap.ts";
+import { SyncCountingWritableTap } from "../serialization/counting_writable_tap_sync.ts";
 import type { Resolver } from "./resolver.ts";
 import { type ErrorHook, throwInvalidError } from "./error.ts";
 

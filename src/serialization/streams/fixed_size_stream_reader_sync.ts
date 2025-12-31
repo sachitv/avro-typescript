@@ -1,4 +1,4 @@
-import type { ISyncStreamReadableBuffer } from "./sync_streams.ts";
+import type { ISyncStreamReadableBuffer } from "./streams_sync.ts";
 
 /**
  * Simple synchronous stream reader backed by a fixed-size Uint8Array.

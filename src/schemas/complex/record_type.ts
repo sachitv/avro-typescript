@@ -10,7 +10,7 @@ import type { ResolvedNames } from "./resolve_names.ts";
 import type {
   SyncReadableTapLike,
   SyncWritableTapLike,
-} from "../../serialization/sync_tap.ts";
+} from "../../serialization/tap_sync.ts";
 
 // Re-export extracted modules for backward compatibility
 export {

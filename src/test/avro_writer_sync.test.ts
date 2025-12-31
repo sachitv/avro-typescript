@@ -1,12 +1,12 @@
 import { assertEquals } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { SyncAvroWriter } from "../sync_avro_writer.ts";
-import { SyncAvroReader } from "../sync_avro_reader.ts";
+import { SyncAvroWriter } from "../avro_writer_sync.ts";
+import { SyncAvroReader } from "../avro_reader_sync.ts";
 import {
   SyncInMemoryReadableBuffer,
   SyncInMemoryWritableBuffer,
-} from "../serialization/buffers/sync_in_memory_buffer.ts";
-import { SyncFixedSizeStreamWriter } from "../serialization/streams/sync_fixed_size_stream_writer.ts";
+} from "../serialization/buffers/in_memory_buffer_sync.ts";
+import { SyncFixedSizeStreamWriter } from "../serialization/streams/fixed_size_stream_writer_sync.ts";
 
 const SIMPLE_SCHEMA = {
   type: "record",

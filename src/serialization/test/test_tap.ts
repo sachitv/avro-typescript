@@ -285,5 +285,4 @@ export class TestTap implements ReadableTapLike, WritableTapLike {
     (tap as TestTap).#syncPos(otherReader);
     return result;
   }
-
 }

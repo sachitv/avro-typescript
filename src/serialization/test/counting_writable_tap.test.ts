@@ -72,7 +72,6 @@ describe("CountingWritableTap", () => {
       expect(tap.getPos()).toBe(5);
     });
 
-
     it("writeBytes counts length prefix + data", async () => {
       const tap = new CountingWritableTap();
       const data = new Uint8Array([1, 2, 3]);
@@ -107,7 +106,6 @@ describe("CountingWritableTap", () => {
       await tap.writeBinary("abc", 0);
       expect(tap.getPos()).toBe(0);
     });
-
   });
 
   describe("parity with WritableTap", () => {

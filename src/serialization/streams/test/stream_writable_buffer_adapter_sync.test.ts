@@ -1,7 +1,7 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { SyncFixedSizeStreamWriter } from "../sync_fixed_size_stream_writer.ts";
-import { SyncStreamWritableBufferAdapter } from "../sync_stream_writable_buffer_adapter.ts";
+import { SyncFixedSizeStreamWriter } from "../fixed_size_stream_writer_sync.ts";
+import { SyncStreamWritableBufferAdapter } from "../stream_writable_buffer_adapter_sync.ts";
 
 describe("SyncStreamWritableBufferAdapter", () => {
   describe("appendBytes", () => {

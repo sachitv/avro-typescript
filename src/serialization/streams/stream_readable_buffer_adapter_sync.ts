@@ -1,5 +1,5 @@
-import { type ISyncReadable, ReadBufferError } from "../buffers/sync_buffer.ts";
-import type { ISyncStreamReadableBuffer } from "./sync_streams.ts";
+import { type ISyncReadable, ReadBufferError } from "../buffers/buffer_sync.ts";
+import type { ISyncStreamReadableBuffer } from "./streams_sync.ts";
 
 /**
  * Adapter that wraps an ISyncStreamReadableBuffer to provide the ISyncReadable interface.

@@ -6,7 +6,7 @@ import {
   SyncReadableTap,
   type SyncReadableTapLike,
   SyncWritableTap,
-} from "../../../serialization/sync_tap.ts";
+} from "../../../serialization/tap_sync.ts";
 import { ArrayType, readArrayInto, readArrayIntoSync } from "../array_type.ts";
 import { IntType } from "../../primitive/int_type.ts";
 import { LongType } from "../../primitive/long_type.ts";

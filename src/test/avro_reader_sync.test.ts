@@ -3,14 +3,14 @@ import { describe, it } from "@std/testing/bdd";
 import {
   SyncAvroReader,
   type SyncAvroReaderInstance,
-} from "../sync_avro_reader.ts";
+} from "../avro_reader_sync.ts";
 import {
   SyncInMemoryReadableBuffer,
-} from "../serialization/buffers/sync_in_memory_buffer.ts";
-import { SyncFixedSizeStreamReader } from "../serialization/streams/sync_fixed_size_stream_reader.ts";
+} from "../serialization/buffers/in_memory_buffer_sync.ts";
+import { SyncFixedSizeStreamReader } from "../serialization/streams/fixed_size_stream_reader_sync.ts";
 import type {
   ISyncStreamReadableBuffer,
-} from "../serialization/streams/sync_streams.ts";
+} from "../serialization/streams/streams_sync.ts";
 
 const EXPECTED_WEATHER_RECORDS = [
   { station: "011990-99999", time: -619524000000n, temp: 0 },

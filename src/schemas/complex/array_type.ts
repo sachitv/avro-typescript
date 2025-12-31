@@ -10,7 +10,7 @@ import type { ErrorHook } from "../error.ts";
 import type {
   SyncReadableTapLike,
   SyncWritableTapLike,
-} from "../../serialization/sync_tap.ts";
+} from "../../serialization/tap_sync.ts";
 
 /**
  * Helper function to read an array from a tap.

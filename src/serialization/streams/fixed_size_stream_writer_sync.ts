@@ -1,4 +1,4 @@
-import type { ISyncStreamWritableBuffer } from "./sync_streams.ts";
+import type { ISyncStreamWritableBuffer } from "./streams_sync.ts";
 
 /**
  * Simple synchronous stream writer backed by a fixed-size Uint8Array.

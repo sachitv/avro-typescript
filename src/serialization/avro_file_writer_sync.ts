@@ -2,14 +2,14 @@ import { createType, type SchemaLike } from "../type/create_type.ts";
 import type { Type } from "../schemas/type.ts";
 import type { MetadataInit } from "./avro_file_writer.ts";
 import { BLOCK_TYPE, HEADER_TYPE, MAGIC_BYTES } from "./avro_constants.ts";
-import type { ISyncWritable } from "./buffers/sync_buffer.ts";
+import type { ISyncWritable } from "./buffers/buffer_sync.ts";
 import type {
   SyncEncoder,
   SyncEncoderRegistry,
-} from "./encoders/sync_encoder.ts";
-import { NullSyncEncoder } from "./encoders/null_sync_encoder.ts";
+} from "./encoders/encoder_sync.ts";
+import { NullEncoderSync } from "./encoders/encoder_null_sync.ts";
 import { encode as encodeString } from "./text_encoding.ts";
-import { SyncWritableTap } from "./sync_tap.ts";
+import { SyncWritableTap } from "./tap_sync.ts";
 
 const DEFAULT_BLOCK_SIZE_BYTES = 64000;
 const SYNC_MARKER_SIZE = 16;
@@ -60,7 +60,7 @@ export class SyncAvroFileWriter {
     this.#syncMarker = this.#initializeSyncMarker(options.syncMarker);
 
     this.#builtInEncoders = {
-      "null": new NullSyncEncoder(),
+      "null": new NullEncoderSync(),
     };
     this.#customEncoders = this.#validateCustomEncoders(options.encoders);
     this.#encoder = this.#resolveEncoder(this.#codec);

@@ -5,7 +5,7 @@ import type {
 import type {
   SyncReadableTapLike,
   SyncWritableTapLike,
-} from "../../serialization/sync_tap.ts";
+} from "../../serialization/tap_sync.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
 import type { JSONType } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";

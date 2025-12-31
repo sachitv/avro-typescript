@@ -5,7 +5,7 @@ import { ReadableTap } from "../../../serialization/tap.ts";
 import {
   SyncReadableTap,
   SyncWritableTap,
-} from "../../../serialization/sync_tap.ts";
+} from "../../../serialization/tap_sync.ts";
 import { DoubleType } from "../double_type.ts";
 import { IntType } from "../int_type.ts";
 import { LongType } from "../long_type.ts";

@@ -1,10 +1,10 @@
 import { assertEquals } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { NullSyncDecoder } from "../null_sync_decoder.ts";
+import { NullDecoderSync } from "../decoder_null_sync.ts";
 
-describe("NullSyncDecoder", () => {
+describe("NullDecoderSync", () => {
   it("returns the input data unchanged", () => {
-    const decoder = new NullSyncDecoder();
+    const decoder = new NullDecoderSync();
 
     const testData = [
       new Uint8Array([]),
@@ -22,7 +22,7 @@ describe("NullSyncDecoder", () => {
   });
 
   it("does not allocate a new backing buffer", () => {
-    const decoder = new NullSyncDecoder();
+    const decoder = new NullDecoderSync();
     const data = new Uint8Array([7, 8, 9]);
     const result = decoder.decode(data);
 

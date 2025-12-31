@@ -5,7 +5,7 @@ import type {
 import type {
   SyncReadableTapLike,
   SyncWritableTapLike,
-} from "../../serialization/sync_tap.ts";
+} from "../../serialization/tap_sync.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import type { JSONType } from "../type.ts";
 import { calculateVarintSize } from "../../internal/varint.ts";

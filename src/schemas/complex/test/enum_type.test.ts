@@ -5,7 +5,7 @@ import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import {
   SyncReadableTap,
   SyncWritableTap,
-} from "../../../serialization/sync_tap.ts";
+} from "../../../serialization/tap_sync.ts";
 import { EnumType } from "../enum_type.ts";
 import { resolveNames } from "../resolve_names.ts";
 import { IntType } from "../../primitive/int_type.ts";

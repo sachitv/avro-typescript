@@ -12,8 +12,8 @@ import type { SchemaLike } from "../../src/type/create_type.ts";
 import { createType } from "../../src/mod.ts";
 import {
   SyncInMemoryWritableBuffer,
-} from "../../src/serialization/buffers/sync_in_memory_buffer.ts";
-import { SyncWritableTap } from "../../src/serialization/sync_tap.ts";
+} from "../../src/serialization/buffers/in_memory_buffer_sync.ts";
+import { SyncWritableTap } from "../../src/serialization/tap_sync.ts";
 import {
   CompiledWriterStrategy,
   InterpretedWriterStrategy,

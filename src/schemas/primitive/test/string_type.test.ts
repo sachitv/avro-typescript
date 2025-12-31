@@ -7,8 +7,8 @@ import { ReadableTap } from "../../../serialization/tap.ts";
 import {
   SyncReadableTap,
   SyncWritableTap,
-} from "../../../serialization/sync_tap.ts";
-import { ReadBufferError } from "../../../serialization/buffers/sync_buffer.ts";
+} from "../../../serialization/tap_sync.ts";
+import { ReadBufferError } from "../../../serialization/buffers/buffer_sync.ts";
 import { calculateVarintSize } from "../../../internal/varint.ts";
 import { utf8ByteLength } from "../../../serialization/text_encoding.ts";
 

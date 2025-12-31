@@ -1,5 +1,5 @@
 import type { ReadableTapLike } from "../../serialization/tap.ts";
-import type { SyncReadableTapLike } from "../../serialization/sync_tap.ts";
+import type { SyncReadableTapLike } from "../../serialization/tap_sync.ts";
 import { Resolver } from "../resolver.ts";
 import type { RecordField } from "./record_field.ts";
 import type { RecordType } from "./record_type.ts";

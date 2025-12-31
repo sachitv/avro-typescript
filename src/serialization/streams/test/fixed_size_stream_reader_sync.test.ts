@@ -1,6 +1,6 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { SyncFixedSizeStreamReader } from "../sync_fixed_size_stream_reader.ts";
+import { SyncFixedSizeStreamReader } from "../fixed_size_stream_reader_sync.ts";
 
 describe("SyncFixedSizeStreamReader", () => {
   it("reads sequential chunks", () => {

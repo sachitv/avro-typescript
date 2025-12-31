@@ -23,10 +23,10 @@ import type {
 } from "../../../serialization/tap.ts";
 import {
   SyncReadableTap,
-  SyncWritableTap,
   type SyncReadableTapLike,
+  SyncWritableTap,
   type SyncWritableTapLike,
-} from "../../../serialization/sync_tap.ts";
+} from "../../../serialization/tap_sync.ts";
 import { ValidationError } from "../../error.ts";
 
 describe("UnionType", () => {
@@ -1144,7 +1144,8 @@ describe("UnionType", () => {
           ValidationError,
         );
         await assertRejects(
-          () => union.writeUnchecked(new Tap(buffer), 123 as unknown as UnionValue),
+          () =>
+            union.writeUnchecked(new Tap(buffer), 123 as unknown as UnionValue),
           ValidationError,
         );
         await assertRejects(

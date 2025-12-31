@@ -1,5 +1,5 @@
-import type { ISyncWritable } from "../buffers/sync_buffer.ts";
-import type { ISyncStreamWritableBuffer } from "./sync_streams.ts";
+import type { ISyncWritable } from "../buffers/buffer_sync.ts";
+import type { ISyncStreamWritableBuffer } from "./streams_sync.ts";
 
 /**
  * Adapter that wraps an ISyncStreamWritableBuffer to provide the ISyncWritable interface.

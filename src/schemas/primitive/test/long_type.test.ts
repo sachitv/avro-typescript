@@ -4,7 +4,7 @@ import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import {
   SyncReadableTap,
   SyncWritableTap,
-} from "../../../serialization/sync_tap.ts";
+} from "../../../serialization/tap_sync.ts";
 import { LongType } from "../long_type.ts";
 import { IntType } from "../int_type.ts";
 import { ValidationError } from "../../error.ts";

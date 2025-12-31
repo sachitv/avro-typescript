@@ -2,12 +2,12 @@ import { bigIntToSafeNumber } from "./conversion.ts";
 import { compareUint8Arrays } from "./compare_bytes.ts";
 import { decode, encoder } from "./text_encoding.ts";
 import { TapBase } from "./tap.ts";
-import type { ISyncReadable, ISyncWritable } from "./buffers/sync_buffer.ts";
-import { ReadBufferError } from "./buffers/sync_buffer.ts";
+import type { ISyncReadable, ISyncWritable } from "./buffers/buffer_sync.ts";
+import { ReadBufferError } from "./buffers/buffer_sync.ts";
 import {
   SyncInMemoryReadableBuffer,
   SyncInMemoryWritableBuffer,
-} from "./buffers/sync_in_memory_buffer.ts";
+} from "./buffers/in_memory_buffer_sync.ts";
 
 /**
  * Type guard to check if an object implements ISyncReadable.

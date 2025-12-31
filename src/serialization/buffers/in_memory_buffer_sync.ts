@@ -1,5 +1,5 @@
-import type { ISyncReadable, ISyncWritable } from "./sync_buffer.ts";
-import { ReadBufferError, WriteBufferError } from "./sync_buffer.ts";
+import type { ISyncReadable, ISyncWritable } from "./buffer_sync.ts";
+import { ReadBufferError, WriteBufferError } from "./buffer_sync.ts";
 
 /**
  * Shared strict in-memory buffer base with common functionality.

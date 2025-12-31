@@ -6,11 +6,11 @@ import { Buffer } from "node:buffer";
 import {
   SyncReadableTap,
   SyncWritableTap,
-} from "../../src/serialization/sync_tap.ts";
+} from "../../src/serialization/tap_sync.ts";
 import {
   SyncInMemoryReadableBuffer,
   SyncInMemoryWritableBuffer,
-} from "../../src/serialization/buffers/sync_in_memory_buffer.ts";
+} from "../../src/serialization/buffers/in_memory_buffer_sync.ts";
 
 export type BenchmarkLibrary = "avro-typescript" | "avsc" | "avro-js";
 type AvscSchema = Parameters<typeof avsc.Type.forSchema>[0];
