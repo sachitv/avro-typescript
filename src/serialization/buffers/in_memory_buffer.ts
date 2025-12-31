@@ -1,4 +1,5 @@
 import type { IReadableBuffer, IWritableBuffer } from "./buffer.ts";
+import { ReadBufferError, WriteBufferError } from "../tap_errors.ts";
 
 /**
  * Shared strict in-memory buffer base with common functionality.
@@ -32,7 +33,7 @@ export abstract class InMemoryBufferBase {
  * Key features:
  * - Fixed size: The buffer size is determined at construction and cannot be resized.
  * - Random access: Supports reading at arbitrary byte offsets.
- * - Strict bounds checking: Operations that exceed buffer bounds throw RangeError.
+ * - Strict bounds checking: Operations that exceed buffer bounds throw ReadBufferError.
  * - Efficient: Uses Uint8Array for fast byte-level operations.
  *
  * @example
@@ -44,7 +45,7 @@ export abstract class InMemoryBufferBase {
  * const data = await buffer.read(0, 4); // Returns Uint8Array of 4 bytes
  *
  * // This will throw:
- * await buffer.read(1020, 10); // RangeError: Operation exceeds buffer bounds
+ * await buffer.read(1020, 10); // ReadBufferError: Operation exceeds buffer bounds
  * ```
  */
 export class InMemoryReadableBuffer extends InMemoryBufferBase
@@ -56,13 +57,19 @@ export class InMemoryReadableBuffer extends InMemoryBufferBase
    */
   private checkBounds(offset: number, size: number): void {
     if (offset < 0 || size < 0) {
-      throw new RangeError(
+      throw new ReadBufferError(
         `Offset and size must be non-negative. Got offset=${offset}, size=${size}`,
+        offset,
+        size,
+        this.view.length,
       );
     }
     if (offset + size > this.view.length) {
-      throw new RangeError(
+      throw new ReadBufferError(
         `Operation exceeds buffer bounds. offset=${offset}, size=${size}, bufferLength=${this.view.length}`,
+        offset,
+        size,
+        this.view.length,
       );
     }
   }
@@ -105,7 +112,7 @@ export class InMemoryReadableBuffer extends InMemoryBufferBase
  * Key features:
  * - Fixed size: The buffer size is determined at construction and cannot be resized.
  * - Sequential writes: Maintains an internal offset that advances with each write.
- * - Strict bounds checking: Throws RangeError when write would exceed buffer capacity.
+ * - Strict bounds checking: Throws WriteBufferError when write would exceed buffer capacity.
  * - Efficient: Uses Uint8Array for fast byte-level operations.
  *
  * @example
@@ -117,7 +124,7 @@ export class InMemoryReadableBuffer extends InMemoryBufferBase
  * await buffer.appendBytes(new Uint8Array([1, 2, 3, 4]));
  *
  * // This will throw if buffer is full:
- * await buffer.appendBytes(new Uint8Array(2000)); // RangeError: Write operation exceeds buffer bounds
+ * await buffer.appendBytes(new Uint8Array(2000)); // WriteBufferError: Write operation exceeds buffer bounds
  * ```
  */
 export class InMemoryWritableBuffer extends InMemoryBufferBase
@@ -133,8 +140,11 @@ export class InMemoryWritableBuffer extends InMemoryBufferBase
   constructor(buf: ArrayBuffer, offset = 0) {
     super(buf);
     if (offset < 0 || offset > this.view.length) {
-      throw new RangeError(
+      throw new WriteBufferError(
         `Initial offset must be within buffer bounds. Got offset=${offset}, bufferLength=${this.view.length}`,
+        offset,
+        0,
+        this.view.length,
       );
     }
     this.#initialOffset = offset;
@@ -143,17 +153,25 @@ export class InMemoryWritableBuffer extends InMemoryBufferBase
 
   /**
    * Checks if writing the given data at the specified offset would exceed buffer bounds.
-   * Throws a RangeError if the operation would exceed bounds.
+   * Throws a WriteBufferError if the operation would exceed bounds.
    * @param offset The offset to write at.
    * @param data The data to write.
    */
   protected checkWriteBounds(offset: number, data: Uint8Array): void {
     if (offset < 0) {
-      throw new RangeError(`Offset must be non-negative. Got offset=${offset}`);
+      throw new WriteBufferError(
+        `Offset must be non-negative. Got offset=${offset}`,
+        offset,
+        data.length,
+        this.view.length,
+      );
     }
     if (offset + data.length > this.view.length) {
-      throw new RangeError(
+      throw new WriteBufferError(
         `Write operation exceeds buffer bounds. offset=${offset}, dataSize=${data.length}, bufferLength=${this.view.length}`,
+        offset,
+        data.length,
+        this.view.length,
       );
     }
   }

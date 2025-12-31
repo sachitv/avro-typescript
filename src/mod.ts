@@ -83,6 +83,10 @@ export type {
   ISyncReadable,
   ISyncWritable,
 } from "./serialization/buffers/buffer_sync.ts";
+export {
+  ReadBufferError,
+  WriteBufferError,
+} from "./serialization/tap_errors.ts";
 export { BlobReadableBuffer } from "./serialization/buffers/blob_readable_buffer.ts";
 export {
   InMemoryReadableBuffer,

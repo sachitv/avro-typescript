@@ -4,7 +4,7 @@ import { assertRejects } from "@std/assert";
 import { ReadableTap, WritableTap } from "../tap.ts";
 import type { IReadableBuffer, IWritableBuffer } from "../buffers/buffer.ts";
 import { TestTap as Tap } from "./test_tap.ts";
-import { ReadBufferError } from "../tap_errors.ts";
+import { ReadBufferError, WriteBufferError } from "../tap_errors.ts";
 
 type EqualsFn<T> = (actual: T | undefined, expected: T) => void;
 
@@ -125,7 +125,7 @@ function registerWriterReaderTests<T>(
       const tap = new Tap(new ArrayBuffer(0));
       await assertRejects(
         async () => await opts.writer(tap, opts.elems[0]),
-        RangeError,
+        WriteBufferError,
       );
     });
 
@@ -477,7 +477,7 @@ describe("WritableTap byte emission", () => {
     const tap = newTap(1);
     await assertRejects(
       async () => await tap.writeBinary("\x01\x02", 2),
-      RangeError,
+      WriteBufferError,
     );
     const expected = toUint8Array([0]);
     const buf = await tap._testOnlyBuf();
