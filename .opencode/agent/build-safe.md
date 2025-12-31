@@ -30,10 +30,11 @@ permission:
     "git log*": allow
     "git diff*": allow
     "git show": allow
-    "git branch*": allow
+    "git branch": allow
     "git ls-files": allow
     "git rev-parse": allow
-    "git remote*": allow
+    "git remote": allow
+    "git remote -v": allow
     "git config --list": allow
     "git config --get*": allow
     "git describe": allow
@@ -92,8 +93,6 @@ permission:
     "git prune": ask
     "git gc": ask
     "git fsck": ask
-    "git checkout -b": ask
-    "git checkout -B": ask
     "git switch*": ask
     "git restore*": ask
 
