@@ -14,7 +14,7 @@ Thumbs.db
 .deno/
 
 # Coverage
-coverage/
+/coverage/
 
 # Environment variables
 .env
