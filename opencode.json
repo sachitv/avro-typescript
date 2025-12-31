@@ -1,0 +1,15 @@
+{
+  "agent": {
+    "build-safe": {
+      "permission": {
+        "skill": {
+          "fmt": "allow",
+          "lint": "allow",
+          "test": "allow",
+          "coverage": "allow"
+        }
+      }
+    }
+  },
+  "$schema": "https://opencode.ai/config.json"
+}
