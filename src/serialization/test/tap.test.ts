@@ -4,6 +4,7 @@ import { assertRejects } from "@std/assert";
 import { ReadableTap, WritableTap } from "../tap.ts";
 import type { IReadableBuffer, IWritableBuffer } from "../buffers/buffer.ts";
 import { TestTap as Tap } from "./test_tap.ts";
+import { ReadBufferError } from "../tap_errors.ts";
 
 type EqualsFn<T> = (actual: T | undefined, expected: T) => void;
 
@@ -82,13 +83,13 @@ class NullFloatDoubleTap extends ReadableTap {
   // deno-lint-ignore require-await
   override async readFloat(): Promise<number> {
     this.pos += 4;
-    throw new RangeError("Attempt to read beyond buffer bounds.");
+    throw new ReadBufferError("Attempt to read beyond buffer bounds.", this.pos - 4, 4, 0);
   }
 
   // deno-lint-ignore require-await
   override async readDouble(): Promise<number> {
     this.pos += 8;
-    throw new RangeError("Attempt to read beyond buffer bounds.");
+    throw new ReadBufferError("Attempt to read beyond buffer bounds.", this.pos - 8, 8, 0);
   }
 }
 
@@ -117,7 +118,7 @@ function registerWriterReaderTests<T>(
 
     it("read over", async () => {
       const tap = new Tap(new ArrayBuffer(0));
-      await assertRejects(async () => await opts.reader(tap), RangeError);
+      await assertRejects(async () => await opts.reader(tap), ReadBufferError);
     });
 
     it("write over", async () => {
@@ -315,7 +316,7 @@ describe("Tap comparator helpers", () => {
   it("matchFloat throws when float reads are unavailable", async () => {
     const tap1 = new NullFloatDoubleTap();
     const tap2 = new NullFloatDoubleTap();
-    await assertRejects(async () => await tap1.matchFloat(tap2), RangeError);
+    await assertRejects(async () => await tap1.matchFloat(tap2), ReadBufferError);
   });
 
   it("matchFloat returns 1 when first value is greater", async () => {
@@ -341,7 +342,7 @@ describe("Tap comparator helpers", () => {
   it("matchDouble throws when double reads are unavailable", async () => {
     const tap1 = new NullFloatDoubleTap();
     const tap2 = new NullFloatDoubleTap();
-    await assertRejects(async () => await tap1.matchDouble(tap2), RangeError);
+    await assertRejects(async () => await tap1.matchDouble(tap2), ReadBufferError);
   });
 
   it("matchDouble returns 0 when values are equal", async () => {
@@ -357,8 +358,8 @@ describe("Tap comparator helpers", () => {
   it("matchFloat and matchDouble reject when reads underflow", async () => {
     const buf1 = tapFromBytes([0x00, 0x00, 0x00]);
     const buf2 = tapFromBytes([0x7f, 0x00]);
-    await assertRejects(async () => await buf1.matchFloat(buf2), RangeError);
-    await assertRejects(async () => await buf1.matchDouble(buf2), RangeError);
+    await assertRejects(async () => await buf1.matchFloat(buf2), ReadBufferError);
+    await assertRejects(async () => await buf1.matchDouble(buf2), ReadBufferError);
   });
 
   it("matchDouble returns 1 when first value is greater", async () => {
@@ -401,7 +402,7 @@ describe("Tap comparator helpers", () => {
   it("matchFixed rejects when data is unavailable", async () => {
     const tap1 = tapFromBytes([1, 2]);
     const tap2 = tapFromBytes([1]);
-    await assertRejects(async () => await tap1.matchFixed(tap2, 4), RangeError);
+    await assertRejects(async () => await tap1.matchFixed(tap2, 4), ReadBufferError);
   });
 
   it("matchFixed returns 1 when first array is greater", async () => {
@@ -426,7 +427,7 @@ describe("Tap comparator helpers", () => {
       0x00,
       0x00,
     ]);
-    await assertRejects(async () => await tap1.matchDouble(tap2), RangeError);
+    await assertRejects(async () => await tap1.matchDouble(tap2), ReadBufferError);
   });
 
   it("matchDouble rejects when second tap runs out of data", async () => {
@@ -441,7 +442,7 @@ describe("Tap comparator helpers", () => {
       0x00,
     ]);
     const tap2 = tapFromBytes([0x00, 0x00, 0x00, 0x00]);
-    await assertRejects(async () => await tap1.matchDouble(tap2), RangeError);
+    await assertRejects(async () => await tap1.matchDouble(tap2), ReadBufferError);
   });
 
   it("matchFixed throws when read fails", async () => {
@@ -451,7 +452,7 @@ describe("Tap comparator helpers", () => {
     };
     const tap1 = new ReadableTap(mockBuffer);
     const tap2 = new ReadableTap(mockBuffer);
-    await assertRejects(async () => await tap1.matchFixed(tap2, 1), RangeError);
+    await assertRejects(async () => await tap1.matchFixed(tap2, 1), ReadBufferError);
   });
 });
 
@@ -656,10 +657,10 @@ describe("Construction & buffer compatibility", () => {
     ).toThrow(TypeError);
   });
 
-  it("isValid returns false when buffer.read throws RangeError", async () => {
+  it("isValid returns false when buffer.read throws ReadBufferError", async () => {
     const mockBuffer: IReadableBuffer = {
       read: () => {
-        throw new RangeError("some range error");
+        throw new ReadBufferError("some read error", 0, 0, 0);
       },
       canReadMore: () => Promise.resolve(false),
     };
@@ -680,7 +681,7 @@ describe("ReadableTap buffer exposure", () => {
 
   it("getValue throws when position exceeds buffer length", async () => {
     const tap = new ReadableTap(new ArrayBuffer(4), 10);
-    await assertRejects(async () => await tap.getValue(), RangeError);
+    await assertRejects(async () => await tap.getValue(), ReadBufferError);
   });
 
   it("_testOnlyBuf returns the full buffer", async () => {
@@ -733,7 +734,7 @@ describe("ReadableTap buffer exposure", () => {
 
   it("getValue throws when the buffer returns undefined", async () => {
     const tap = new ReadableTap(new UndefinedReadBuffer(2), 3);
-    await assertRejects(async () => await tap.getValue(), RangeError);
+    await assertRejects(async () => await tap.getValue(), ReadBufferError);
   });
 });
 
@@ -744,7 +745,7 @@ describe("ReadableTap fallbacks", () => {
       canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
-    await assertRejects(async () => await tap.readFloat(), RangeError);
+    await assertRejects(async () => await tap.readFloat(), ReadBufferError);
   });
 
   it("readDouble throws when read fails", async () => {
@@ -753,7 +754,7 @@ describe("ReadableTap fallbacks", () => {
       canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
-    await assertRejects(async () => await tap.readDouble(), RangeError);
+    await assertRejects(async () => await tap.readDouble(), ReadBufferError);
   });
 
   it("matchString throws when content read fails", async () => {
@@ -770,7 +771,7 @@ describe("ReadableTap fallbacks", () => {
     };
     const tap1 = new ReadableTap(mockBuffer);
     const tap2 = new ReadableTap(mockBuffer);
-    await assertRejects(async () => await tap1.matchString(tap2), RangeError);
+    await assertRejects(async () => await tap1.matchString(tap2), ReadBufferError);
   });
 
   it("readString throws when read fails", async () => {
@@ -779,7 +780,7 @@ describe("ReadableTap fallbacks", () => {
       canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
-    await assertRejects(async () => await tap.readString(), RangeError);
+    await assertRejects(async () => await tap.readString(), ReadBufferError);
   });
 
   it("readBytes throws when read fails", async () => {
@@ -788,7 +789,7 @@ describe("ReadableTap fallbacks", () => {
       canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
-    await assertRejects(async () => await tap.readBytes(), RangeError);
+    await assertRejects(async () => await tap.readBytes(), ReadBufferError);
   });
 
   it("readFixed throws when read fails", async () => {
@@ -797,7 +798,7 @@ describe("ReadableTap fallbacks", () => {
       canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
-    await assertRejects(async () => await tap.readFixed(1), RangeError);
+    await assertRejects(async () => await tap.readFixed(1), ReadBufferError);
   });
 });
 
