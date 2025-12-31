@@ -1,19 +1,27 @@
-import {
-  type ReadableTapLike,
-  WritableTap,
-  type WritableTapLike,
+import type {
+  ReadableTapLike,
+  WritableTapLike,
 } from "../../serialization/tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../serialization/tap_sync.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import type { JSONType, Type } from "../type.ts";
 import { Resolver } from "../resolver.ts";
-import { type ErrorHook, throwInvalidError } from "../error.ts";
+import type { ErrorHook } from "../error.ts";
+import { decode, utf8ByteLength } from "../../serialization/text_encoding.ts";
 import { calculateVarintSize } from "../../internal/varint.ts";
-import { decode, encode } from "../../serialization/text_encoding.ts";
 
 /**
  * String type.
  */
 export class StringType extends PrimitiveType<string> {
+  /** Creates a new string type. */
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /** Checks if the value is a valid string. */
   public override check(
     value: unknown,
@@ -27,31 +35,23 @@ export class StringType extends PrimitiveType<string> {
     return isValid;
   }
 
-  /** Converts a string value to its Avro-encoded buffer representation. */
-  public override async toBuffer(value: string): Promise<ArrayBuffer> {
-    this.check(value, throwInvalidError, []);
-    const strBytes = encode(value);
-    const lengthSize = calculateVarintSize(strBytes.length);
-    const buf = new ArrayBuffer(lengthSize + strBytes.length);
-    const tap = new WritableTap(buf);
-    await this.write(tap, value);
-    return buf;
-  }
-
   /** Reads a string value from the tap. */
   public override async read(tap: ReadableTapLike): Promise<string> {
     return await tap.readString();
   }
 
-  /** Writes a string value to the tap. */
-  public override async write(
+  /** Writes a string value to the tap without validation. */
+  public override async writeUnchecked(
     tap: WritableTapLike,
     value: string,
   ): Promise<void> {
-    if (typeof value !== "string") {
-      throwInvalidError([], value, this);
-    }
     await tap.writeString(value);
+  }
+
+  /** Returns the encoded byte length of the given value. */
+  protected override byteLength(value: string): number {
+    const length = utf8ByteLength(value);
+    return calculateVarintSize(length) + length;
   }
 
   /** Skips a string value in the tap. */
@@ -84,6 +84,12 @@ export class StringType extends PrimitiveType<string> {
           // Convert bytes to string (assuming UTF-8)
           return decode(bytes);
         }
+
+        public override readSync(tap: SyncReadableTapLike): string {
+          const bytes = tap.readBytes();
+          // Convert bytes to string (assuming UTF-8)
+          return decode(bytes);
+        }
       }(this);
     } else {
       return super.createResolver(writerType);
@@ -101,5 +107,31 @@ export class StringType extends PrimitiveType<string> {
     tap2: ReadableTapLike,
   ): Promise<number> {
     return await tap1.matchString(tap2);
+  }
+
+  /** Reads a string value synchronously from the tap. */
+  public override readSync(tap: SyncReadableTapLike): string {
+    return tap.readString();
+  }
+
+  /** Writes a string value synchronously to the tap without validation. */
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: string,
+  ): void {
+    tap.writeString(value);
+  }
+
+  /** Skips a string value synchronously in the tap. */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    tap.skipString();
+  }
+
+  /** Matches two readable taps synchronously for string equality. */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchString(tap2);
   }
 }

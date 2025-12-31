@@ -2,6 +2,10 @@ import type {
   ReadableTapLike,
   WritableTapLike,
 } from "../../serialization/tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../serialization/tap_sync.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
 import type { JSONType } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
@@ -10,6 +14,11 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
  * Null type.
  */
 export class NullType extends FixedSizeBaseType<null> {
+  /** Creates a new null type. */
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /**
    * Checks if the value is null.
    */
@@ -32,16 +41,11 @@ export class NullType extends FixedSizeBaseType<null> {
     return await Promise.resolve(null);
   }
 
-  /**
-   * Writes a null value to the tap.
-   */
-  public override async write(
+  /** Writes a null value to the tap without validation. */
+  public override async writeUnchecked(
     _tap: WritableTapLike,
-    value: null,
+    _value: null,
   ): Promise<void> {
-    if (value !== null) {
-      throwInvalidError([], value, this);
-    }
     await Promise.resolve();
   }
 
@@ -92,5 +96,28 @@ export class NullType extends FixedSizeBaseType<null> {
     _tap2: ReadableTapLike,
   ): Promise<number> {
     return await Promise.resolve(0);
+  }
+
+  /**
+   * Reads a null value synchronously from the tap.
+   */
+  public override readSync(_tap: SyncReadableTapLike): null {
+    return null;
+  }
+
+  /** Writes a null value synchronously to the tap without validation. */
+  public override writeSyncUnchecked(
+    _tap: SyncWritableTapLike,
+    _value: null,
+  ): void {}
+
+  /**
+   * Compares two null values synchronously in the taps.
+   */
+  public override matchSync(
+    _tap1: SyncReadableTapLike,
+    _tap2: SyncReadableTapLike,
+  ): number {
+    return 0;
   }
 }

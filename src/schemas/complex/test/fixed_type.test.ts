@@ -2,6 +2,10 @@ import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { FixedType } from "../fixed_type.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/tap_sync.ts";
 import { ReadableTap } from "../../../serialization/tap.ts";
 import type { Type } from "../../type.ts";
 import { ValidationError } from "../../error.ts";
@@ -18,438 +22,634 @@ function createFixedType(
 }
 
 describe("FixedType", () => {
-  it("creates FixedType with name, namespace, aliases and size", () => {
-    const fixedType = createFixedType("MD5", 16, "org.example.types", [
-      "Hash",
-      "Checksum",
-    ]);
+  describe("constructor validation", () => {
+    it("creates FixedType with name, namespace, aliases and size", () => {
+      const fixedType = createFixedType("MD5", 16, "org.example.types", [
+        "Hash",
+        "Checksum",
+      ]);
 
-    assertEquals(fixedType.getFullName(), "org.example.types.MD5");
-    assertEquals(fixedType.getNamespace(), "org.example.types");
-    assertEquals(fixedType.getAliases(), [
-      "org.example.types.Hash",
-      "org.example.types.Checksum",
-    ]);
-    assertEquals(fixedType.getSize(), 16);
-    assertEquals(fixedType.sizeBytes(), 16);
-  });
+      assertEquals(fixedType.getFullName(), "org.example.types.MD5");
+      assertEquals(fixedType.getNamespace(), "org.example.types");
+      assertEquals(fixedType.getAliases(), [
+        "org.example.types.Hash",
+        "org.example.types.Checksum",
+      ]);
+      assertEquals(fixedType.getSize(), 16);
+    });
 
-  it("validates size parameter in constructor", () => {
-    assertThrows(
-      () => createFixedType("Invalid", 0),
-      Error,
-      "Invalid fixed size: 0. Size must be a positive integer.",
-    );
+    it("validates size parameter in constructor", () => {
+      assertThrows(
+        () => createFixedType("Invalid", 0),
+        Error,
+        "Invalid fixed size: 0. Size must be a positive integer.",
+      );
 
-    assertThrows(
-      () => createFixedType("Invalid", -5),
-      Error,
-      "Invalid fixed size: -5. Size must be a positive integer.",
-    );
+      assertThrows(
+        () => createFixedType("Invalid", -5),
+        Error,
+        "Invalid fixed size: -5. Size must be a positive integer.",
+      );
 
-    assertThrows(
-      () => createFixedType("Invalid", 3.14),
-      Error,
-      "Invalid fixed size: 3.14. Size must be a positive integer.",
-    );
-  });
-
-  it("validates Uint8Array values of correct size", () => {
-    const fixedType = createFixedType("Test", 4);
-
-    // Valid values
-    assertEquals(fixedType.check(new Uint8Array([1, 2, 3, 4])), true);
-    assertEquals(fixedType.check(new Uint8Array([0, 0, 0, 0])), true);
-
-    // Invalid values
-    assertEquals(fixedType.check(new Uint8Array([1, 2, 3])), false); // Too short
-    assertEquals(fixedType.check(new Uint8Array([1, 2, 3, 4, 5])), false); // Too long
-    assertEquals(fixedType.check("not bytes"), false);
-    assertEquals(fixedType.check(123), false);
-    assertEquals(fixedType.check(null), false);
-    assertEquals(fixedType.check(undefined), false);
-  });
-
-  it("calls error hook for invalid values", () => {
-    const fixedType = createFixedType("Test", 4);
-    let errorCalled = false;
-    let errorPath: string[] = [];
-    let errorValue: unknown;
-
-    const errorHook = (path: string[], value: unknown) => {
-      errorCalled = true;
-      errorPath = path;
-      errorValue = value;
-    };
-
-    // Test invalid value with error hook
-    assertEquals(
-      fixedType.check(new Uint8Array([1, 2, 3]), errorHook, ["test"]),
-      false,
-    );
-    assertEquals(errorCalled, true);
-    assertEquals(errorPath, ["test"]);
-    assertEquals(errorValue, new Uint8Array([1, 2, 3]));
-  });
-
-  it("does not call error hook for valid values", () => {
-    const fixedType = createFixedType("Test", 4);
-    let errorCalled = false;
-
-    const errorHook = () => {
-      errorCalled = true;
-    };
-
-    // Test valid value with error hook (should not call hook)
-    assertEquals(
-      fixedType.check(new Uint8Array([1, 2, 3, 4]), errorHook, ["test"]),
-      true,
-    );
-    assertEquals(errorCalled, false);
-  });
-
-  it("serializes and deserializes fixed-size byte arrays", async () => {
-    const fixedType = createFixedType("Test", 4);
-    const originalBytes = new Uint8Array([1, 2, 3, 4]);
-
-    // Test write and read
-    const buf = new ArrayBuffer(4);
-    const tap = new Tap(buf);
-    await fixedType.write(tap, originalBytes);
-
-    const tap2 = new Tap(buf);
-    const readBytes = await fixedType.read(tap2);
-
-    assertEquals(readBytes, originalBytes);
-  });
-
-  it("throws error when writing invalid values", async () => {
-    const fixedType = createFixedType("Test", 4);
-    const buf = new ArrayBuffer(4);
-    const tap = new Tap(buf);
-
-    await assertRejects(
-      async () => await fixedType.write(tap, new Uint8Array([1, 2, 3])),
-      Error,
-      "Invalid value",
-    );
-
-    await assertRejects(
-      async () => await fixedType.write(tap, new Uint8Array([1, 2, 3, 4, 5])),
-      Error,
-      "Invalid value",
-    );
-  });
-
-  it("throws error when reading insufficient data", async () => {
-    const fixedType = createFixedType("Test", 4);
-    const buf = new ArrayBuffer(2); // Not enough data
-    const tap = new Tap(buf);
-
-    await assertRejects(
-      async () => await fixedType.read(tap),
-      RangeError,
-      "Operation exceeds buffer bounds",
-    );
-  });
-
-  // This test checks that fixed type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
-  it("should throw when read fails", async () => {
-    const fixedType = createFixedType("Test", 4);
-    const mockBuffer = {
-      read: (_offset: number, _size: number) => Promise.resolve(undefined),
-      // This is unused here.
-      canReadMore: (_offset: number) => Promise.resolve(false),
-    };
-    const tap = new ReadableTap(mockBuffer);
-    await assertRejects(
-      async () => {
-        await fixedType.read(tap);
-      },
-      RangeError,
-      "Attempt to read beyond buffer bounds.",
-    );
-  });
-
-  it("compares fixed-size byte arrays lexicographically", () => {
-    const fixedType = createFixedType("Test", 4);
-    const bytes1 = new Uint8Array([1, 2, 3, 4]);
-    const bytes2 = new Uint8Array([1, 2, 3, 5]);
-    const bytes3 = new Uint8Array([1, 2, 3, 4]);
-
-    // bytes1 < bytes2 (differs at position 3: 4 < 5)
-    assertEquals(fixedType.compare(bytes1, bytes2), -1);
-    // bytes2 > bytes1 (differs at position 3: 5 > 4)
-    assertEquals(fixedType.compare(bytes2, bytes1), 1);
-    // bytes1 == bytes3 (identical arrays)
-    assertEquals(fixedType.compare(bytes1, bytes3), 0);
-  });
-
-  it("throws error for non-Uint8Array inputs in comparison", () => {
-    const fixedType = createFixedType("Test", 4);
-    const validBytes = new Uint8Array([1, 2, 3, 4]);
-
-    assertThrows(
-      () => fixedType.compare("not bytes" as unknown as Uint8Array, validBytes),
-      Error,
-      "Fixed comparison requires Uint8Array values.",
-    );
-
-    assertThrows(
-      () => fixedType.compare(validBytes, "not bytes" as unknown as Uint8Array),
-      Error,
-      "Fixed comparison requires Uint8Array values.",
-    );
-  });
-
-  it("throws error for wrong size inputs in comparison", () => {
-    const fixedType = createFixedType("Test", 4);
-    const validBytes = new Uint8Array([1, 2, 3, 4]);
-
-    assertThrows(
-      () => fixedType.compare(new Uint8Array([1, 2, 3]), validBytes),
-      Error,
-      "Fixed values must be exactly 4 bytes.",
-    );
-
-    assertThrows(
-      () => fixedType.compare(validBytes, new Uint8Array([1, 2, 3])),
-      Error,
-      "Fixed values must be exactly 4 bytes.",
-    );
-  });
-
-  it("creates deep copy of fixed-size byte arrays when cloning", () => {
-    const fixedType = createFixedType("Test", 4);
-    const original = new Uint8Array([1, 2, 3, 4]);
-    const cloned = fixedType.cloneFromValue(original);
-
-    assertEquals(cloned, original);
-    assertEquals(cloned === original, false); // Different instances
-  });
-
-  it("clones JSON string defaults", () => {
-    const fixedType = createFixedType("Test", 3);
-    const cloned = fixedType.cloneFromValue("\u0001\u0002\u0003");
-    assertEquals([...cloned], [1, 2, 3]);
-  });
-
-  it("throws error when cloning invalid values", () => {
-    const fixedType = createFixedType("Test", 4);
-
-    assertThrows(
-      () => fixedType.cloneFromValue(new Uint8Array([1, 2, 3])),
-      Error,
-      "Invalid value",
-    );
-  });
-
-  it("throws ValidationError when cloning unsupported default types", () => {
-    const fixedType = createFixedType("Test", 4);
-    assertThrows(() => {
-      fixedType.cloneFromValue(123 as unknown);
-    }, ValidationError);
-  });
-
-  it("generates random fixed-size byte arrays", () => {
-    const fixedType = createFixedType("Test", 8);
-    const random = fixedType.random();
-
-    assertEquals(random.length, 8);
-    assertEquals(random instanceof Uint8Array, true);
-  });
-
-  it("when created with namespace and aliases, toJSON provides correct JSON representation", () => {
-    const fixedType = createFixedType("MD5", 16, "org.example.types", [
-      "Hash",
-      "Checksum",
-    ]);
-
-    assertEquals(fixedType.toJSON(), {
-      name: "org.example.types.MD5",
-      type: "fixed",
-      size: 16,
+      assertThrows(
+        () => createFixedType("Invalid", 3.14),
+        Error,
+        "Invalid fixed size: 3.14. Size must be a positive integer.",
+      );
     });
   });
 
-  it("when created without namespace, toJSON provides correct JSON representation", () => {
-    const fixedType = createFixedType("Simple", 4);
+  describe("value validation", () => {
+    it("validates Uint8Array values of correct size", () => {
+      const fixedType = createFixedType("Test", 4);
 
-    assertEquals(fixedType.toJSON(), {
-      name: "Simple",
-      type: "fixed",
-      size: 4,
+      // Valid values
+      assertEquals(fixedType.check(new Uint8Array([1, 2, 3, 4])), true);
+      assertEquals(fixedType.check(new Uint8Array([0, 0, 0, 0])), true);
+
+      // Invalid values
+      assertEquals(fixedType.check(new Uint8Array([1, 2, 3])), false); // Too short
+      assertEquals(fixedType.check(new Uint8Array([1, 2, 3, 4, 5])), false); // Too long
+      assertEquals(fixedType.check("not bytes"), false);
+      assertEquals(fixedType.check(123), false);
+      assertEquals(fixedType.check(null), false);
+      assertEquals(fixedType.check(undefined), false);
+    });
+
+    it("calls error hook for invalid values", () => {
+      const fixedType = createFixedType("Test", 4);
+      let errorCalled = false;
+      let errorPath: string[] = [];
+      let errorValue: unknown;
+
+      const errorHook = (path: string[], value: unknown) => {
+        errorCalled = true;
+        errorPath = path;
+        errorValue = value;
+      };
+
+      // Test invalid value with error hook
+      assertEquals(
+        fixedType.check(new Uint8Array([1, 2, 3]), errorHook, ["test"]),
+        false,
+      );
+      assertEquals(errorCalled, true);
+      assertEquals(errorPath, ["test"]);
+      assertEquals(errorValue, new Uint8Array([1, 2, 3]));
+    });
+
+    it("does not call error hook for valid values", () => {
+      const fixedType = createFixedType("Test", 4);
+      let errorCalled = false;
+
+      const errorHook = () => {
+        errorCalled = true;
+      };
+
+      // Test valid value with error hook (should not call hook)
+      assertEquals(
+        fixedType.check(new Uint8Array([1, 2, 3, 4]), errorHook, ["test"]),
+        true,
+      );
+      assertEquals(errorCalled, false);
     });
   });
 
-  it("converts values to ArrayBuffer", async () => {
-    const fixedType = createFixedType("Test", 4);
-    const bytes = new Uint8Array([1, 2, 3, 4]);
-    const buffer = await fixedType.toBuffer(bytes);
+  describe("serialization", () => {
+    it("serializes and deserializes fixed-size byte arrays", async () => {
+      const fixedType = createFixedType("Test", 4);
+      const originalBytes = new Uint8Array([1, 2, 3, 4]);
 
-    assertEquals(buffer.byteLength, 4);
-    const view = new Uint8Array(buffer);
-    assertEquals(view, bytes);
+      // Test write and read
+      const buf = new ArrayBuffer(4);
+      const tap = new Tap(buf);
+      await fixedType.write(tap, originalBytes);
+
+      const tap2 = new Tap(buf);
+      const readBytes = await fixedType.read(tap2);
+
+      assertEquals(readBytes, originalBytes);
+    });
+
+    it("throws error when writing invalid values", async () => {
+      const fixedType = createFixedType("Test", 4);
+      const buf = new ArrayBuffer(4);
+      const tap = new Tap(buf);
+
+      await assertRejects(
+        async () => await fixedType.write(tap, new Uint8Array([1, 2, 3])),
+        Error,
+        "Invalid value",
+      );
+
+      await assertRejects(
+        async () => await fixedType.write(tap, new Uint8Array([1, 2, 3, 4, 5])),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("writes via writeUnchecked without validation", async () => {
+      const resolvedNames = resolveNames({
+        name: "Test",
+        namespace: undefined,
+        aliases: undefined,
+      });
+      const fixedType = new FixedType({
+        ...resolvedNames,
+        size: 4,
+        validate: false,
+      });
+      const buffer = new ArrayBuffer(8);
+      const tap = new Tap(buffer);
+      // Writing a longer array should be handled without throwing
+      await fixedType.write(tap, new Uint8Array([1, 2, 3, 4, 5, 6]));
+      const readTap = new Tap(buffer);
+      const result = await fixedType.read(readTap);
+      assertEquals(result, new Uint8Array([1, 2, 3, 4]));
+    });
+
+    it("throws error when reading insufficient data", async () => {
+      const fixedType = createFixedType("Test", 4);
+      const buf = new ArrayBuffer(2); // Not enough data
+      const tap = new Tap(buf);
+
+      await assertRejects(
+        async () => await fixedType.read(tap),
+        RangeError,
+        "Operation exceeds buffer bounds",
+      );
+    });
+
+    // This test checks that fixed type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
+    it("should throw when read fails", async () => {
+      const fixedType = createFixedType("Test", 4);
+      const mockBuffer = {
+        read: (_offset: number, _size: number) => Promise.resolve(undefined),
+        // This is unused here.
+        canReadMore: (_offset: number) => Promise.resolve(false),
+      };
+      const tap = new ReadableTap(mockBuffer);
+      await assertRejects(
+        async () => {
+          await fixedType.read(tap);
+        },
+        RangeError,
+        "Attempt to read beyond buffer bounds.",
+      );
+    });
   });
 
-  it("validates values before converting to buffer", async () => {
-    const fixedType = createFixedType("Test", 4);
+  describe("comparison", () => {
+    it("compares fixed-size byte arrays lexicographically", () => {
+      const fixedType = createFixedType("Test", 4);
+      const bytes1 = new Uint8Array([1, 2, 3, 4]);
+      const bytes2 = new Uint8Array([1, 2, 3, 5]);
+      const bytes3 = new Uint8Array([1, 2, 3, 4]);
 
-    await assertRejects(
-      async () => await fixedType.toBuffer(new Uint8Array([1, 2, 3])),
-      Error,
-      "Invalid value",
-    );
+      // bytes1 < bytes2 (differs at position 3: 4 < 5)
+      assertEquals(fixedType.compare(bytes1, bytes2), -1);
+      // bytes2 > bytes1 (differs at position 3: 5 > 4)
+      assertEquals(fixedType.compare(bytes2, bytes1), 1);
+      // bytes1 == bytes3 (identical arrays)
+      assertEquals(fixedType.compare(bytes1, bytes3), 0);
+    });
+
+    it("throws error for non-Uint8Array inputs in comparison", () => {
+      const fixedType = createFixedType("Test", 4);
+      const validBytes = new Uint8Array([1, 2, 3, 4]);
+
+      assertThrows(
+        () =>
+          fixedType.compare("not bytes" as unknown as Uint8Array, validBytes),
+        Error,
+        "Fixed comparison requires Uint8Array values.",
+      );
+
+      assertThrows(
+        () =>
+          fixedType.compare(validBytes, "not bytes" as unknown as Uint8Array),
+        Error,
+        "Fixed comparison requires Uint8Array values.",
+      );
+    });
+
+    it("throws error for wrong size inputs in comparison", () => {
+      const fixedType = createFixedType("Test", 4);
+      const validBytes = new Uint8Array([1, 2, 3, 4]);
+
+      assertThrows(
+        () => fixedType.compare(new Uint8Array([1, 2, 3]), validBytes),
+        Error,
+        "Fixed values must be exactly 4 bytes.",
+      );
+
+      assertThrows(
+        () => fixedType.compare(validBytes, new Uint8Array([1, 2, 3])),
+        Error,
+        "Fixed values must be exactly 4 bytes.",
+      );
+    });
   });
 
-  it("skips fixed-size values in tap", async () => {
-    const fixedType = createFixedType("Test", 4);
-    const buf = new ArrayBuffer(8);
-    const view = new Uint8Array(buf);
-    view.set([1, 2, 3, 4, 5, 6, 7, 8]);
+  describe("cloning", () => {
+    it("creates deep copy of fixed-size byte arrays when cloning", () => {
+      const fixedType = createFixedType("Test", 4);
+      const original = new Uint8Array([1, 2, 3, 4]);
+      const cloned = fixedType.cloneFromValue(original);
 
-    const tap = new Tap(buf);
-    assertEquals(tap.getPos(), 0);
+      assertEquals(cloned, original);
+      assertEquals(cloned === original, false); // Different instances
+    });
 
-    await fixedType.skip(tap);
-    assertEquals(tap.getPos(), 4);
+    it("clones JSON string defaults", () => {
+      const fixedType = createFixedType("Test", 3);
+      const cloned = fixedType.cloneFromValue("\u0001\u0002\u0003");
+      assertEquals([...cloned], [1, 2, 3]);
+    });
 
-    await fixedType.skip(tap);
-    assertEquals(tap.getPos(), 8);
+    it("throws error when cloning invalid values", () => {
+      const fixedType = createFixedType("Test", 4);
+
+      assertThrows(
+        () => fixedType.cloneFromValue(new Uint8Array([1, 2, 3])),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("throws ValidationError when cloning unsupported default types", () => {
+      const fixedType = createFixedType("Test", 4);
+      assertThrows(() => {
+        fixedType.cloneFromValue(123 as unknown);
+      }, ValidationError);
+    });
+
+    it("generates random fixed-size byte arrays", () => {
+      const fixedType = createFixedType("Test", 8);
+      const random = fixedType.random();
+
+      assertEquals(random.length, 8);
+      assertEquals(random instanceof Uint8Array, true);
+    });
   });
 
-  it("matches encoded fixed-size buffers", async () => {
-    const fixedType = createFixedType("Test", 4);
-    const bytes1 = new Uint8Array([1, 2, 3, 4]);
-    const bytes2 = new Uint8Array([1, 2, 3, 4]);
-    const bytes3 = new Uint8Array([1, 2, 3, 5]);
+  describe("JSON representation", () => {
+    it("when created with namespace and aliases, toJSON provides correct JSON representation", () => {
+      const fixedType = createFixedType("MD5", 16, "org.example.types", [
+        "Hash",
+        "Checksum",
+      ]);
 
-    const buf1 = new ArrayBuffer(4);
-    const buf2 = new ArrayBuffer(4);
-    const buf3 = new ArrayBuffer(4);
+      assertEquals(fixedType.toJSON(), {
+        name: "org.example.types.MD5",
+        type: "fixed",
+        size: 16,
+      });
+    });
 
-    new Uint8Array(buf1).set(bytes1);
-    new Uint8Array(buf2).set(bytes2);
-    new Uint8Array(buf3).set(bytes3);
+    it("when created without namespace, toJSON provides correct JSON representation", () => {
+      const fixedType = createFixedType("Simple", 4);
 
-    const tapMatch1 = new Tap(buf1);
-    const tapMatch2 = new Tap(buf2);
-    assertEquals(await fixedType.match(tapMatch1, tapMatch2), 0); // Match
-
-    const tapDiff1 = new Tap(buf1);
-    const tapDiff2 = new Tap(buf3);
-    assertEquals(await fixedType.match(tapDiff1, tapDiff2), -1); // bytes1 < bytes3
+      assertEquals(fixedType.toJSON(), {
+        name: "Simple",
+        type: "fixed",
+        size: 4,
+      });
+    });
   });
 
-  it("creates resolver for identical FixedType", () => {
-    const readerType = createFixedType("MD5", 16, "org.example.types");
-    const writerType = createFixedType("MD5", 16, "org.example.types");
+  describe("buffer operations", () => {
+    it("converts values to ArrayBuffer", async () => {
+      const fixedType = createFixedType("Test", 4);
+      const bytes = new Uint8Array([1, 2, 3, 4]);
+      const buffer = await fixedType.toBuffer(bytes);
 
-    const resolver = readerType.createResolver(writerType);
-    assertEquals(resolver.constructor.name, "FixedResolver");
+      assertEquals(buffer.byteLength, 4);
+      const view = new Uint8Array(buffer);
+      assertEquals(view, bytes);
+    });
+
+    it("validates values before converting to buffer", async () => {
+      const fixedType = createFixedType("Test", 4);
+
+      await assertRejects(
+        async () => await fixedType.toBuffer(new Uint8Array([1, 2, 3])),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("converts values to buffer without validation when validate is false", async () => {
+      const resolvedNames = resolveNames({
+        name: "Test",
+        namespace: undefined,
+        aliases: undefined,
+      });
+      const fixedType = new FixedType({
+        ...resolvedNames,
+        size: 4,
+        validate: false,
+      });
+      const bytes = new Uint8Array([1, 2, 3, 4]);
+      const buffer = await fixedType.toBuffer(bytes);
+
+      assertEquals(buffer.byteLength, 4);
+      const view = new Uint8Array(buffer);
+      assertEquals(view, bytes);
+    });
+
+    it("converts values to sync buffer without validation when validate is false", () => {
+      const resolvedNames = resolveNames({
+        name: "Test",
+        namespace: undefined,
+        aliases: undefined,
+      });
+      const fixedType = new FixedType({
+        ...resolvedNames,
+        size: 4,
+        validate: false,
+      });
+      const bytes = new Uint8Array([1, 2, 3, 4]);
+      const buffer = fixedType.toSyncBuffer(bytes);
+
+      assertEquals(buffer.byteLength, 4);
+      const view = new Uint8Array(buffer);
+      assertEquals(view, bytes);
+    });
+
+    it("skips fixed-size values in tap", async () => {
+      const fixedType = createFixedType("Test", 4);
+      const buf = new ArrayBuffer(8);
+      const view = new Uint8Array(buf);
+      view.set([1, 2, 3, 4, 5, 6, 7, 8]);
+
+      const tap = new Tap(buf);
+      assertEquals(tap.getPos(), 0);
+
+      await fixedType.skip(tap);
+      assertEquals(tap.getPos(), 4);
+
+      await fixedType.skip(tap);
+      assertEquals(tap.getPos(), 8);
+    });
   });
 
-  it("creates resolver for FixedType with alias", () => {
-    const readerType = createFixedType("Hash", 16, "org.example.types", [
-      "MD5",
-      "Checksum",
-    ]);
-    const writerType = createFixedType("MD5", 16, "org.example.types");
+  describe("sync operations", () => {
+    it("round-trips via sync buffer", () => {
+      const fixedType = createFixedType("Test", 4);
+      const bytes = new Uint8Array([1, 2, 3, 4]);
+      const buffer = fixedType.toSyncBuffer(bytes);
+      assertEquals(fixedType.fromSyncBuffer(buffer), bytes);
+    });
 
-    const resolver = readerType.createResolver(writerType);
-    assertEquals(resolver.constructor.name, "FixedResolver");
+    it("reads and writes via sync taps", () => {
+      const fixedType = createFixedType("Test", 4);
+      const bytes = new Uint8Array([5, 6, 7, 8]);
+      const buffer = new ArrayBuffer(8);
+      const writeTap = new SyncWritableTap(buffer);
+      fixedType.writeSync(writeTap, bytes);
+      const readTap = new SyncReadableTap(buffer);
+      assertEquals(readTap.getPos(), 0);
+      assertEquals(fixedType.readSync(readTap), bytes);
+      assertEquals(readTap.getPos(), writeTap.getPos());
+    });
+
+    it("throws when writeSync receives invalid value", () => {
+      const fixedType = createFixedType("Test", 4);
+      const buffer = new ArrayBuffer(8);
+      const tap = new SyncWritableTap(buffer);
+      assertThrows(
+        () => fixedType.writeSync(tap, new Uint8Array([1, 2, 3])),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("writes via writeSyncUnchecked without validation", () => {
+      const resolvedNames = resolveNames({
+        name: "Test",
+        namespace: undefined,
+        aliases: undefined,
+      });
+      const fixedType = new FixedType({
+        ...resolvedNames,
+        size: 4,
+        validate: false,
+      });
+      const buffer = new ArrayBuffer(8);
+      const tap = new SyncWritableTap(buffer);
+      // Writing a longer array should be truncated to size
+      fixedType.writeSync(tap, new Uint8Array([1, 2, 3, 4, 5, 6]));
+      const readTap = new SyncReadableTap(buffer);
+      const result = fixedType.readSync(readTap);
+      assertEquals(result, new Uint8Array([1, 2, 3, 4]));
+    });
+
+    it("skips fixed-size values via sync taps", () => {
+      const fixedType = createFixedType("Test", 4);
+      const buffer = new ArrayBuffer(8);
+      const view = new Uint8Array(buffer);
+      view.set([1, 2, 3, 4, 5, 6, 7, 8]);
+
+      const tap = new SyncReadableTap(buffer);
+      assertEquals(tap.getPos(), 0);
+
+      fixedType.skipSync(tap);
+      assertEquals(tap.getPos(), 4);
+
+      fixedType.skipSync(tap);
+      assertEquals(tap.getPos(), 8);
+    });
+
+    it("matches encoded fixed-size buffers via sync taps", () => {
+      const fixedType = createFixedType("Test", 4);
+      const bytes1 = new Uint8Array([1, 2, 3, 4]);
+      const bytes2 = new Uint8Array([1, 2, 3, 5]);
+      const buf1 = fixedType.toSyncBuffer(bytes1);
+      const buf2 = fixedType.toSyncBuffer(bytes2);
+
+      assertEquals(
+        fixedType.matchSync(
+          new SyncReadableTap(buf1),
+          new SyncReadableTap(buf1),
+        ),
+        0,
+      );
+      assertEquals(
+        fixedType.matchSync(
+          new SyncReadableTap(buf1),
+          new SyncReadableTap(buf2),
+        ),
+        -1,
+      );
+    });
+
+    it("matches encoded fixed-size buffers", async () => {
+      const fixedType = createFixedType("Test", 4);
+      const bytes1 = new Uint8Array([1, 2, 3, 4]);
+      const bytes2 = new Uint8Array([1, 2, 3, 4]);
+      const bytes3 = new Uint8Array([1, 2, 3, 5]);
+
+      const buf1 = new ArrayBuffer(4);
+      const buf2 = new ArrayBuffer(4);
+      const buf3 = new ArrayBuffer(4);
+
+      new Uint8Array(buf1).set(bytes1);
+      new Uint8Array(buf2).set(bytes2);
+      new Uint8Array(buf3).set(bytes3);
+
+      const tapMatch1 = new Tap(buf1);
+      const tapMatch2 = new Tap(buf2);
+      assertEquals(await fixedType.match(tapMatch1, tapMatch2), 0); // Match
+
+      const tapDiff1 = new Tap(buf1);
+      const tapDiff2 = new Tap(buf3);
+      assertEquals(await fixedType.match(tapDiff1, tapDiff2), -1); // bytes1 < bytes3
+    });
   });
 
-  it("throws error for incompatible FixedType names", () => {
-    const readerType = createFixedType("MD5", 16, "org.example.types");
-    const writerType = createFixedType("SHA1", 16, "org.example.types");
+  describe("schema resolution", () => {
+    it("creates resolver for identical FixedType", () => {
+      const readerType = createFixedType("MD5", 16, "org.example.types");
+      const writerType = createFixedType("MD5", 16, "org.example.types");
 
-    assertThrows(
-      () => readerType.createResolver(writerType),
-      Error,
-      "Schema evolution not supported from writer type: org.example.types.SHA1 to reader type: org.example.types.MD5",
-    );
+      const resolver = readerType.createResolver(writerType);
+      assertEquals(resolver.constructor.name, "FixedResolver");
+    });
+
+    it("creates resolver for FixedType with alias", () => {
+      const readerType = createFixedType("Hash", 16, "org.example.types", [
+        "MD5",
+        "Checksum",
+      ]);
+      const writerType = createFixedType("MD5", 16, "org.example.types");
+
+      const resolver = readerType.createResolver(writerType);
+      assertEquals(resolver.constructor.name, "FixedResolver");
+    });
+
+    it("throws error for incompatible FixedType names", () => {
+      const readerType = createFixedType("MD5", 16, "org.example.types");
+      const writerType = createFixedType("SHA1", 16, "org.example.types");
+
+      assertThrows(
+        () => readerType.createResolver(writerType),
+        Error,
+        "Schema evolution not supported from writer type: org.example.types.SHA1 to reader type: org.example.types.MD5",
+      );
+    });
+
+    it("throws error for different FixedType sizes", () => {
+      const readerType = createFixedType("MD5", 16, "org.example.types");
+      const writerType = createFixedType("MD5", 20, "org.example.types");
+
+      assertThrows(
+        () => readerType.createResolver(writerType),
+        Error,
+        "Cannot resolve fixed types with different sizes: writer has 20, reader has 16",
+      );
+    });
+
+    it("reads values through FixedType resolver", async () => {
+      const readerType = createFixedType("MD5", 16, "org.example.types");
+      const writerType = createFixedType("MD5", 16, "org.example.types");
+
+      const resolver = readerType.createResolver(writerType);
+      const testData = new Uint8Array([
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+      ]);
+
+      const buf = new ArrayBuffer(16);
+      const tap = new Tap(buf);
+      await tap.writeFixed(testData);
+
+      const tap2 = new Tap(buf);
+      const readData = await resolver.read(tap2);
+
+      assertEquals(readData, testData);
+    });
+
+    it("reads values through FixedType resolver synchronously", () => {
+      const readerType = createFixedType("MD5", 16, "org.example.types");
+      const writerType = createFixedType("MD5", 16, "org.example.types");
+
+      const resolver = readerType.createResolver(writerType);
+      const bytes = new Uint8Array([
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+      ]);
+      const buffer = writerType.toSyncBuffer(bytes);
+      const result = resolver.readSync(new SyncReadableTap(buffer));
+      assertEquals(result, bytes);
+    });
   });
 
-  it("throws error for different FixedType sizes", () => {
-    const readerType = createFixedType("MD5", 16, "org.example.types");
-    const writerType = createFixedType("MD5", 20, "org.example.types");
+  describe("name matching", () => {
+    it("matches names including aliases", () => {
+      const fixedType = createFixedType("MD5", 16, "org.example.types", [
+        "Hash",
+        "Checksum",
+      ]);
 
-    assertThrows(
-      () => readerType.createResolver(writerType),
-      Error,
-      "Cannot resolve fixed types with different sizes: writer has 20, reader has 16",
-    );
-  });
+      assertEquals(fixedType.matchesName("org.example.types.MD5"), true);
+      assertEquals(fixedType.matchesName("MD5"), false); // Not fully qualified
+      assertEquals(fixedType.matchesName("org.example.types.Hash"), true);
+      assertEquals(fixedType.matchesName("org.example.types.Checksum"), true);
+      assertEquals(fixedType.matchesName("org.example.types.Unknown"), false);
+    });
 
-  it("reads values through FixedType resolver", async () => {
-    const readerType = createFixedType("MD5", 16, "org.example.types");
-    const writerType = createFixedType("MD5", 16, "org.example.types");
+    it("falls back to base resolver for non-FixedType", () => {
+      const fixedType = createFixedType("MD5", 16, "org.example.types");
 
-    const resolver = readerType.createResolver(writerType);
-    const testData = new Uint8Array([
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      8,
-      9,
-      10,
-      11,
-      12,
-      13,
-      14,
-      15,
-      16,
-    ]);
+      // Create a mock type that's not FixedType
+      const mockType = {
+        constructor: { name: "mock.MockType" },
+        getAliases: () => [],
+        toJSON: () => "mock",
+      } as unknown as Type;
 
-    const buf = new ArrayBuffer(16);
-    const tap = new Tap(buf);
-    await tap.writeFixed(testData, 16);
-
-    const tap2 = new Tap(buf);
-    const readData = await resolver.read(tap2);
-
-    assertEquals(readData, testData);
-  });
-
-  it("matches names including aliases", () => {
-    const fixedType = createFixedType("MD5", 16, "org.example.types", [
-      "Hash",
-      "Checksum",
-    ]);
-
-    assertEquals(fixedType.matchesName("org.example.types.MD5"), true);
-    assertEquals(fixedType.matchesName("MD5"), false); // Not fully qualified
-    assertEquals(fixedType.matchesName("org.example.types.Hash"), true);
-    assertEquals(fixedType.matchesName("org.example.types.Checksum"), true);
-    assertEquals(fixedType.matchesName("org.example.types.Unknown"), false);
-  });
-
-  it("falls back to base resolver for non-FixedType", () => {
-    const fixedType = createFixedType("MD5", 16, "org.example.types");
-
-    // Create a mock type that's not FixedType
-    const mockType = {
-      constructor: { name: "mock.MockType" },
-      getAliases: () => [],
-      toJSON: () => "mock",
-    } as unknown as Type;
-
-    // This should fall back to the base class implementation which throws an error
-    assertThrows(
-      () => fixedType.createResolver(mockType),
-      Error,
-      `Schema evolution not supported from writer type: mock to reader type: 
+      // This should fall back to the base class implementation which throws an error
+      assertThrows(
+        () => fixedType.createResolver(mockType),
+        Error,
+        `Schema evolution not supported from writer type: mock to reader type: 
 {
   "name": "org.example.types.MD5",
   "type": "fixed",
   "size": 16
 }
 `,
-    );
+      );
+    });
   });
 });

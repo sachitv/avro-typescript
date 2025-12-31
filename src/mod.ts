@@ -1,6 +1,8 @@
 // Core Avro functionality
 export { AvroReader } from "./avro_reader.ts";
 export { AvroWriter } from "./avro_writer.ts";
+export { SyncAvroReader } from "./avro_reader_sync.ts";
+export { SyncAvroWriter } from "./avro_writer_sync.ts";
 export { createType } from "./type/create_type.ts";
 
 // Schema types
@@ -61,6 +63,10 @@ export type {
 export type { AvroWriterOptions } from "./serialization/avro_file_writer.ts";
 export { AvroFileParser } from "./serialization/avro_file_parser.ts";
 export { AvroFileWriter } from "./serialization/avro_file_writer.ts";
+export type { SyncAvroFileParserOptions } from "./serialization/avro_file_parser_sync.ts";
+export type { SyncAvroWriterOptions } from "./serialization/avro_file_writer_sync.ts";
+export { SyncAvroFileParser } from "./serialization/avro_file_parser_sync.ts";
+export { SyncAvroFileWriter } from "./serialization/avro_file_writer_sync.ts";
 export {
   BLOCK_TYPE,
   HEADER_TYPE,
@@ -73,11 +79,19 @@ export type {
   IReadableBuffer,
   IWritableBuffer,
 } from "./serialization/buffers/buffer.ts";
+export type {
+  ISyncReadable,
+  ISyncWritable,
+} from "./serialization/buffers/buffer_sync.ts";
 export { BlobReadableBuffer } from "./serialization/buffers/blob_readable_buffer.ts";
 export {
   InMemoryReadableBuffer,
   InMemoryWritableBuffer,
 } from "./serialization/buffers/in_memory_buffer.ts";
+export {
+  SyncInMemoryReadableBuffer,
+  SyncInMemoryWritableBuffer,
+} from "./serialization/buffers/in_memory_buffer_sync.ts";
 
 // Streams
 export type {
@@ -90,14 +104,32 @@ export { StreamReadableBufferAdapter } from "./serialization/streams/stream_read
 export { StreamWritableBufferAdapter } from "./serialization/streams/stream_writable_buffer_adapter.ts";
 export { FixedSizeStreamReadableBufferAdapter } from "./serialization/streams/fixed_size_stream_readable_buffer_adapter.ts";
 export { ForwardOnlyStreamReadableBufferAdapter } from "./serialization/streams/forward_only_stream_readable_buffer_adapter.ts";
+export type {
+  ISyncStreamReadableBuffer,
+  ISyncStreamWritableBuffer,
+} from "./serialization/streams/streams_sync.ts";
+export { SyncStreamReadableBufferAdapter } from "./serialization/streams/stream_readable_buffer_adapter_sync.ts";
+export { SyncStreamWritableBufferAdapter } from "./serialization/streams/stream_writable_buffer_adapter_sync.ts";
+export { SyncFixedSizeStreamReader } from "./serialization/streams/fixed_size_stream_reader_sync.ts";
+export { SyncFixedSizeStreamWriter } from "./serialization/streams/fixed_size_stream_writer_sync.ts";
 
 // Encoders/Decoders
 export type { Encoder } from "./serialization/encoders/encoder.ts";
+export type {
+  SyncEncoder,
+  SyncEncoderRegistry,
+} from "./serialization/encoders/encoder_sync.ts";
 export type { Decoder } from "./serialization/decoders/decoder.ts";
+export type {
+  SyncDecoder,
+  SyncDecoderRegistry,
+} from "./serialization/decoders/decoder_sync.ts";
 export { NullEncoder } from "./serialization/encoders/null_encoder.ts";
 export { DeflateEncoder } from "./serialization/encoders/deflate_encoder.ts";
+export { NullEncoderSync } from "./serialization/encoders/encoder_null_sync.ts";
 export { NullDecoder } from "./serialization/decoders/null_decoder.ts";
 export { DeflateDecoder } from "./serialization/decoders/deflate_decoder.ts";
+export { NullDecoderSync } from "./serialization/decoders/decoder_null_sync.ts";
 
 // Taps
 export type { ReadableTapLike, WritableTapLike } from "./serialization/tap.ts";

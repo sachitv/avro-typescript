@@ -1,6 +1,6 @@
-import { type ReadableTapLike, WritableTap } from "../../serialization/tap.ts";
+import type { ReadableTapLike } from "../../serialization/tap.ts";
+import type { SyncReadableTapLike } from "../../serialization/tap_sync.ts";
 import { BaseType } from "../base_type.ts";
-import { throwInvalidError } from "../error.ts";
 
 /**
  * Base class for fixed-size Avro types.
@@ -11,24 +11,20 @@ import { throwInvalidError } from "../error.ts";
  * Provides optimized serialization for types with known fixed byte sizes.
  */
 export abstract class FixedSizeBaseType<T = unknown> extends BaseType<T> {
+  /** Creates a new fixed-size base type. */
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /**
    * Returns the fixed size in bytes for this type.
    * @returns The exact size in bytes.
    */
   public abstract sizeBytes(): number;
 
-  /**
-   * Serializes a value into an ArrayBuffer using the exact fixed size.
-   * @param value The value to serialize.
-   * @returns The serialized ArrayBuffer.
-   */
-  public override async toBuffer(value: T): Promise<ArrayBuffer> {
-    this.check(value, throwInvalidError, []);
-    const size = this.sizeBytes();
-    const buf = new ArrayBuffer(size);
-    const tap = new WritableTap(buf);
-    await this.write(tap, value);
-    return buf;
+  /** Returns the fixed byte length for any value of this type. */
+  protected override byteLength(_value: T): number {
+    return this.sizeBytes();
   }
 
   /**
@@ -37,5 +33,13 @@ export abstract class FixedSizeBaseType<T = unknown> extends BaseType<T> {
    */
   public async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipFixed(this.sizeBytes());
+  }
+
+  /**
+   * Skips a fixed-size value synchronously by advancing the tap by the fixed size.
+   * @param tap The sync tap to skip from.
+   */
+  public skipSync(tap: SyncReadableTapLike): void {
+    tap.skipFixed(this.sizeBytes());
   }
 }

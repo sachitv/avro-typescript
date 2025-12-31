@@ -1,17 +1,25 @@
-import {
-  type ReadableTapLike,
-  WritableTap,
-  type WritableTapLike,
+import type {
+  ReadableTapLike,
+  WritableTapLike,
 } from "../../serialization/tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../serialization/tap_sync.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import type { JSONType } from "../type.ts";
 import { calculateVarintSize } from "../../internal/varint.ts";
-import { type ErrorHook, throwInvalidError } from "../error.ts";
+import type { ErrorHook } from "../error.ts";
 
 /**
  * Int type (32-bit).
  */
 export class IntType extends PrimitiveType<number> {
+  /** Creates a new int type. */
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /** Checks if the value is a valid 32-bit integer. */
   public override check(
     value: unknown,
@@ -31,31 +39,22 @@ export class IntType extends PrimitiveType<number> {
     return await tap.readInt();
   }
 
-  /** Writes a 32-bit integer to the tap. */
-  public override async write(
+  /** Writes a 32-bit integer to the tap without validation. */
+  public override async writeUnchecked(
     tap: WritableTapLike,
     value: number,
   ): Promise<void> {
-    if (!this.check(value)) {
-      throwInvalidError([], value, this);
-    }
     await tap.writeInt(value);
+  }
+
+  /** Returns the encoded byte length of the given value. */
+  protected override byteLength(value: number): number {
+    return calculateVarintSize(value);
   }
 
   /** Skips a 32-bit integer in the tap. */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipInt();
-  }
-
-  /** Converts a 32-bit integer to its buffer representation. */
-  public override async toBuffer(value: number): Promise<ArrayBuffer> {
-    this.check(value, throwInvalidError, []);
-    // For int, allocate exact size based on value
-    const size = calculateVarintSize(value);
-    const buf = new ArrayBuffer(size);
-    const tap = new WritableTap(buf);
-    await this.write(tap, value);
-    return buf;
   }
 
   /**
@@ -83,5 +82,31 @@ export class IntType extends PrimitiveType<number> {
     tap2: ReadableTapLike,
   ): Promise<number> {
     return await tap1.matchInt(tap2);
+  }
+
+  /** Reads a 32-bit integer synchronously from the tap. */
+  public override readSync(tap: SyncReadableTapLike): number {
+    return tap.readInt();
+  }
+
+  /** Writes a 32-bit integer synchronously to the tap without validation. */
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: number,
+  ): void {
+    tap.writeInt(value);
+  }
+
+  /** Skips a 32-bit integer synchronously in the tap. */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    tap.skipInt();
+  }
+
+  /** Matches two 32-bit integers synchronously in the taps. */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchInt(tap2);
   }
 }

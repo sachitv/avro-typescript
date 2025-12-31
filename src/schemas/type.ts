@@ -1,6 +1,17 @@
-import type { ReadableTapLike, WritableTapLike } from "../serialization/tap.ts";
+import {
+  type ReadableTapLike,
+  WritableTap,
+  type WritableTapLike,
+} from "../serialization/tap.ts";
+import {
+  type SyncReadableTapLike,
+  SyncWritableTap,
+  type SyncWritableTapLike,
+} from "../serialization/tap_sync.ts";
+import { CountingWritableTap } from "../serialization/counting_writable_tap.ts";
+import { SyncCountingWritableTap } from "../serialization/counting_writable_tap_sync.ts";
 import type { Resolver } from "./resolver.ts";
-import type { ErrorHook } from "./error.ts";
+import { type ErrorHook, throwInvalidError } from "./error.ts";
 
 /**
  * Options for validation, including an optional error hook.
@@ -25,12 +36,37 @@ export type JSONType =
  * Provides the common interface for serialization, deserialization, validation, and cloning.
  */
 export abstract class Type<T = unknown> {
+  /** Controls whether write operations validate values before serialization. */
+  protected readonly validateWrites: boolean;
+
+  /** Creates a new Type instance. */
+  protected constructor(validate = true) {
+    this.validateWrites = validate;
+  }
+
   /**
    * Serializes a value into an ArrayBuffer using the schema.
    * @param value The value to serialize.
    * @returns The serialized ArrayBuffer.
    */
-  public abstract toBuffer(value: T): Promise<ArrayBuffer>;
+  public async toBuffer(value: T): Promise<ArrayBuffer> {
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
+    const sizeHint = this.byteLength(value);
+    if (sizeHint !== undefined) {
+      const buffer = new ArrayBuffer(assertValidSize(sizeHint));
+      const tap = new WritableTap(buffer);
+      await this.writeUnchecked(tap, value);
+      return buffer;
+    }
+    const countingTap = new CountingWritableTap();
+    await this.writeUnchecked(countingTap, value);
+    const buffer = new ArrayBuffer(countingTap.getPos());
+    const tap = new WritableTap(buffer);
+    await this.writeUnchecked(tap, value);
+    return buffer;
+  }
 
   /**
    * Deserializes an ArrayBuffer into a value using the schema.
@@ -66,7 +102,24 @@ export abstract class Type<T = unknown> {
    * @param tap The tap to write to.
    * @param value The value to write.
    */
-  public abstract write(tap: WritableTapLike, value: T): Promise<void>;
+  public async write(tap: WritableTapLike, value: T): Promise<void> {
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
+    await this.writeUnchecked(tap, value);
+  }
+
+  /**
+   * Writes a value to the tap without performing runtime validation.
+   *
+   * This is used to implement `createType(schema, { validate: false })`
+   * efficiently and recursively. The default implementation delegates to
+   * {@link write}.
+   */
+  public abstract writeUnchecked(
+    tap: WritableTapLike,
+    value: T,
+  ): Promise<void>;
 
   /**
    * Reads a value from the tap. Must be implemented by subclasses.
@@ -124,4 +177,96 @@ export abstract class Type<T = unknown> {
     tap1: ReadableTapLike,
     tap2: ReadableTapLike,
   ): Promise<number>;
+
+  /**
+   * Serializes a value into an ArrayBuffer synchronously using the schema.
+   * @param value The value to serialize.
+   * @returns The serialized ArrayBuffer.
+   */
+  public toSyncBuffer(value: T): ArrayBuffer {
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
+    const sizeHint = this.byteLength(value);
+    if (sizeHint !== undefined) {
+      const buffer = new ArrayBuffer(assertValidSize(sizeHint));
+      const tap = new SyncWritableTap(buffer);
+      this.writeSyncUnchecked(tap, value);
+      return buffer;
+    }
+    const countingTap = new SyncCountingWritableTap();
+    this.writeSyncUnchecked(countingTap, value);
+    const buffer = new ArrayBuffer(countingTap.getPos());
+    const tap = new SyncWritableTap(buffer);
+    this.writeSyncUnchecked(tap, value);
+    return buffer;
+  }
+
+  /**
+   * Deserializes an ArrayBuffer into a value synchronously using the schema.
+   * @param buffer The ArrayBuffer to deserialize.
+   * @returns The deserialized value.
+   */
+  public abstract fromSyncBuffer(buffer: ArrayBuffer): T;
+
+  /**
+   * Writes a value to the sync tap. Must be implemented by subclasses.
+   * @param tap The sync tap to write to.
+   * @param value The value to write.
+   */
+  public writeSync(tap: SyncWritableTapLike, value: T): void {
+    if (this.validateWrites) {
+      this.check(value, throwInvalidError, []);
+    }
+    this.writeSyncUnchecked(tap, value);
+  }
+
+  /**
+   * Writes a value to the sync tap without performing runtime validation.
+   *
+   * The default implementation delegates to {@link writeSync}.
+   */
+  public abstract writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: T,
+  ): void;
+
+  /**
+   * Reads a value from the sync tap. Must be implemented by subclasses.
+   * @param tap The sync tap to read from.
+   * @returns The read value.
+   */
+  public abstract readSync(tap: SyncReadableTapLike): T;
+
+  /**
+   * Skips a value in the sync tap. Must be implemented by subclasses.
+   * @param tap The sync tap to skip from.
+   */
+  public abstract skipSync(tap: SyncReadableTapLike): void;
+
+  /**
+   * Compares two encoded buffers synchronously. Must be implemented by subclasses.
+   * @param tap1 The first sync tap.
+   * @param tap2 The second sync tap.
+   * @returns -1 if tap1 < tap2, 0 if equal, 1 if tap1 > tap2.
+   */
+  public abstract matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number;
+
+  /**
+   * Returns the encoded byte length for the value when it is cheap to compute.
+   * Override in types with fixed or easily derived sizes to skip counting taps.
+   */
+  protected byteLength(_value: T): number | undefined {
+    return undefined;
+  }
+}
+
+function assertValidSize(size: number): number {
+  if (!Number.isFinite(size) || !Number.isInteger(size) || size < 0) {
+    throw new RangeError(`Invalid byte length: ${size}`);
+  }
+  return size;
 }

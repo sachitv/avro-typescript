@@ -22,8 +22,12 @@ export class DecimalLogicalType extends LogicalType<bigint, Uint8Array> {
    * @param underlying The underlying bytes or fixed type.
    * @param params The precision and scale parameters.
    */
-  constructor(underlying: BytesType | FixedType, params: DecimalParams) {
-    super(underlying);
+  constructor(
+    underlying: BytesType | FixedType,
+    params: DecimalParams,
+    validate = true,
+  ) {
+    super(underlying, validate);
 
     if (!(underlying instanceof BytesType || underlying instanceof FixedType)) {
       throw new Error(

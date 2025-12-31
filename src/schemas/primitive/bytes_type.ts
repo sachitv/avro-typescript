@@ -1,8 +1,11 @@
-import {
-  type ReadableTapLike,
-  WritableTap,
-  type WritableTapLike,
+import type {
+  ReadableTapLike,
+  WritableTapLike,
 } from "../../serialization/tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../serialization/tap_sync.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import type { JSONType, Type } from "./../type.ts";
 import { Resolver } from "./../resolver.ts";
@@ -13,6 +16,11 @@ import { calculateVarintSize } from "../../internal/varint.ts";
  * Bytes type.
  */
 export class BytesType extends PrimitiveType<Uint8Array> {
+  /** Creates a new bytes type. */
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /** Checks if the value is a valid bytes array. */
   public override check(
     value: unknown,
@@ -34,16 +42,31 @@ export class BytesType extends PrimitiveType<Uint8Array> {
   }
 
   /**
-   * Writes a byte array to the tap.
+   * Reads a byte array from the sync tap.
    */
-  public override async write(
+  public override readSync(tap: SyncReadableTapLike): Uint8Array {
+    return tap.readBytes();
+  }
+
+  /** Writes a byte array to the tap without validation. */
+  public override async writeUnchecked(
     tap: WritableTapLike,
     value: Uint8Array,
   ): Promise<void> {
-    if (!(value instanceof Uint8Array)) {
-      throwInvalidError([], value, this);
-    }
     await tap.writeBytes(value);
+  }
+
+  /** Returns the encoded byte length of the given value. */
+  protected override byteLength(value: Uint8Array): number {
+    return calculateVarintSize(value.length) + value.length;
+  }
+
+  /** Writes a byte array synchronously to the tap without validation. */
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: Uint8Array,
+  ): void {
+    tap.writeBytes(value);
   }
 
   /**
@@ -54,17 +77,10 @@ export class BytesType extends PrimitiveType<Uint8Array> {
   }
 
   /**
-   * Converts a byte array to an ArrayBuffer.
+   * Skips a byte array in the sync tap.
    */
-  public override async toBuffer(value: Uint8Array): Promise<ArrayBuffer> {
-    this.check(value, throwInvalidError, []);
-    // Pre-allocate buffer based on value length for efficiency
-    const lengthSize = calculateVarintSize(value.length);
-    const totalSize = lengthSize + value.length;
-    const buf = new ArrayBuffer(totalSize);
-    const tap = new WritableTap(buf);
-    await this.write(tap, value);
-    return buf;
+  public override skipSync(tap: SyncReadableTapLike): void {
+    tap.skipBytes();
   }
 
   /**
@@ -79,6 +95,15 @@ export class BytesType extends PrimitiveType<Uint8Array> {
           tap: ReadableTapLike,
         ): Promise<Uint8Array> {
           const str = await tap.readString();
+          // Convert string to bytes (assuming UTF-8)
+          const encoder = new TextEncoder();
+          return encoder.encode(str);
+        }
+
+        public override readSync(
+          tap: SyncReadableTapLike,
+        ): Uint8Array {
+          const str = tap.readString();
           // Convert string to bytes (assuming UTF-8)
           const encoder = new TextEncoder();
           return encoder.encode(str);
@@ -152,5 +177,13 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     tap2: ReadableTapLike,
   ): Promise<number> {
     return await tap1.matchBytes(tap2);
+  }
+
+  /** Matches bytes between two sync taps. */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchBytes(tap2);
   }
 }

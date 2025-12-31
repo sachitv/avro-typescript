@@ -16,8 +16,8 @@ export class DateLogicalType extends LogicalType<number, number> {
    * Creates a new DateLogicalType.
    * @param underlying The underlying int type.
    */
-  constructor(underlying: IntType) {
-    super(underlying);
+  constructor(underlying: IntType, validate = true) {
+    super(underlying, validate);
   }
 
   /** Checks if the logical type can read from the underlying type. */
@@ -64,8 +64,8 @@ export class TimeMillisLogicalType extends LogicalType<number, number> {
    * Creates a new TimeMillisLogicalType.
    * @param underlying The underlying int type.
    */
-  constructor(underlying: IntType) {
-    super(underlying);
+  constructor(underlying: IntType, validate = true) {
+    super(underlying, validate);
   }
 
   /** Checks if the logical type can read from the underlying type. */
@@ -114,8 +114,8 @@ export class TimeMicrosLogicalType extends LogicalType<bigint, bigint> {
    * Creates a new TimeMicrosLogicalType.
    * @param underlying The underlying long type.
    */
-  constructor(underlying: LongType) {
-    super(underlying);
+  constructor(underlying: LongType, validate = true) {
+    super(underlying, validate);
   }
 
   /** Checks if the logical type can read from the underlying type. */
@@ -164,8 +164,8 @@ export class TimestampMillisLogicalType extends LogicalType<Date, bigint> {
    * Creates a new TimestampMillisLogicalType.
    * @param underlying The underlying long type.
    */
-  constructor(underlying: LongType) {
-    super(underlying);
+  constructor(underlying: LongType, validate = true) {
+    super(underlying, validate);
   }
 
   /** Checks if the logical type can read from the underlying type. */
@@ -226,8 +226,8 @@ export class TimestampMicrosLogicalType extends LogicalType<bigint, bigint> {
    * Creates a new TimestampMicrosLogicalType.
    * @param underlying The underlying long type.
    */
-  constructor(underlying: LongType) {
-    super(underlying);
+  constructor(underlying: LongType, validate = true) {
+    super(underlying, validate);
   }
 
   /** Checks if the logical type can read from the underlying type. */
@@ -277,8 +277,8 @@ export class TimestampNanosLogicalType extends LogicalType<bigint, bigint> {
    * Creates a new TimestampNanosLogicalType.
    * @param underlying The underlying long type.
    */
-  constructor(underlying: LongType) {
-    super(underlying);
+  constructor(underlying: LongType, validate = true) {
+    super(underlying, validate);
   }
 
   /** Checks if the logical type can read from the underlying type. */
@@ -329,8 +329,8 @@ export class LocalTimestampMillisLogicalType
    * Creates a new LocalTimestampMillisLogicalType.
    * @param underlying The underlying long type.
    */
-  constructor(underlying: LongType) {
-    super(underlying);
+  constructor(underlying: LongType, validate = true) {
+    super(underlying, validate);
   }
 
   /** Checks if the logical type can read from the underlying type. */
@@ -382,8 +382,8 @@ export class LocalTimestampMicrosLogicalType
    * Creates a new LocalTimestampMicrosLogicalType.
    * @param underlying The underlying long type.
    */
-  constructor(underlying: LongType) {
-    super(underlying);
+  constructor(underlying: LongType, validate = true) {
+    super(underlying, validate);
   }
 
   /** Checks if the logical type can read from the underlying type. */
@@ -434,8 +434,8 @@ export class LocalTimestampNanosLogicalType
    * Creates a new LocalTimestampNanosLogicalType.
    * @param underlying The underlying long type.
    */
-  constructor(underlying: LongType) {
-    super(underlying);
+  constructor(underlying: LongType, validate = true) {
+    super(underlying, validate);
   }
 
   /** Checks if the logical type can read from the underlying type. */

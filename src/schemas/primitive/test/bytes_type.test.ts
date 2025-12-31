@@ -2,6 +2,10 @@ import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import type { ReadableTapLike } from "../../../serialization/tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/tap_sync.ts";
 import { BytesType } from "../bytes_type.ts";
 import { StringType } from "../string_type.ts";
 import { ValidationError } from "../../error.ts";
@@ -276,6 +280,170 @@ describe("BytesType", () => {
     it("should have isValid", () => {
       assert(type.isValid(new Uint8Array([1])));
       assert(!type.isValid("invalid"));
+    });
+  });
+
+  describe("sync APIs", () => {
+    describe("readSync", () => {
+      it("should read bytes synchronously from tap", () => {
+        const data = new Uint8Array([1, 2, 3, 4]);
+        const buffer = new ArrayBuffer(10);
+        const writeTap = new SyncWritableTap(buffer);
+        writeTap.writeBytes(data);
+        const readTap = new SyncReadableTap(buffer);
+        const result = type.readSync(readTap);
+        assertEquals(result, data);
+      });
+
+      it("should throw when insufficient data", () => {
+        const buffer = new ArrayBuffer(0); // Empty buffer
+        const tap = new SyncReadableTap(buffer);
+        assertThrows(
+          () => {
+            type.readSync(tap);
+          },
+          Error, // ReadBufferError
+          "Operation exceeds buffer bounds",
+        );
+      });
+    });
+
+    describe("writeSync", () => {
+      it("should write bytes synchronously to tap", () => {
+        const data = new Uint8Array([5, 6, 7]);
+        const buffer = new ArrayBuffer(10);
+        const writeTap = new SyncWritableTap(buffer);
+        type.writeSync(writeTap, data);
+        const readTap = new SyncReadableTap(buffer);
+        const result = readTap.readBytes();
+        assertEquals(result, data);
+      });
+
+      it("should throw for invalid value", () => {
+        const buffer = new ArrayBuffer(10);
+        const tap = new SyncWritableTap(buffer);
+        assertThrows(() => {
+          type.writeSync(tap, "invalid" as unknown as Uint8Array);
+        }, ValidationError);
+      });
+    });
+
+    describe("skipSync", () => {
+      it("should skip bytes synchronously in tap", () => {
+        const data = new Uint8Array([1, 2, 3]);
+        const buffer = type.toSyncBuffer(data);
+        const tap = new SyncReadableTap(buffer);
+        const posBefore = tap.getPos();
+        type.skipSync(tap);
+        const posAfter = tap.getPos();
+        assertEquals(posAfter - posBefore, buffer.byteLength);
+      });
+    });
+
+    describe("toSyncBuffer", () => {
+      it("should serialize bytes synchronously correctly", () => {
+        const data = new Uint8Array([10, 20, 30]);
+        const buffer = type.toSyncBuffer(data);
+        const result = type.fromSyncBuffer(buffer);
+        assertEquals(result, data);
+      });
+
+      it("should throw ValidationError for invalid value", () => {
+        assertThrows(() => {
+          type.toSyncBuffer("invalid" as unknown as Uint8Array);
+        }, ValidationError);
+      });
+    });
+
+    describe("fromSyncBuffer", () => {
+      it("should deserialize bytes synchronously from buffer", () => {
+        const data = new Uint8Array([100, 101, 102]);
+        const buffer = type.toSyncBuffer(data);
+        const result = type.fromSyncBuffer(buffer);
+        assertEquals(result, data);
+      });
+
+      it("should throw for insufficient data", () => {
+        const buffer = new ArrayBuffer(0);
+        assertThrows(
+          () => {
+            type.fromSyncBuffer(buffer);
+          },
+          Error, // ReadBufferError
+          "Operation exceeds buffer bounds",
+        );
+      });
+    });
+
+    describe("matchSync", () => {
+      it("should match encoded bytes buffers synchronously correctly", () => {
+        const val1 = new Uint8Array([1, 2, 3]);
+        const val2 = new Uint8Array([1, 2, 3]);
+        const val3 = new Uint8Array([1, 2, 4]);
+        const val4 = new Uint8Array([1, 2]);
+
+        const buf1 = type.toSyncBuffer(val1);
+        const buf2 = type.toSyncBuffer(val2);
+        const buf3 = type.toSyncBuffer(val3);
+        const buf4 = type.toSyncBuffer(val4);
+
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf2)),
+          0,
+        ); // equal
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf3)),
+          -1,
+        ); // [1,2,3] < [1,2,4]
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf3), new SyncReadableTap(buf1)),
+          1,
+        ); // [1,2,4] > [1,2,3]
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf1), new SyncReadableTap(buf4)),
+          1,
+        ); // longer > shorter
+        assertEquals(
+          type.matchSync(new SyncReadableTap(buf4), new SyncReadableTap(buf1)),
+          -1,
+        ); // shorter < longer
+      });
+    });
+
+    describe("createResolver sync", () => {
+      it("should create resolver for same type with readSync", () => {
+        const resolver = type.createResolver(type);
+        const value = new Uint8Array([1, 2, 3]);
+        const buffer = type.toSyncBuffer(value);
+        const tap = new SyncReadableTap(buffer);
+        const result = resolver.readSync(tap);
+        assertEquals(result, value);
+      });
+
+      it("should create resolver for StringType writer with readSync", async () => {
+        const stringType = new StringType();
+        const resolver = type.createResolver(stringType);
+        const str = "hello";
+        const buffer = await stringType.toBuffer(str);
+        const tap = new SyncReadableTap(buffer);
+        const result = resolver.readSync(tap);
+        const expected = new TextEncoder().encode(str);
+        assertEquals(result, expected);
+      });
+
+      it("should throw when reading string with insufficient data in resolver", () => {
+        const stringType = new StringType();
+        const resolver = type.createResolver(stringType);
+        const buf = new ArrayBuffer(5);
+        const writeTap = new SyncWritableTap(buf);
+        writeTap.writeLong(10n);
+        const readTap = new SyncReadableTap(buf);
+        assertThrows(
+          () => resolver.readSync(readTap),
+          Error, // ReadBufferError
+          "Operation exceeds buffer bounds",
+        );
+      });
     });
   });
 });

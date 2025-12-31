@@ -9,6 +9,10 @@ import { StringType } from "../../primitive/string_type.ts";
 import { FixedType } from "../../complex/fixed_type.ts";
 import { resolveNames } from "../../complex/resolve_names.ts";
 import { ReadableTap, WritableTap } from "../../../serialization/tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/tap_sync.ts";
 import { ValidationError } from "../../error.ts";
 
 // A simple test logical type that wraps strings
@@ -60,6 +64,32 @@ class IncompatibleLogicalType extends LogicalType<string, string> {
   }
 }
 
+// A test logical type with validate=false
+class NoValidateLogicalType extends LogicalType<string, string> {
+  constructor() {
+    super(new StringType(), false);
+  }
+
+  protected isInstance(value: unknown): value is string {
+    return typeof value === "string";
+  }
+
+  protected toUnderlying(value: string): string {
+    if (value === "throw") {
+      throw new Error("Test throw");
+    }
+    return value;
+  }
+
+  protected fromUnderlying(value: string): string {
+    return value;
+  }
+
+  public toJSON() {
+    return withLogicalTypeJSON("string", "novalidate");
+  }
+}
+
 // A test named logical type for testing NamedLogicalType
 class TestNamedLogicalType extends NamedLogicalType<string, Uint8Array> {
   constructor() {
@@ -86,6 +116,36 @@ class TestNamedLogicalType extends NamedLogicalType<string, Uint8Array> {
     return withLogicalTypeJSON(
       { type: "fixed", name: "TestNamed", size: 4 },
       "test_named",
+    );
+  }
+}
+
+// A test named logical type with validate=false
+class NoValidateNamedLogicalType extends NamedLogicalType<string, Uint8Array> {
+  constructor() {
+    const names = resolveNames({
+      name: "NoValidateNamed",
+      namespace: "test.namespace",
+    });
+    super(new FixedType({ ...names, size: 4 }), false);
+  }
+
+  protected isInstance(value: unknown): value is string {
+    return typeof value === "string";
+  }
+
+  protected toUnderlying(value: string): Uint8Array {
+    return new TextEncoder().encode(value.padEnd(4, "\0").slice(0, 4));
+  }
+
+  protected fromUnderlying(value: Uint8Array): string {
+    return new TextDecoder().decode(value).replace(/\0+$/, "");
+  }
+
+  public toJSON() {
+    return withLogicalTypeJSON(
+      { type: "fixed", name: "NoValidateNamed", size: 4 },
+      "novalidate_named",
     );
   }
 }
@@ -374,6 +434,13 @@ describe("NamedLogicalType", () => {
     const type = new TestNamedLogicalType();
     assertEquals(type.getAliases(), []); // No aliases in our test
   });
+
+  it("NamedLogicalType with validate=false works correctly", async () => {
+    const type = new NoValidateNamedLogicalType();
+    const buffer = await type.toBuffer("test");
+    const value = await type.fromBuffer(buffer);
+    assertEquals(value, "test");
+  });
 });
 
 describe("withLogicalTypeJSON", () => {
@@ -424,5 +491,93 @@ describe("withLogicalTypeJSON", () => {
       Error,
       "Unsupported underlying schema for logical type serialization.",
     );
+  });
+
+  describe("sync helpers", () => {
+    const type = new TestLogicalType();
+
+    it("round-trips via sync buffer", () => {
+      const buffer = type.toSyncBuffer("sync");
+      assertEquals(type.fromSyncBuffer(buffer), "sync");
+    });
+
+    it("writes, reads, and skips via sync taps", () => {
+      const buffer = new ArrayBuffer(64);
+      const writeTap = new SyncWritableTap(buffer);
+      type.writeSync(writeTap, "sync");
+      const readTap = new SyncReadableTap(buffer);
+      assertEquals(type.readSync(readTap), "sync");
+      assertEquals(readTap.getPos(), writeTap.getPos());
+
+      const skipTap = new SyncReadableTap(buffer);
+      type.skipSync(skipTap);
+      assertEquals(skipTap.getPos(), writeTap.getPos());
+    });
+
+    it("matches buffers via matchSync", () => {
+      const bufA = type.toSyncBuffer("a");
+      const bufB = type.toSyncBuffer("b");
+      assertEquals(
+        type.matchSync(new SyncReadableTap(bufA), new SyncReadableTap(bufB)),
+        -1,
+      );
+      assertEquals(
+        type.matchSync(new SyncReadableTap(bufA), new SyncReadableTap(bufA)),
+        0,
+      );
+    });
+
+    it("resolver.readSync returns logical values", () => {
+      const resolver = type.createResolver(type);
+      const buffer = type.toSyncBuffer("resolved");
+      assertEquals(resolver.readSync(new SyncReadableTap(buffer)), "resolved");
+    });
+  });
+
+  describe("validation disabled (validate=false)", () => {
+    const type = new NoValidateLogicalType();
+
+    it("toBuffer does not validate when validate=false", async () => {
+      // Even with value="throw" which would normally fail validation,
+      // it should not throw because validation is disabled
+      const buffer = await type.toBuffer("test");
+      const value = await type.fromBuffer(buffer);
+      assertEquals(value, "test");
+    });
+
+    it("toSyncBuffer does not validate when validate=false", () => {
+      const buffer = type.toSyncBuffer("test");
+      const value = type.fromSyncBuffer(buffer);
+      assertEquals(value, "test");
+    });
+
+    it("write does not validate when validate=false", async () => {
+      const buffer = new ArrayBuffer(100);
+      const tap = new WritableTap(buffer);
+      // Should not throw even with valid value since validation is off
+      await type.write(tap, "test");
+      assertEquals(tap.getPos() > 0, true);
+    });
+
+    it("writeSync does not validate when validate=false", () => {
+      const buffer = new ArrayBuffer(100);
+      const tap = new SyncWritableTap(buffer);
+      type.writeSync(tap, "test");
+      assertEquals(tap.getPos() > 0, true);
+    });
+
+    it("writeUnchecked writes without validation", async () => {
+      const buffer = new ArrayBuffer(100);
+      const tap = new WritableTap(buffer);
+      await type.writeUnchecked(tap, "unchecked");
+      assertEquals(tap.getPos() > 0, true);
+    });
+
+    it("writeSyncUnchecked writes without validation", () => {
+      const buffer = new ArrayBuffer(100);
+      const tap = new SyncWritableTap(buffer);
+      type.writeSyncUnchecked(tap, "unchecked");
+      assertEquals(tap.getPos() > 0, true);
+    });
   });
 });

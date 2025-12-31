@@ -1,8 +1,11 @@
-import {
-  type ReadableTapLike,
-  WritableTap,
-  type WritableTapLike,
+import type {
+  ReadableTapLike,
+  WritableTapLike,
 } from "../../serialization/tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../serialization/tap_sync.ts";
 import { NamedType } from "./named_type.ts";
 import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
@@ -16,6 +19,8 @@ import { compareUint8Arrays } from "../../serialization/compare_bytes.ts";
 export interface FixedTypeParams extends ResolvedNames {
   /** The size in bytes. */
   size: number;
+  /** Whether to validate during writes. Defaults to true. */
+  validate?: boolean;
 }
 
 /**
@@ -37,29 +42,8 @@ export class FixedType extends NamedType<Uint8Array> {
       );
     }
 
-    super(names);
+    super(names, params.validate ?? true);
     this.#size = size;
-  }
-
-  /**
-   * Gets the size in bytes.
-   */
-  public sizeBytes(): number {
-    return this.#size;
-  }
-
-  /**
-   * Serializes a value into an ArrayBuffer using the exact fixed size.
-   * @param value The value to serialize.
-   * @returns The serialized ArrayBuffer.
-   */
-  public override async toBuffer(value: Uint8Array): Promise<ArrayBuffer> {
-    this.check(value, throwInvalidError, []);
-    const size = this.sizeBytes();
-    const buf = new ArrayBuffer(size);
-    const tap = new WritableTap(buf);
-    await this.write(tap, value);
-    return buf;
   }
 
   /**
@@ -67,11 +51,19 @@ export class FixedType extends NamedType<Uint8Array> {
    * @param tap The tap to skip from.
    */
   public override async skip(tap: ReadableTapLike): Promise<void> {
-    await tap.skipFixed(this.sizeBytes());
+    await tap.skipFixed(this.#size);
+  }
+
+  /**
+   * Advances a sync tap past the fixed payload without reading.
+   */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    tap.skipFixed(this.#size);
   }
 
   /**
    * Gets the size in bytes.
+   * This is a public method so that it can be called in the resolver.
    */
   public getSize(): number {
     return this.#size;
@@ -108,18 +100,40 @@ export class FixedType extends NamedType<Uint8Array> {
   }
 
   /**
+   * Reads the fixed bytes synchronously from a tap.
+   */
+  public override readSync(tap: SyncReadableTapLike): Uint8Array {
+    return tap.readFixed(this.#size);
+  }
+
+  /**
    * Writes a fixed-size byte array to the tap.
    * @param tap The tap to write to.
    * @param value The byte array to write.
    */
-  public override async write(
+  /**
+   * Writes fixed bytes without validation.
+   */
+  public override async writeUnchecked(
     tap: WritableTapLike,
     value: Uint8Array,
   ): Promise<void> {
-    if (!(value instanceof Uint8Array) || value.length !== this.#size) {
-      throwInvalidError([], value, this);
-    }
-    await tap.writeFixed(value, this.#size);
+    await tap.writeFixed(value);
+  }
+
+  /**
+   * Writes fixed bytes without validation synchronously.
+   */
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: Uint8Array,
+  ): void {
+    tap.writeFixed(value);
+  }
+
+  /** Returns the fixed byte length. */
+  protected override byteLength(_value: Uint8Array): number {
+    return this.#size;
   }
 
   /**
@@ -133,6 +147,16 @@ export class FixedType extends NamedType<Uint8Array> {
     tap2: ReadableTapLike,
   ): Promise<number> {
     return await tap1.matchFixed(tap2, this.#size);
+  }
+
+  /**
+   * Compares two sync taps that decode fixed values.
+   */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchFixed(tap2, this.#size);
   }
 
   /**
@@ -252,5 +276,10 @@ class FixedResolver extends Resolver<Uint8Array> {
   public override async read(tap: ReadableTapLike): Promise<Uint8Array> {
     const reader = this.readerType as FixedType;
     return await reader.read(tap);
+  }
+
+  public override readSync(tap: SyncReadableTapLike): Uint8Array {
+    const reader = this.readerType as FixedType;
+    return reader.readSync(tap);
   }
 }

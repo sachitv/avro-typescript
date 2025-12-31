@@ -1,10 +1,14 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
+import type { WritableTapLike } from "../../../serialization/tap.ts";
+import type {
+  SyncReadableTap,
+  SyncWritableTapLike,
+} from "../../../serialization/tap_sync.ts";
 import { PrimitiveType } from "../primitive_type.ts";
 import type { JSONType, Type } from "../../type.ts";
-import { throwInvalidError, ValidationError } from "../../error.ts";
-import { encode } from "../../../serialization/text_encoding.ts";
+import { ValidationError } from "../../error.ts";
 
 /**
  * A simple concrete implementation of PrimitiveType for testing purposes.
@@ -28,26 +32,14 @@ class TestPrimitiveType extends PrimitiveType<number> {
     return isValid;
   }
 
-  public override async toBuffer(value: number): Promise<ArrayBuffer> {
-    // Allocate 5 bytes (max size for 32-bit int varint)
-    const buf = new ArrayBuffer(5);
-    const tap = new Tap(buf);
-    await this.write(tap, value);
-    const result = await tap.getValue();
-    return (result.buffer as ArrayBuffer).slice(
-      result.byteOffset,
-      result.byteOffset + result.byteLength,
-    );
-  }
-
   public override async read(tap: Tap): Promise<number> {
     return await tap.readInt();
   }
 
-  public override async write(tap: Tap, value: number): Promise<void> {
-    if (!this.check(value)) {
-      throwInvalidError([], value, this);
-    }
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: number,
+  ): Promise<void> {
     await tap.writeInt(value);
   }
 
@@ -65,6 +57,28 @@ class TestPrimitiveType extends PrimitiveType<number> {
 
   public override async match(tap1: Tap, tap2: Tap): Promise<number> {
     return await tap1.matchInt(tap2);
+  }
+
+  public override readSync(tap: SyncReadableTap): number {
+    return tap.readInt();
+  }
+
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: number,
+  ): void {
+    tap.writeInt(value);
+  }
+
+  public override skipSync(tap: SyncReadableTap): void {
+    tap.skipInt();
+  }
+
+  public override matchSync(
+    tap1: SyncReadableTap,
+    tap2: SyncReadableTap,
+  ): number {
+    return tap1.matchInt(tap2);
   }
 }
 
@@ -88,26 +102,14 @@ class FakePrimitiveType extends PrimitiveType<string> {
     return isValid;
   }
 
-  public override async toBuffer(value: string): Promise<ArrayBuffer> {
-    const strBytes = encode(value);
-    const buf = new ArrayBuffer(5 + strBytes.length);
-    const tap = new Tap(buf);
-    await tap.writeString(value);
-    const result = await tap.getValue();
-    return (result.buffer as ArrayBuffer).slice(
-      result.byteOffset,
-      result.byteOffset + result.byteLength,
-    );
-  }
-
   public override async read(tap: Tap): Promise<string> {
     return (await tap.readString())!;
   }
 
-  public override async write(tap: Tap, value: string): Promise<void> {
-    if (!this.check(value)) {
-      throwInvalidError([], value, this);
-    }
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: string,
+  ): Promise<void> {
     await tap.writeString(value);
   }
 
@@ -125,6 +127,28 @@ class FakePrimitiveType extends PrimitiveType<string> {
 
   public override async match(tap1: Tap, tap2: Tap): Promise<number> {
     return await tap1.matchString(tap2);
+  }
+
+  public override readSync(tap: SyncReadableTap): string {
+    return tap.readString()!;
+  }
+
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: string,
+  ): void {
+    tap.writeString(value);
+  }
+
+  public override skipSync(tap: SyncReadableTap): void {
+    tap.skipString();
+  }
+
+  public override matchSync(
+    tap1: SyncReadableTap,
+    tap2: SyncReadableTap,
+  ): number {
+    return tap1.matchString(tap2);
   }
 }
 

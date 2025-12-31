@@ -1,8 +1,11 @@
-import {
-  type ReadableTapLike,
-  WritableTap,
-  type WritableTapLike,
+import type {
+  ReadableTapLike,
+  WritableTapLike,
 } from "../../serialization/tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../serialization/tap_sync.ts";
 import { PrimitiveType } from "./primitive_type.ts";
 import type { JSONType, Type } from "../type.ts";
 import { Resolver } from "../resolver.ts";
@@ -17,6 +20,11 @@ const MAX_LONG = (1n << 63n) - 1n;
  * Long type (64-bit).
  */
 export class LongType extends PrimitiveType<bigint> {
+  /** Creates a new long type. */
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /** Checks if the value is a valid long. */
   public override check(
     value: unknown,
@@ -36,31 +44,22 @@ export class LongType extends PrimitiveType<bigint> {
     return await tap.readLong();
   }
 
-  /** Writes a long value to the tap. */
-  public override async write(
+  /** Writes a long value to the tap without validation. */
+  public override async writeUnchecked(
     tap: WritableTapLike,
     value: bigint,
   ): Promise<void> {
-    if (!this.check(value)) {
-      throwInvalidError([], value, this);
-    }
     await tap.writeLong(value);
+  }
+
+  /** Returns the encoded byte length of the given value. */
+  protected override byteLength(value: bigint): number {
+    return calculateVarintSize(value);
   }
 
   /** Skips a long value in the tap. */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipLong();
-  }
-
-  /** Converts a bigint value to its buffer representation. */
-  public override async toBuffer(value: bigint): Promise<ArrayBuffer> {
-    this.check(value, throwInvalidError, []);
-    // For long, allocate exact size based on value
-    const size = calculateVarintSize(value);
-    const buf = new ArrayBuffer(size);
-    const tap = new WritableTap(buf);
-    await this.write(tap, value);
-    return buf;
   }
 
   /**
@@ -102,6 +101,11 @@ export class LongType extends PrimitiveType<bigint> {
           const intValue = await tap.readInt();
           return BigInt(intValue);
         }
+
+        public override readSync(tap: SyncReadableTapLike): bigint {
+          const intValue = tap.readInt();
+          return BigInt(intValue);
+        }
       }(this);
     } else {
       return super.createResolver(writerType);
@@ -119,5 +123,31 @@ export class LongType extends PrimitiveType<bigint> {
     tap2: ReadableTapLike,
   ): Promise<number> {
     return await tap1.matchLong(tap2);
+  }
+
+  /** Reads a long value synchronously from the tap. */
+  public override readSync(tap: SyncReadableTapLike): bigint {
+    return tap.readLong();
+  }
+
+  /** Writes a long value synchronously to the tap without validation. */
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: bigint,
+  ): void {
+    tap.writeLong(value);
+  }
+
+  /** Skips a long value synchronously in the tap. */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    tap.skipLong();
+  }
+
+  /** Compares two taps synchronously for long equality. */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchLong(tap2);
   }
 }

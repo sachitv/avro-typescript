@@ -2,6 +2,10 @@ import type {
   ReadableTapLike,
   WritableTapLike,
 } from "../../serialization/tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../serialization/tap_sync.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
 import type { JSONType, Type } from "../type.ts";
 import { Resolver } from "../resolver.ts";
@@ -14,6 +18,11 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
  * Double type (64-bit).
  */
 export class DoubleType extends FixedSizeBaseType<number> {
+  /** Creates a new double type. */
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /** Checks if the value is a valid double. */
   public check(
     value: unknown,
@@ -32,20 +41,43 @@ export class DoubleType extends FixedSizeBaseType<number> {
     return await tap.readDouble();
   }
 
-  /** Writes a double value to the tap. */
-  public override async write(
+  /** Writes a double value to the tap without validation. */
+  public override async writeUnchecked(
     tap: WritableTapLike,
     value: number,
   ): Promise<void> {
-    if (!this.check(value)) {
-      throwInvalidError([], value, this);
-    }
     await tap.writeDouble(value);
   }
 
   /** Skips a double value in the tap. */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipDouble();
+  }
+
+  /** Reads a double value from the sync tap. */
+  public readSync(tap: SyncReadableTapLike): number {
+    return tap.readDouble();
+  }
+
+  /** Writes a double value synchronously to the tap without validation. */
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: number,
+  ): void {
+    tap.writeDouble(value);
+  }
+
+  /** Skips a double value in the sync tap. */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    tap.skipDouble();
+  }
+
+  /** Matches two sync taps for equality. */
+  public matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchDouble(tap2);
   }
 
   /**
@@ -84,6 +116,11 @@ export class DoubleType extends FixedSizeBaseType<number> {
           const intValue = await tap.readInt();
           return intValue;
         }
+
+        public override readSync(tap: SyncReadableTapLike): number {
+          const intValue = tap.readInt();
+          return intValue;
+        }
       }(this);
     } else if (writerType instanceof LongType) {
       // Double can promote from long (64-bit to 64-bit double, lossy for large values)
@@ -92,12 +129,22 @@ export class DoubleType extends FixedSizeBaseType<number> {
           const longValue = await tap.readLong();
           return Number(longValue);
         }
+
+        public override readSync(tap: SyncReadableTapLike): number {
+          const longValue = tap.readLong();
+          return Number(longValue);
+        }
       }(this);
     } else if (writerType instanceof FloatType) {
       // Double can promote from float (32-bit to 64-bit double)
       return new class extends Resolver {
         public override async read(tap: ReadableTapLike): Promise<number> {
           const floatValue = await tap.readFloat();
+          return floatValue;
+        }
+
+        public override readSync(tap: SyncReadableTapLike): number {
+          const floatValue = tap.readFloat();
           return floatValue;
         }
       }(this);

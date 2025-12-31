@@ -1,6 +1,6 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { UnionType } from "../union_type.ts";
+import { UnionType, type UnionValue } from "../union_type.ts";
 import { StringType } from "../../primitive/string_type.ts";
 import { IntType } from "../../primitive/int_type.ts";
 import { LongType } from "../../primitive/long_type.ts";
@@ -17,9 +17,20 @@ import { FixedType } from "../fixed_type.ts";
 import { Type } from "../../type.ts";
 import type { Resolver } from "../../resolver.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
+import type {
+  ReadableTapLike,
+  WritableTapLike,
+} from "../../../serialization/tap.ts";
+import {
+  SyncReadableTap,
+  type SyncReadableTapLike,
+  SyncWritableTap,
+  type SyncWritableTapLike,
+} from "../../../serialization/tap_sync.ts";
+import { ValidationError } from "../../error.ts";
 
 describe("UnionType", () => {
-  describe("union with null", () => {
+  describe("null union handling", () => {
     /*
      * Union Structure:
      * Union
@@ -413,6 +424,14 @@ describe("UnionType", () => {
         assertEquals(result, { string: "test" });
       });
 
+      it("reads branch resolver synchronously", () => {
+        const resolver = unionType.createResolver(stringType);
+        const buffer = stringType.toSyncBuffer("sync");
+        assertEquals(resolver.readSync(new SyncReadableTap(buffer)), {
+          string: "sync",
+        });
+      });
+
       it("UnionFromUnionResolver throws for invalid index", async () => {
         const resolver = unionType.createResolver(unionType);
         // Create buffer with invalid index 999
@@ -425,6 +444,14 @@ describe("UnionType", () => {
           Error,
           "Invalid union index: 999",
         );
+      });
+
+      it("reads union-to-union resolver synchronously", () => {
+        const resolver = unionType.createResolver(unionType);
+        const buffer = unionType.toSyncBuffer({ string: "sync" });
+        assertEquals(resolver.readSync(new SyncReadableTap(buffer)), {
+          string: "sync",
+        });
       });
     });
   });
@@ -841,44 +868,74 @@ describe("UnionType", () => {
 
     it("should throw on type with invalid toJSON", () => {
       const invalidType = new (class extends Type<string> {
-        check() {
+        constructor() {
+          super();
+        }
+
+        public override check() {
           return true;
         }
-        async write(): Promise<void> {
+        public override async writeUnchecked(
+          _tap: WritableTapLike,
+          _value: string,
+        ): Promise<void> {
           await Promise.resolve();
         }
-        async read(): Promise<string> {
+        public override async read(_tap: ReadableTapLike): Promise<string> {
           return await Promise.resolve("");
         }
-        async skip(): Promise<void> {
+        public override async skip(_tap: ReadableTapLike): Promise<void> {
           await Promise.resolve();
         }
-        compare() {
+        public override compare() {
           return 0;
         }
-        random() {
+        public override random() {
           return "";
         }
-        toJSON() {
+        public override toJSON() {
           return { foo: "bar" };
         } // invalid, no "type" field
-        async toBuffer(): Promise<ArrayBuffer> {
-          return await Promise.resolve(new ArrayBuffer(0));
-        }
-        async fromBuffer(): Promise<string> {
+        public override async fromBuffer(
+          _buffer: ArrayBuffer,
+        ): Promise<string> {
           return await Promise.resolve("");
         }
-        isValid() {
+        public override isValid() {
           return true;
         }
-        cloneFromValue() {
+        public override cloneFromValue() {
           return "";
         }
-        createResolver() {
+        public override createResolver() {
           return null as unknown as Resolver<unknown>;
         }
-        async match(): Promise<number> {
+        public override async match(
+          _tap1: ReadableTapLike,
+          _tap2: ReadableTapLike,
+        ): Promise<number> {
           return await Promise.resolve(0);
+        }
+        public override fromSyncBuffer(_buffer: ArrayBuffer): string {
+          return "";
+        }
+
+        public override writeSyncUnchecked(
+          _tap: SyncWritableTapLike,
+          _value: string,
+        ): void {}
+
+        public override readSync(_tap: SyncReadableTapLike): string {
+          return "";
+        }
+
+        public override skipSync(_tap: SyncReadableTapLike): void {}
+
+        public override matchSync(
+          _tap1: SyncReadableTapLike,
+          _tap2: SyncReadableTapLike,
+        ): number {
+          return 0;
         }
       })();
       assertThrows(
@@ -886,6 +943,256 @@ describe("UnionType", () => {
         Error,
         "Unable to determine union branch name.",
       );
+    });
+
+    it("throws when readSync encounters invalid union index", () => {
+      const union = new UnionType({ types: [new StringType()] });
+      const buffer = new ArrayBuffer(8);
+      const tap = new SyncWritableTap(buffer);
+      tap.writeLong(123n);
+      const readTap = new SyncReadableTap(buffer);
+      assertThrows(
+        () => union.readSync(readTap),
+        Error,
+        "Invalid union index: 123",
+      );
+    });
+
+    it("UnionFromUnionResolver throws for invalid index via sync tap", () => {
+      const union = new UnionType({ types: [new StringType()] });
+      const resolver = union.createResolver(union);
+      const buffer = new ArrayBuffer(8);
+      const tap = new SyncWritableTap(buffer);
+      tap.writeLong(999n);
+      const readTap = new SyncReadableTap(buffer);
+      assertThrows(
+        () => resolver.readSync(readTap),
+        Error,
+        "Invalid union index: 999",
+      );
+    });
+
+    describe("sync helpers", () => {
+      const syncUnion = new UnionType({
+        types: [new NullType(), new StringType()],
+      });
+
+      it("round-trips via sync buffer", () => {
+        const stringValue = { string: "sync" };
+        const stringBuffer = syncUnion.toSyncBuffer(stringValue);
+        assertEquals(syncUnion.fromSyncBuffer(stringBuffer), stringValue);
+
+        const nullBuffer = syncUnion.toSyncBuffer(null);
+        assertEquals(syncUnion.fromSyncBuffer(nullBuffer), null);
+      });
+
+      it("reads and writes via sync taps", () => {
+        const value = { string: "sync" };
+        const buffer = new ArrayBuffer(64);
+        const writeTap = new SyncWritableTap(buffer);
+        syncUnion.writeSync(writeTap, value);
+        const readTap = new SyncReadableTap(buffer);
+        assertEquals(syncUnion.readSync(readTap), value);
+        assertEquals(readTap.getPos(), writeTap.getPos());
+      });
+
+      it("skips values via sync taps", () => {
+        const buffer = syncUnion.toSyncBuffer(null);
+        const tap = new SyncReadableTap(buffer);
+        syncUnion.skipSync(tap);
+        assertEquals(tap.getPos(), buffer.byteLength);
+      });
+
+      it("skips non-null values via sync taps", () => {
+        const buffer = syncUnion.toSyncBuffer({ string: "skip" });
+        const tap = new SyncReadableTap(buffer);
+        syncUnion.skipSync(tap);
+        assertEquals(tap.getPos(), buffer.byteLength);
+      });
+
+      it("matches encoded buffers via sync taps", () => {
+        const bufNull = syncUnion.toSyncBuffer(null);
+        const bufString = syncUnion.toSyncBuffer({ string: "a" });
+        assertEquals(
+          syncUnion.matchSync(
+            new SyncReadableTap(bufNull),
+            new SyncReadableTap(bufString),
+          ),
+          -1,
+        );
+        assertEquals(
+          syncUnion.matchSync(
+            new SyncReadableTap(bufString),
+            new SyncReadableTap(bufString),
+          ),
+          0,
+        );
+        assertEquals(
+          syncUnion.matchSync(
+            new SyncReadableTap(bufNull),
+            new SyncReadableTap(bufNull),
+          ),
+          0,
+        );
+      });
+
+      it("matches identical non-null branches via sync taps", () => {
+        const bufString = syncUnion.toSyncBuffer({ string: "same" });
+        assertEquals(
+          syncUnion.matchSync(
+            new SyncReadableTap(bufString),
+            new SyncReadableTap(bufString),
+          ),
+          0,
+        );
+      });
+
+      it("compares different non-null branches via sync taps", () => {
+        const multiUnion = new UnionType({
+          types: [new IntType(), new StringType()],
+        });
+        const bufInt = multiUnion.toSyncBuffer({ int: 1 });
+        const bufString = multiUnion.toSyncBuffer({ string: "a" });
+        // int branch (index 0) < string branch (index 1)
+        assertEquals(
+          multiUnion.matchSync(
+            new SyncReadableTap(bufInt),
+            new SyncReadableTap(bufString),
+          ),
+          -1,
+        );
+        // string branch (index 1) > int branch (index 0)
+        assertEquals(
+          multiUnion.matchSync(
+            new SyncReadableTap(bufString),
+            new SyncReadableTap(bufInt),
+          ),
+          1,
+        );
+      });
+
+      it("returns null from sync resolver when branch is null", () => {
+        const resolver = syncUnion.createResolver(new NullType());
+        assertEquals(
+          resolver.readSync(new SyncReadableTap(new ArrayBuffer(0))),
+          null,
+        );
+      });
+    });
+
+    describe("validation modes", () => {
+      it("write() with validate=false allows invalid values", async () => {
+        const noValidateUnion = new UnionType({
+          types: [new StringType(), new IntType()],
+          validate: false,
+        });
+        const buffer = new ArrayBuffer(64);
+        const tap = new Tap(buffer);
+        // This would normally fail validation, but with validate=false it should work
+        await noValidateUnion.write(tap, { string: "test" });
+        const readTap = new Tap(buffer);
+        const result = await noValidateUnion.read(readTap);
+        assertEquals(result, { string: "test" });
+      });
+
+      it("writeSync() with validate=false allows invalid values", () => {
+        const noValidateUnion = new UnionType({
+          types: [new StringType(), new IntType()],
+          validate: false,
+        });
+        const buffer = new ArrayBuffer(64);
+        const tap = new SyncWritableTap(buffer);
+        // This would normally fail validation, but with validate=false it should work
+        noValidateUnion.writeSync(tap, { string: "test" });
+        const readTap = new SyncReadableTap(buffer);
+        const result = noValidateUnion.readSync(readTap);
+        assertEquals(result, { string: "test" });
+      });
+
+      it("writeUnchecked() works with non-null branch value", async () => {
+        const union = new UnionType({
+          types: [new StringType(), new IntType()],
+        });
+        const buffer = new ArrayBuffer(64);
+        const tap = new Tap(buffer);
+        await union.writeUnchecked(tap, { string: "unchecked" });
+        const readTap = new Tap(buffer);
+        const result = await union.read(readTap);
+        assertEquals(result, { string: "unchecked" });
+      });
+
+      it("writeSyncUnchecked() works with non-null branch value", () => {
+        const union = new UnionType({
+          types: [new StringType(), new IntType()],
+        });
+        const buffer = new ArrayBuffer(64);
+        const tap = new SyncWritableTap(buffer);
+        union.writeSyncUnchecked(tap, { int: 42 });
+        const readTap = new SyncReadableTap(buffer);
+        const result = union.readSync(readTap);
+        assertEquals(result, { int: 42 });
+      });
+
+      it("writeUnchecked throws for invalid union shapes", async () => {
+        const union = new UnionType({
+          types: [new StringType(), new IntType()],
+        });
+        const buffer = new ArrayBuffer(64);
+
+        await assertRejects(
+          () => union.writeUnchecked(new Tap(buffer), null),
+          ValidationError,
+        );
+        await assertRejects(
+          () =>
+            union.writeUnchecked(new Tap(buffer), 123 as unknown as UnionValue),
+          ValidationError,
+        );
+        await assertRejects(
+          () =>
+            union.writeUnchecked(
+              new Tap(buffer),
+              { string: "value", int: 1 } as unknown as UnionValue,
+            ),
+          ValidationError,
+        );
+        await assertRejects(
+          () =>
+            union.writeUnchecked(
+              new Tap(buffer),
+              { other: "value" } as unknown as UnionValue,
+            ),
+          ValidationError,
+        );
+        await assertRejects(
+          () =>
+            union.writeUnchecked(
+              new Tap(buffer),
+              { string: undefined } as unknown as UnionValue,
+            ),
+          ValidationError,
+        );
+
+        const nullUnion = new UnionType({
+          types: [new NullType(), new StringType()],
+        });
+        await assertRejects(
+          () =>
+            nullUnion.writeUnchecked(
+              new Tap(buffer),
+              { null: "value" } as unknown as UnionValue,
+            ),
+          ValidationError,
+        );
+        assertThrows(
+          () =>
+            nullUnion.writeSyncUnchecked(
+              new SyncWritableTap(buffer),
+              { null: "value" } as unknown as UnionValue,
+            ),
+          ValidationError,
+        );
+      });
     });
   });
 });

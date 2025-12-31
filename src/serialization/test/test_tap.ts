@@ -164,9 +164,9 @@ export class TestTap implements ReadableTapLike, WritableTapLike {
     this.#syncPos(tap);
   }
 
-  async writeFixed(buf: Uint8Array, len?: number): Promise<void> {
+  async writeFixed(buf: Uint8Array): Promise<void> {
     const tap = this.#writer();
-    await tap.writeFixed(buf, len);
+    await tap.writeFixed(buf);
     this.#syncPos(tap);
   }
 
@@ -284,18 +284,5 @@ export class TestTap implements ReadableTapLike, WritableTapLike {
     this.#syncPos(thisReader);
     (tap as TestTap).#syncPos(otherReader);
     return result;
-  }
-
-  async unpackLongBytes(): Promise<Uint8Array> {
-    const tap = this.#reader();
-    const value = await tap.unpackLongBytes();
-    this.#syncPos(tap);
-    return value;
-  }
-
-  async packLongBytes(arr: Uint8Array): Promise<void> {
-    const tap = this.#writer();
-    await tap.packLongBytes(arr);
-    this.#syncPos(tap);
   }
 }

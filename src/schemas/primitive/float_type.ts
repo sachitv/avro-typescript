@@ -2,6 +2,10 @@ import type {
   ReadableTapLike,
   WritableTapLike,
 } from "../../serialization/tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../serialization/tap_sync.ts";
 import { FixedSizeBaseType } from "./fixed_size_base_type.ts";
 import type { JSONType, Type } from "../type.ts";
 import { Resolver } from "../resolver.ts";
@@ -13,6 +17,11 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
  * Float type (32-bit).
  */
 export class FloatType extends FixedSizeBaseType<number> {
+  /** Creates a new float type. */
+  constructor(validate = true) {
+    super(validate);
+  }
+
   /** Checks if the value is a valid float. */
   public check(
     value: unknown,
@@ -31,12 +40,25 @@ export class FloatType extends FixedSizeBaseType<number> {
     return await tap.readFloat();
   }
 
-  /** Writes a float value to the tap. */
-  public async write(tap: WritableTapLike, value: number): Promise<void> {
-    if (!this.check(value)) {
-      throwInvalidError([], value, this);
-    }
+  /** Reads a float value from the sync tap. */
+  public readSync(tap: SyncReadableTapLike): number {
+    return tap.readFloat();
+  }
+
+  /** Writes a float value to the tap without validation. */
+  public override async writeUnchecked(
+    tap: WritableTapLike,
+    value: number,
+  ): Promise<void> {
     await tap.writeFloat(value);
+  }
+
+  /** Writes a float value synchronously to the tap without validation. */
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: number,
+  ): void {
+    tap.writeFloat(value);
   }
 
   /** Skips a float value in the tap. */
@@ -80,12 +102,22 @@ export class FloatType extends FixedSizeBaseType<number> {
           const intValue = await tap.readInt();
           return intValue;
         }
+
+        public override readSync(tap: SyncReadableTapLike): number {
+          const intValue = tap.readInt();
+          return intValue;
+        }
       }(this);
     } else if (writerType instanceof LongType) {
       // Float can promote from long (64-bit to 32-bit float, lossy)
       return new class extends Resolver {
         public override async read(tap: ReadableTapLike): Promise<number> {
           const longValue = await tap.readLong();
+          return Number(longValue);
+        }
+
+        public override readSync(tap: SyncReadableTapLike): number {
+          const longValue = tap.readLong();
           return Number(longValue);
         }
       }(this);
@@ -105,5 +137,13 @@ export class FloatType extends FixedSizeBaseType<number> {
     tap2: ReadableTapLike,
   ): Promise<number> {
     return await tap1.matchFloat(tap2);
+  }
+
+  /** Matches float values between sync taps. */
+  public matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchFloat(tap2);
   }
 }

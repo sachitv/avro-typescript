@@ -1,4 +1,8 @@
 import { ReadableTap, type ReadableTapLike } from "../serialization/tap.ts";
+import {
+  SyncReadableTap,
+  type SyncReadableTapLike,
+} from "../serialization/tap_sync.ts";
 import { Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
 import { safeStringify } from "./json.ts";
@@ -26,6 +30,11 @@ export type IsValidOptions = { errorHook?: ErrorHook };
  * Subclasses must implement the remaining abstract methods.
  */
 export abstract class BaseType<T = unknown> extends Type<T> {
+  /** Creates a new BaseType instance. */
+  protected constructor(validate = true) {
+    super(validate);
+  }
+
   /**
    * Deserializes an ArrayBuffer into a value using the schema.
    * @param buffer The ArrayBuffer to deserialize.
@@ -61,6 +70,10 @@ export abstract class BaseType<T = unknown> extends Type<T> {
         async read(tap: ReadableTapLike) {
           return await this.readerType.read(tap);
         }
+
+        readSync(tap: SyncReadableTapLike) {
+          return this.readerType.readSync(tap);
+        }
       }(this);
     } else {
       throw new Error(
@@ -69,5 +82,19 @@ export abstract class BaseType<T = unknown> extends Type<T> {
         } to reader type: ${safeStringify(this.toJSON())}`,
       );
     }
+  }
+
+  /**
+   * Deserializes an ArrayBuffer into a value synchronously using the schema.
+   * @param buffer The ArrayBuffer to deserialize.
+   * @returns The deserialized value.
+   */
+  public fromSyncBuffer(buffer: ArrayBuffer): T {
+    const tap = new SyncReadableTap(buffer);
+    const value = this.readSync(tap);
+    if (!tap.isValid() || tap.getPos() !== buffer.byteLength) {
+      throw new Error("Insufficient data for type");
+    }
+    return value;
   }
 }

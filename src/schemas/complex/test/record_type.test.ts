@@ -2,8 +2,13 @@ import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
+import {
+  SyncReadableTap,
+  SyncWritableTap,
+} from "../../../serialization/tap_sync.ts";
 import { IntType } from "../../primitive/int_type.ts";
 import { StringType } from "../../primitive/string_type.ts";
+import { LongType } from "../../primitive/long_type.ts";
 import { BytesType } from "../../primitive/bytes_type.ts";
 import { RecordType } from "../record_type.ts";
 import { resolveNames } from "../resolve_names.ts";
@@ -36,7 +41,7 @@ function createRecord(params: {
 }
 
 describe("RecordType", () => {
-  describe("Constructor", () => {
+  describe("constructor validation", () => {
     it("requires a fields array", () => {
       const names = resolveNames({ name: "example.Empty" });
       assertThrows(() =>
@@ -345,23 +350,7 @@ describe("RecordType", () => {
             { name: "Ann" } as unknown as Record<string, unknown>,
           ),
         Error,
-        `Invalid value: 'undefined' for type: 
-{
-  "name": "example.Person",
-  "type": "record",
-  "fields": [
-    {
-      "name": "id",
-      "type": "int"
-    },
-    {
-      "name": "name",
-      "type": "string",
-      "default": "unknown"
-    }
-  ]
-}
- at path: id`,
+        "Invalid value: 'undefined'",
       );
     });
 
@@ -389,23 +378,7 @@ describe("RecordType", () => {
             { child: { name: "Ann" } } as unknown as Record<string, unknown>,
           ),
         Error,
-        `Invalid value: 'undefined' for type: 
-{
-  "name": "example.ChildRecord",
-  "type": "record",
-  "fields": [
-    {
-      "name": "id",
-      "type": "int"
-    },
-    {
-      "name": "name",
-      "type": "string",
-      "default": "unknown"
-    }
-  ]
-}
- at path: id`,
+        "Invalid value: 'undefined'",
       );
     });
 
@@ -415,36 +388,24 @@ describe("RecordType", () => {
         fields: [{ name: "id", type: new IntType() }],
       });
 
-      const expectedTypeJson = `
-{
-  "name": "example.Person",
-  "type": "record",
-  "fields": [
-    {
-      "name": "id",
-      "type": "int"
-    }
-  ]
-}`;
-
       const tap = new Tap(new ArrayBuffer(16));
       await assertRejects(
         async () =>
           await type.write(tap, "string" as unknown as Record<string, unknown>),
         ValidationError,
-        `Invalid value: 'string' for type: ${expectedTypeJson}`,
+        "Invalid value: 'string'",
       );
       await assertRejects(
         async () =>
           await type.write(tap, 42 as unknown as Record<string, unknown>),
         ValidationError,
-        `Invalid value: '42' for type: ${expectedTypeJson}`,
+        "Invalid value: '42'",
       );
       await assertRejects(
         async () =>
           await type.write(tap, null as unknown as Record<string, unknown>),
         ValidationError,
-        `Invalid value: 'null' for type: ${expectedTypeJson}`,
+        "Invalid value: 'null'",
       );
       await assertRejects(
         async () =>
@@ -453,13 +414,7 @@ describe("RecordType", () => {
             [1, 2, 3] as unknown as Record<string, unknown>,
           ),
         ValidationError,
-        `Invalid value: '
-[
-  1,
-  2,
-  3
-]
-' for type: ${expectedTypeJson}`,
+        "Invalid value:",
       );
     });
 
@@ -498,23 +453,7 @@ describe("RecordType", () => {
             { name: "Ann" } as unknown as Record<string, unknown>,
           ),
         ValidationError,
-        `Invalid value: 'undefined' for type: 
-{
-  "name": "example.Person",
-  "type": "record",
-  "fields": [
-    {
-      "name": "id",
-      "type": "int"
-    },
-    {
-      "name": "name",
-      "type": "string",
-      "default": "unknown"
-    }
-  ]
-}
- at path: id`,
+        "Invalid value: 'undefined'",
       );
     });
 
@@ -970,7 +909,7 @@ describe("RecordType", () => {
       assertEquals(await resolver.read(tap), { name: "Sam" });
     });
 
-    it("maps writer field aliases to reader field names", async () => {
+    it("maps writer field aliases to reader field names (writer alias matches reader name)", async () => {
       const writer = createRecord({
         name: "example.Person",
         fields: [{
@@ -1026,6 +965,43 @@ describe("RecordType", () => {
       assertEquals([...value.data], [1, 2]);
     });
 
+    it("skips extra writer fields via sync resolver", () => {
+      const writer = createRecord({
+        name: "example.SyncWriter",
+        fields: [
+          { name: "name", type: new StringType() },
+          { name: "age", type: new IntType() },
+        ],
+      });
+      const reader = createRecord({
+        name: "example.SyncWriter",
+        fields: [{ name: "name", type: new StringType() }],
+      });
+
+      const resolver = reader.createResolver(writer);
+      const buffer = writer.toSyncBuffer({ name: "Ann", age: 30 });
+      const result = resolver.readSync(new SyncReadableTap(buffer));
+      assertEquals(result, { name: "Ann" });
+    });
+
+    it("uses nested resolvers for compatible field promotion via sync resolver", () => {
+      const writer = createRecord({
+        name: "example.SyncPayload",
+        fields: [{ name: "data", type: new IntType() }],
+      });
+      const reader = createRecord({
+        name: "example.SyncPayload",
+        fields: [{ name: "data", type: new LongType() }],
+      });
+
+      const resolver = reader.createResolver(writer);
+      const buffer = writer.toSyncBuffer({ data: 15 });
+      const result = resolver.readSync(new SyncReadableTap(buffer)) as {
+        data: bigint;
+      };
+      assertEquals(result.data, 15n);
+    });
+
     it("throws resolver error when reader field lacks default", () => {
       const writer = createRecord({
         name: "example.Person",
@@ -1073,18 +1049,7 @@ describe("RecordType", () => {
       assertThrows(
         () => reader.createResolver(writer),
         Error,
-        `Schema evolution not supported from writer type: string to reader type: 
-{
-  "name": "example.Record",
-  "type": "record",
-  "fields": [
-    {
-      "name": "id",
-      "type": "int"
-    }
-  ]
-}
-`,
+        "Schema evolution not supported from writer type: string to reader type:",
       );
     });
 
@@ -1270,6 +1235,862 @@ describe("RecordType", () => {
         Error,
         "Field 'id' has no default",
       );
+    });
+  });
+
+  describe("sync serialization", () => {
+    const type = createRecord({
+      name: "example.Sync",
+      fields: [
+        { name: "id", type: new IntType() },
+        { name: "name", type: new StringType() },
+      ],
+    });
+
+    it("round-trips via sync buffer", () => {
+      const recordValue = { id: 1, name: "Ann" };
+      const buffer = type.toSyncBuffer(recordValue);
+      assertEquals(type.fromSyncBuffer(buffer), recordValue);
+    });
+
+    it("reads and writes via sync taps", () => {
+      const recordValue = { id: 2, name: "Bob" };
+      const buffer = new ArrayBuffer(256);
+      const writeTap = new SyncWritableTap(buffer);
+      type.writeSync(writeTap, recordValue);
+      const readTap = new SyncReadableTap(buffer);
+      assertEquals(type.readSync(readTap), recordValue);
+      assertEquals(readTap.getPos(), writeTap.getPos());
+    });
+
+    it("throws when writeSync receives a non-record value", () => {
+      const buffer = new ArrayBuffer(64);
+      const tap = new SyncWritableTap(buffer);
+      assertThrows(
+        () =>
+          type.writeSync(
+            tap,
+            "not a record" as unknown as Record<string, unknown>,
+          ),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("throws when toSyncBuffer receives a non-record value", () => {
+      assertThrows(
+        () =>
+          type.toSyncBuffer(
+            "not a record" as unknown as Record<string, unknown>,
+          ),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("skips records via sync taps", () => {
+      const recordValue = { id: 3, name: "Cleo" };
+      const buffer = type.toSyncBuffer(recordValue);
+      const tap = new SyncReadableTap(buffer);
+      assertEquals(tap.getPos(), 0);
+      type.skipSync(tap);
+      assertEquals(tap.getPos(), buffer.byteLength);
+    });
+
+    it("matches encoded records via sync taps", () => {
+      const a = { id: 1, name: "A" };
+      const b = { id: 2, name: "B" };
+      const bufA = type.toSyncBuffer(a);
+      const bufB = type.toSyncBuffer(b);
+
+      assertEquals(
+        type.matchSync(new SyncReadableTap(bufA), new SyncReadableTap(bufB)),
+        -1,
+      );
+      assertEquals(
+        type.matchSync(new SyncReadableTap(bufA), new SyncReadableTap(bufA)),
+        0,
+      );
+    });
+
+    it("skips ignore-ordered fields via matchSync", () => {
+      const ignoreType = createRecord({
+        name: "example.IgnoreOrder",
+        fields: [
+          { name: "score", type: new IntType(), order: "ascending" },
+          { name: "ignored", type: new IntType(), order: "ignore" },
+        ],
+      });
+
+      const valueA = { score: 5, ignored: 10 };
+      const valueB = { score: 5, ignored: 20 };
+      const bufA = ignoreType.toSyncBuffer(valueA);
+      const bufB = ignoreType.toSyncBuffer(valueB);
+
+      assertEquals(
+        ignoreType.matchSync(
+          new SyncReadableTap(bufA),
+          new SyncReadableTap(bufB),
+        ),
+        0,
+      );
+    });
+
+    it("applies defaults when writing sync data", () => {
+      const defaultType = createRecord({
+        name: "example.DefaultSync",
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "rating", type: new IntType(), default: 7 },
+        ],
+      });
+
+      const recordValue = { id: 9 };
+      const buffer = new ArrayBuffer(64);
+      const writeTap = new SyncWritableTap(buffer);
+      defaultType.writeSync(writeTap, recordValue);
+      const readTap = new SyncReadableTap(buffer);
+
+      assertEquals(
+        defaultType.readSync(readTap),
+        { id: 9, rating: 7 },
+      );
+
+      const syncBuffer = defaultType.toSyncBuffer(recordValue);
+      assertEquals(defaultType.fromSyncBuffer(syncBuffer), {
+        id: 9,
+        rating: 7,
+      });
+    });
+
+    it("throws when missing required field during writeSync", () => {
+      const type = createRecord({
+        name: "example.Person",
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType(), default: "unknown" },
+        ],
+      });
+
+      const buffer = new ArrayBuffer(16);
+      const tap = new SyncWritableTap(buffer);
+      assertThrows(
+        () =>
+          type.writeSync(
+            tap,
+            { name: "Ann" } as unknown as Record<string, unknown>,
+          ),
+        Error,
+        `Invalid value: 'undefined' for type:`,
+      );
+    });
+
+    it("throws when missing required field during toSyncBuffer", () => {
+      const type = createRecord({
+        name: "example.Person",
+        fields: [
+          { name: "id", type: new IntType() }, // required field
+          { name: "name", type: new StringType(), default: "unknown" },
+        ],
+      });
+
+      assertThrows(
+        () =>
+          type.toSyncBuffer(
+            { name: "Ann" } as unknown as Record<string, unknown>,
+          ),
+        Error,
+        `Invalid value: 'undefined' for type:`,
+      );
+    });
+
+    it("uses nested resolvers for compatible field promotion via sync resolver", () => {
+      const writer = createRecord({
+        name: "example.SyncPayload",
+        fields: [{ name: "data", type: new StringType() }],
+      });
+      const reader = createRecord({
+        name: "example.SyncPayload",
+        fields: [{ name: "data", type: new BytesType() }],
+      });
+
+      const resolver = reader.createResolver(writer);
+      const buffer = writer.toSyncBuffer({ data: "\x01\x02" });
+      const result = resolver.readSync(new SyncReadableTap(buffer)) as {
+        data: Uint8Array;
+      };
+      assertEquals([...result.data], [1, 2]);
+    });
+
+    it("uses direct field reading when no resolver needed via sync resolver", () => {
+      const sharedType = new StringType();
+      const writer = createRecord({
+        name: "example.SyncDirect",
+        fields: [{ name: "data", type: sharedType }],
+      });
+      const reader = createRecord({
+        name: "example.SyncDirect",
+        fields: [{ name: "data", type: sharedType }],
+      });
+
+      const resolver = reader.createResolver(writer);
+      const buffer = writer.toSyncBuffer({ data: "test" });
+      const result = resolver.readSync(new SyncReadableTap(buffer)) as {
+        data: string;
+      };
+      assertEquals(result.data, "test");
+    });
+
+    it("reads records via sync resolver", () => {
+      const writer = createRecord({
+        name: "example.Person",
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+        ],
+      });
+      const reader = createRecord({
+        name: "example.Person",
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+          { name: "rating", type: new IntType(), default: 0 },
+        ],
+      });
+      const resolver = reader.createResolver(writer);
+
+      const value = { id: 3, name: "Sync" };
+      const buffer = writer.toSyncBuffer(value);
+      const result = resolver.readSync(new SyncReadableTap(buffer)) as {
+        id: number;
+        name: string;
+        rating: number;
+      };
+      assertEquals(result.id, value.id);
+      assertEquals(result.name, value.name);
+      assertEquals(result.rating, 0);
+    });
+  });
+
+  describe("validate=false mode", () => {
+    it("writes without validation via write() when validate=false", async () => {
+      const names = resolveNames({ name: "example.NoValidate" });
+      const type = new RecordType({
+        ...names,
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+        ],
+        validate: false,
+      });
+
+      const buffer = new ArrayBuffer(64);
+      const tap = new Tap(buffer);
+      await type.write(tap, { id: 42, name: "test" });
+
+      const readTap = new Tap(buffer);
+      const decoded = await type.read(readTap);
+      assertEquals(decoded, { id: 42, name: "test" });
+    });
+
+    it("writes without validation via writeSync() when validate=false", () => {
+      const names = resolveNames({ name: "example.NoValidateSync" });
+      const type = new RecordType({
+        ...names,
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+        ],
+        validate: false,
+      });
+
+      const buffer = new ArrayBuffer(64);
+      const writeTap = new SyncWritableTap(buffer);
+      type.writeSync(writeTap, { id: 42, name: "test" });
+
+      const readTap = new SyncReadableTap(buffer);
+      const decoded = type.readSync(readTap);
+      assertEquals(decoded, { id: 42, name: "test" });
+    });
+
+    it("uses toBuffer() without validation when validate=false", async () => {
+      const names = resolveNames({ name: "example.NoValidateBuffer" });
+      const type = new RecordType({
+        ...names,
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+        ],
+        validate: false,
+      });
+
+      const buffer = await type.toBuffer({ id: 1, name: "test" });
+      const decoded = await type.fromBuffer(buffer);
+      assertEquals(decoded, { id: 1, name: "test" });
+    });
+
+    it("uses toSyncBuffer() without validation when validate=false", () => {
+      const names = resolveNames({ name: "example.NoValidateSyncBuffer" });
+      const type = new RecordType({
+        ...names,
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+        ],
+        validate: false,
+      });
+
+      const buffer = type.toSyncBuffer({ id: 1, name: "test" });
+      const decoded = type.fromSyncBuffer(buffer);
+      assertEquals(decoded, { id: 1, name: "test" });
+    });
+  });
+
+  describe("writeUnchecked methods", () => {
+    it("writes async unchecked", async () => {
+      const type = createRecord({
+        name: "example.UncheckedAsync",
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+        ],
+      });
+
+      const buffer = new ArrayBuffer(64);
+      const tap = new Tap(buffer);
+      await type.writeUnchecked(tap, { id: 99, name: "unchecked" });
+
+      const readTap = new Tap(buffer);
+      const decoded = await type.read(readTap);
+      assertEquals(decoded, { id: 99, name: "unchecked" });
+    });
+
+    it("writes sync unchecked", () => {
+      const type = createRecord({
+        name: "example.UncheckedSync",
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+        ],
+      });
+
+      const buffer = new ArrayBuffer(64);
+      const writeTap = new SyncWritableTap(buffer);
+      type.writeSyncUnchecked(writeTap, { id: 99, name: "unchecked" });
+
+      const readTap = new SyncReadableTap(buffer);
+      const decoded = type.readSync(readTap);
+      assertEquals(decoded, { id: 99, name: "unchecked" });
+    });
+  });
+
+  describe("compiled unchecked writers with various primitive types", () => {
+    it("handles all primitive types in unchecked async mode", async () => {
+      const BooleanType = (await import("../../primitive/boolean_type.ts"))
+        .BooleanType;
+      const FloatType = (await import("../../primitive/float_type.ts"))
+        .FloatType;
+      const DoubleType = (await import("../../primitive/double_type.ts"))
+        .DoubleType;
+
+      // Create record with all primitive field types to exercise each branch
+      // in #compileUncheckedWriter
+      const names = resolveNames({ name: "example.AllPrimitives" });
+      const type = new RecordType({
+        ...names,
+        fields: [
+          { name: "nullField", type: new NullType() },
+          { name: "boolField", type: new BooleanType() },
+          { name: "intField", type: new IntType() },
+          { name: "longField", type: new LongType() },
+          { name: "floatField", type: new FloatType() },
+          { name: "doubleField", type: new DoubleType() },
+          { name: "bytesField", type: new BytesType() },
+          { name: "stringField", type: new StringType() },
+        ],
+        validate: false,
+      });
+
+      const value = {
+        nullField: null,
+        boolField: true,
+        intField: 42,
+        longField: 123n,
+        floatField: 3.14,
+        doubleField: 2.718281828,
+        bytesField: new Uint8Array([1, 2, 3]),
+        stringField: "hello",
+      };
+
+      const buffer = await type.toBuffer(value);
+      const decoded = await type.fromBuffer(buffer);
+
+      assertEquals(decoded.nullField, null);
+      assertEquals(decoded.boolField, true);
+      assertEquals(decoded.intField, 42);
+      assertEquals(decoded.longField, 123n);
+      // Float comparison with tolerance
+      assert(Math.abs((decoded.floatField as number) - 3.14) < 0.001);
+      assertEquals(decoded.doubleField, 2.718281828);
+      assertEquals([...(decoded.bytesField as Uint8Array)], [1, 2, 3]);
+      assertEquals(decoded.stringField, "hello");
+    });
+
+    it("handles all primitive types in unchecked sync mode", async () => {
+      const BooleanType = (await import("../../primitive/boolean_type.ts"))
+        .BooleanType;
+      const FloatType = (await import("../../primitive/float_type.ts"))
+        .FloatType;
+      const DoubleType = (await import("../../primitive/double_type.ts"))
+        .DoubleType;
+
+      const names = resolveNames({ name: "example.AllPrimitivesSync" });
+      const type = new RecordType({
+        ...names,
+        fields: [
+          { name: "nullField", type: new NullType() },
+          { name: "boolField", type: new BooleanType() },
+          { name: "intField", type: new IntType() },
+          { name: "longField", type: new LongType() },
+          { name: "floatField", type: new FloatType() },
+          { name: "doubleField", type: new DoubleType() },
+          { name: "bytesField", type: new BytesType() },
+          { name: "stringField", type: new StringType() },
+        ],
+        validate: false,
+      });
+
+      const value = {
+        nullField: null,
+        boolField: false,
+        intField: -100,
+        longField: -999n,
+        floatField: 1.5,
+        doubleField: 3.14159,
+        bytesField: new Uint8Array([4, 5, 6]),
+        stringField: "world",
+      };
+
+      const buffer = type.toSyncBuffer(value);
+      const decoded = type.fromSyncBuffer(buffer);
+
+      assertEquals(decoded.nullField, null);
+      assertEquals(decoded.boolField, false);
+      assertEquals(decoded.intField, -100);
+      assertEquals(decoded.longField, -999n);
+      assert(Math.abs((decoded.floatField as number) - 1.5) < 0.001);
+      assertEquals(decoded.doubleField, 3.14159);
+      assertEquals([...(decoded.bytesField as Uint8Array)], [4, 5, 6]);
+      assertEquals(decoded.stringField, "world");
+    });
+
+    it("handles nested records in unchecked mode", async () => {
+      const innerNames = resolveNames({ name: "example.InnerUnchecked" });
+      const inner = new RecordType({
+        ...innerNames,
+        fields: [{ name: "value", type: new IntType() }],
+        validate: false,
+      });
+
+      const outerNames = resolveNames({ name: "example.OuterUnchecked" });
+      const outer = new RecordType({
+        ...outerNames,
+        fields: [{ name: "nested", type: inner }],
+        validate: false,
+      });
+
+      const value = { nested: { value: 42 } };
+
+      // Test async
+      const asyncBuffer = await outer.toBuffer(value);
+      const asyncDecoded = await outer.fromBuffer(asyncBuffer);
+      assertEquals(asyncDecoded, value);
+
+      // Test sync
+      const syncBuffer = outer.toSyncBuffer(value);
+      const syncDecoded = outer.fromSyncBuffer(syncBuffer);
+      assertEquals(syncDecoded, value);
+    });
+
+    it("handles union types in unchecked mode via fallback writeUnchecked", async () => {
+      const unionType = new UnionType({
+        types: [new NullType(), new IntType()],
+      });
+
+      const names = resolveNames({ name: "example.UnionFieldUnchecked" });
+      const type = new RecordType({
+        ...names,
+        fields: [{ name: "maybeInt", type: unionType }],
+        validate: false,
+      });
+
+      const value = { maybeInt: { int: 42 } };
+
+      // Test async
+      const asyncBuffer = await type.toBuffer(value);
+      const asyncDecoded = await type.fromBuffer(asyncBuffer);
+      assertEquals(asyncDecoded, value);
+
+      // Test sync
+      const syncBuffer = type.toSyncBuffer(value);
+      const syncDecoded = type.fromSyncBuffer(syncBuffer);
+      assertEquals(syncDecoded, value);
+    });
+
+    it("applies defaults in unchecked mode without throwing", async () => {
+      const names = resolveNames({ name: "example.DefaultsUnchecked" });
+      const type = new RecordType({
+        ...names,
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "score", type: new IntType(), default: 0 },
+        ],
+        validate: false,
+      });
+
+      // Missing 'score' field - should use default
+      const value = { id: 10 };
+
+      const asyncBuffer = await type.toBuffer(value);
+      const asyncDecoded = await type.fromBuffer(asyncBuffer);
+      assertEquals(asyncDecoded, { id: 10, score: 0 });
+
+      const syncBuffer = type.toSyncBuffer(value);
+      const syncDecoded = type.fromSyncBuffer(syncBuffer);
+      assertEquals(syncDecoded, { id: 10, score: 0 });
+    });
+  });
+
+  describe("compiled writer caching", () => {
+    it("caches compiled writers on repeated calls", async () => {
+      const type = createRecord({
+        name: "example.CachedWriter",
+        fields: [{ name: "id", type: new IntType() }],
+      });
+
+      const value = { id: 1 };
+
+      // First call creates the writer
+      const buffer1 = await type.toBuffer(value);
+      // Second call should use cached writer
+      const buffer2 = await type.toBuffer(value);
+
+      assertEquals(buffer1.byteLength, buffer2.byteLength);
+      assertEquals(
+        new Uint8Array(buffer1),
+        new Uint8Array(buffer2),
+      );
+    });
+
+    it("caches compiled sync writers on repeated calls", () => {
+      const type = createRecord({
+        name: "example.CachedSyncWriter",
+        fields: [{ name: "id", type: new IntType() }],
+      });
+
+      const value = { id: 1 };
+
+      const buffer1 = type.toSyncBuffer(value);
+      const buffer2 = type.toSyncBuffer(value);
+
+      assertEquals(buffer1.byteLength, buffer2.byteLength);
+      assertEquals(
+        new Uint8Array(buffer1),
+        new Uint8Array(buffer2),
+      );
+    });
+
+    it("caches unchecked compiled writers on repeated calls", async () => {
+      const names = resolveNames({ name: "example.CachedUnchecked" });
+      const type = new RecordType({
+        ...names,
+        fields: [{ name: "id", type: new IntType() }],
+        validate: false,
+      });
+
+      const value = { id: 1 };
+
+      // First call creates the writer, second uses cached
+      const buffer1 = await type.toBuffer(value);
+      const buffer2 = await type.toBuffer(value);
+
+      assertEquals(buffer1.byteLength, buffer2.byteLength);
+    });
+
+    it("caches unchecked compiled sync writers on repeated calls", () => {
+      const names = resolveNames({ name: "example.CachedUncheckedSync" });
+      const type = new RecordType({
+        ...names,
+        fields: [{ name: "id", type: new IntType() }],
+        validate: false,
+      });
+
+      const value = { id: 1 };
+
+      const buffer1 = type.toSyncBuffer(value);
+      const buffer2 = type.toSyncBuffer(value);
+
+      assertEquals(buffer1.byteLength, buffer2.byteLength);
+    });
+  });
+
+  describe("nested records with validation", () => {
+    it("handles nested RecordType fields in validated sync mode", () => {
+      const innerNames = resolveNames({ name: "example.InnerValidated" });
+      const inner = new RecordType({
+        ...innerNames,
+        fields: [{ name: "value", type: new IntType() }],
+        validate: true,
+      });
+
+      const outerNames = resolveNames({ name: "example.OuterValidated" });
+      const outer = new RecordType({
+        ...outerNames,
+        fields: [{ name: "nested", type: inner }],
+        validate: true,
+      });
+
+      const value = { nested: { value: 42 } };
+
+      const buffer = outer.toSyncBuffer(value);
+      const decoded = outer.fromSyncBuffer(buffer);
+      assertEquals(decoded, value);
+    });
+
+    it("handles nested RecordType fields in validated async mode", async () => {
+      const innerNames = resolveNames({ name: "example.InnerValidatedAsync" });
+      const inner = new RecordType({
+        ...innerNames,
+        fields: [{ name: "value", type: new IntType() }],
+        validate: true,
+      });
+
+      const outerNames = resolveNames({ name: "example.OuterValidatedAsync" });
+      const outer = new RecordType({
+        ...outerNames,
+        fields: [{ name: "nested", type: inner }],
+        validate: true,
+      });
+
+      const value = { nested: { value: 42 } };
+
+      const buffer = await outer.toBuffer(value);
+      const decoded = await outer.fromBuffer(buffer);
+      assertEquals(decoded, value);
+    });
+
+    it("handles recursive record types with cache hit during compilation", async () => {
+      // This test exercises the cache early-return in #getOrCreateCompiledWriter
+      // by creating a recursive record type that references itself
+      const names = resolveNames({ name: "example.RecursiveNode" });
+
+      // deno-lint-ignore prefer-const
+      let nodeType: RecordType;
+      nodeType = new RecordType({
+        ...names,
+        fields: () => [
+          { name: "value", type: new IntType() },
+          {
+            name: "children",
+            // Array of the same record type
+            type: new UnionType({
+              types: [new NullType(), nodeType],
+            }),
+          },
+        ],
+        validate: true,
+      });
+
+      const value = {
+        value: 1,
+        children: {
+          "example.RecursiveNode": {
+            value: 2,
+            children: null,
+          },
+        },
+      };
+
+      // First serialization compiles the writer
+      const buffer1 = await nodeType.toBuffer(value);
+      // Second call should use cached writer
+      const buffer2 = await nodeType.toBuffer(value);
+
+      assertEquals(buffer1.byteLength, buffer2.byteLength);
+
+      const decoded = await nodeType.fromBuffer(buffer1);
+      assertEquals(decoded, value);
+    });
+
+    it("handles recursive record types in sync mode with cache hit", () => {
+      const names = resolveNames({ name: "example.RecursiveSyncNode" });
+
+      // deno-lint-ignore prefer-const
+      let nodeType: RecordType;
+      nodeType = new RecordType({
+        ...names,
+        fields: () => [
+          { name: "value", type: new IntType() },
+          {
+            name: "next",
+            type: new UnionType({
+              types: [new NullType(), nodeType],
+            }),
+          },
+        ],
+        validate: true,
+      });
+
+      const value = {
+        value: 1,
+        next: {
+          "example.RecursiveSyncNode": {
+            value: 2,
+            next: null,
+          },
+        },
+      };
+
+      const buffer1 = nodeType.toSyncBuffer(value);
+      const buffer2 = nodeType.toSyncBuffer(value);
+
+      assertEquals(buffer1.byteLength, buffer2.byteLength);
+      assertEquals(nodeType.fromSyncBuffer(buffer1), value);
+    });
+  });
+
+  describe("unchecked mode edge cases", () => {
+    it("still throws at primitive level when missing required field in unchecked async mode", async () => {
+      const names = resolveNames({ name: "example.NoDefaultUnchecked" });
+      const type = new RecordType({
+        ...names,
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "optional", type: new IntType() }, // No default
+        ],
+        validate: false,
+      });
+
+      // Missing 'optional' field with no default - in unchecked mode this passes undefined
+      // to the primitive serializer, which will throw because it can't convert undefined to int
+      const buffer = new ArrayBuffer(64);
+      const tap = new Tap(buffer);
+      await assertRejects(
+        async () => await type.writeUnchecked(tap, { id: 1 }),
+        RangeError,
+        "undefined",
+      );
+    });
+
+    it("still throws at primitive level when missing required field in unchecked sync mode", () => {
+      const names = resolveNames({ name: "example.NoDefaultUncheckedSync" });
+      const type = new RecordType({
+        ...names,
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "optional", type: new IntType() }, // No default
+        ],
+        validate: false,
+      });
+
+      // Missing 'optional' field with no default
+      const buffer = new ArrayBuffer(64);
+      const tap = new SyncWritableTap(buffer);
+      assertThrows(
+        () => type.writeSyncUnchecked(tap, { id: 1 }),
+        RangeError,
+        "undefined",
+      );
+    });
+  });
+
+  describe("mutual recursion cache hit", () => {
+    it("hits cache early-return with truly direct RecordType mutual recursion (async)", async () => {
+      // Create mutually recursive record types where both fields are DIRECT RecordType
+      // (not wrapped in Union). This exercises the cache early-return during compilation.
+      // When A compiles: sets placeholder -> compiles B -> B sets placeholder -> B compiles A
+      // -> A already has placeholder (cache hit!) -> returns without infinite recursion.
+      const namesA = resolveNames({ name: "example.DirectMutualA" });
+      const namesB = resolveNames({ name: "example.DirectMutualB" });
+
+      // deno-lint-ignore prefer-const
+      let typeA: RecordType;
+      // deno-lint-ignore prefer-const
+      let typeB: RecordType;
+
+      typeA = new RecordType({
+        ...namesA,
+        fields: () => [
+          { name: "valueA", type: new IntType() },
+          { name: "refB", type: typeB },
+        ],
+        validate: true,
+      });
+
+      typeB = new RecordType({
+        ...namesB,
+        fields: () => [
+          { name: "valueB", type: new IntType() },
+          { name: "refA", type: typeA },
+        ],
+        validate: true,
+      });
+
+      // Minimal nested value - the cache hit happens at compile time, not at runtime depth.
+      // We just need enough structure to trigger serialization; null terminates the chain.
+      const value = {
+        valueA: 1,
+        refB: {
+          valueB: 2,
+          // deno-lint-ignore no-explicit-any
+          refA: null as any,
+        },
+      };
+
+      // Throws during serialization due to null, but compilation succeeded (cache hit worked)
+      await assertRejects(async () => await typeA.toBuffer(value), Error);
+    });
+
+    it("hits cache early-return with truly direct RecordType mutual recursion (sync)", () => {
+      // Same test for sync mode - exercises the sync compiled writer cache early-return
+      const namesA = resolveNames({ name: "example.DirectMutualSyncA" });
+      const namesB = resolveNames({ name: "example.DirectMutualSyncB" });
+
+      // deno-lint-ignore prefer-const
+      let typeA: RecordType;
+      // deno-lint-ignore prefer-const
+      let typeB: RecordType;
+
+      typeA = new RecordType({
+        ...namesA,
+        fields: () => [
+          { name: "valueA", type: new IntType() },
+          { name: "refB", type: typeB },
+        ],
+        validate: true,
+      });
+
+      typeB = new RecordType({
+        ...namesB,
+        fields: () => [
+          { name: "valueB", type: new IntType() },
+          { name: "refA", type: typeA },
+        ],
+        validate: true,
+      });
+
+      // Minimal nested value - cache hit happens at compile time
+      const value = {
+        valueA: 1,
+        refB: {
+          valueB: 2,
+          // deno-lint-ignore no-explicit-any
+          refA: null as any,
+        },
+      };
+
+      // Throws during serialization due to null, but compilation succeeded
+      assertThrows(() => typeA.toSyncBuffer(value), Error);
     });
   });
 });

@@ -3,7 +3,12 @@ import { describe, it } from "@std/testing/bdd";
 
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import { ReadableTap } from "../../../serialization/tap.ts";
-import { MapType, readMapInto } from "../map_type.ts";
+import {
+  SyncReadableTap,
+  type SyncReadableTapLike,
+  SyncWritableTap,
+} from "../../../serialization/tap_sync.ts";
+import { MapType, readMapInto, readMapIntoSync } from "../map_type.ts";
 import { IntType } from "../../primitive/int_type.ts";
 import { LongType } from "../../primitive/long_type.ts";
 import { StringType } from "../../primitive/string_type.ts";
@@ -152,6 +157,28 @@ describe("MapType", () => {
       assertEquals(result, map);
     });
 
+    it("writes without validation when validate=false", async () => {
+      const noValidateMap = new MapType({ values: intValues, validate: false });
+      const map = new Map([["a", 1], ["b", 2]]);
+      const buffer = new ArrayBuffer(50);
+      const tap = new Tap(buffer);
+      await noValidateMap.write(tap, map);
+      const readTap = new Tap(buffer);
+      const result = await noValidateMap.read(readTap);
+      assertEquals(result, map);
+    });
+
+    it("writes sync without validation when validate=false", () => {
+      const noValidateMap = new MapType({ values: intValues, validate: false });
+      const map = new Map([["a", 1], ["b", 2]]);
+      const buffer = new ArrayBuffer(50);
+      const tap = new SyncWritableTap(buffer);
+      noValidateMap.writeSync(tap, map);
+      const readTap = new SyncReadableTap(buffer);
+      const result = noValidateMap.readSync(readTap);
+      assertEquals(result, map);
+    });
+
     it("round-trips via toBuffer/fromBuffer", async () => {
       const map = new Map([["key1", 4], ["key2", 5]]);
       const buffer = await intMap.toBuffer(map);
@@ -196,6 +223,120 @@ describe("MapType", () => {
       const tap = new Tap(buffer);
       await nestedMap.skip(tap);
       assertEquals(tap.getPos(), buffer.byteLength);
+    });
+
+    it("round-trips via sync buffer", () => {
+      const map = new Map([["a", 1], ["b", 2]]);
+      const buffer = intMap.toSyncBuffer(map);
+      assertEquals(intMap.fromSyncBuffer(buffer), map);
+    });
+
+    it("reads and writes via sync taps", () => {
+      const map = new Map([["a", 1], ["b", 2]]);
+      const buffer = new ArrayBuffer(256);
+      const writeTap = new SyncWritableTap(buffer);
+      intMap.writeSync(writeTap, map);
+      const readTap = new SyncReadableTap(buffer);
+      assertEquals(intMap.readSync(readTap), map);
+      assertEquals(readTap.getPos(), writeTap.getPos());
+    });
+
+    it("throws when writeSync receives non-map", () => {
+      const buffer = new ArrayBuffer(16);
+      const tap = new SyncWritableTap(buffer);
+      assertThrows(
+        () =>
+          intMap.writeSync(tap, "not a map" as unknown as Map<string, number>),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("throws when writeSync encounters non-string map keys", () => {
+      const buffer = new ArrayBuffer(64);
+      const tap = new SyncWritableTap(buffer);
+      const map = new Map([[1 as unknown as string, 1]]);
+      assertThrows(
+        () => intMap.writeSync(tap, map),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("skips encoded map blocks via sync taps", () => {
+      const map = new Map([["a", 1]]);
+      const buffer = intMap.toSyncBuffer(map);
+      const tap = new SyncReadableTap(buffer);
+      intMap.skipSync(tap);
+      assertEquals(tap.getPos(), buffer.byteLength);
+    });
+
+    it("skips size-prefixed map blocks via sync taps", async () => {
+      const builderBuffer = new ArrayBuffer(32);
+      const builderTap = new Tap(builderBuffer);
+      await builderTap.writeString("key");
+      await builderTap.writeLong(42n);
+      const blockSize = builderTap.getPos();
+
+      const buffer = new ArrayBuffer(64);
+      const writeTap = new Tap(buffer);
+      await writeTap.writeLong(-1n);
+      await writeTap.writeLong(BigInt(blockSize));
+      await writeTap.writeString("key");
+      await writeTap.writeLong(42n);
+      await writeTap.writeLong(0n);
+
+      const encoded = buffer.slice(0, writeTap.getPos());
+      const tap = new SyncReadableTap(encoded);
+      intMap.skipSync(tap);
+      assertEquals(tap.getPos(), encoded.byteLength);
+    });
+
+    it("throws when matching via sync taps", () => {
+      const map = new Map([["a", 1]]);
+      const buffer = intMap.toSyncBuffer(map);
+      assertThrows(
+        () =>
+          intMap.matchSync(
+            new SyncReadableTap(buffer),
+            new SyncReadableTap(buffer),
+          ),
+        Error,
+        "maps cannot be compared",
+      );
+    });
+
+    it("handles empty maps via sync buffer", () => {
+      const emptyMap = new Map<string, number>();
+      const buffer = intMap.toSyncBuffer(emptyMap);
+      assertEquals(intMap.fromSyncBuffer(buffer), emptyMap);
+    });
+
+    it("throws when toSyncBuffer receives invalid value", () => {
+      assertThrows(
+        () => intMap.toSyncBuffer("invalid" as unknown as Map<string, number>),
+        Error,
+        "Invalid value",
+      );
+    });
+
+    it("serializes with toSyncBuffer when validation is disabled", () => {
+      const mapNoValidate = new MapType({
+        values: intValues,
+        validate: false,
+      });
+      const map = new Map([["a", 1]]);
+      const buffer = mapNoValidate.toSyncBuffer(map);
+      assertEquals(mapNoValidate.fromSyncBuffer(buffer), map);
+    });
+
+    it("throws when toSyncBuffer map contains non-string key", () => {
+      const map = new Map([[1 as unknown as string, 1]]);
+      assertThrows(
+        () => intMap.toSyncBuffer(map),
+        Error,
+        "Invalid value",
+      );
     });
 
     it("writes empty map correctly", async () => {
@@ -495,6 +636,19 @@ describe("MapType", () => {
       assertEquals(result, map);
     });
 
+    it("reads map resolver synchronously", () => {
+      const writerMap = createMap(new IntType());
+      const readerMap = createMap(new LongType());
+      const resolver = readerMap.createResolver(writerMap);
+      const map = new Map([["a", 1]]);
+      const buffer = writerMap.toSyncBuffer(map);
+      const result = resolver.readSync(new SyncReadableTap(buffer)) as Map<
+        string,
+        bigint
+      >;
+      assertEquals(result, new Map([["a", 1n]]));
+    });
+
     it("creates resolver for nested identical map types", async () => {
       // Nested maps of ints
       const writerNested = createMap(createMap(new IntType()));
@@ -714,5 +868,58 @@ describe("readMapInto", () => {
       RangeError,
       "Operation exceeds buffer bounds",
     );
+  });
+});
+
+describe("readMapIntoSync", () => {
+  it("reads positive block count", async () => {
+    const buffer = new ArrayBuffer(64);
+    const tap = new Tap(buffer);
+    await tap.writeLong(1n);
+    await tap.writeString("key");
+    await tap.writeLong(42n);
+    await tap.writeLong(0n);
+
+    const encoded = buffer.slice(0, tap.getPos());
+    const syncTap = new SyncReadableTap(encoded);
+    const results: [string, number][] = [];
+    readMapIntoSync(
+      syncTap,
+      (innerTap: SyncReadableTapLike) => Number(innerTap.readLong()),
+      (key: string, value: number) => {
+        results.push([key, value]);
+      },
+    );
+
+    assertEquals(results, [["key", 42]]);
+  });
+
+  it("reads negative block count (size-prefixed)", async () => {
+    const entryBuffer = new ArrayBuffer(64);
+    const entryTap = new Tap(entryBuffer);
+    await entryTap.writeString("neg");
+    await entryTap.writeLong(7n);
+    const blockSize = entryTap.getPos();
+
+    const buffer = new ArrayBuffer(128);
+    const writeTap = new Tap(buffer);
+    await writeTap.writeLong(-1n);
+    await writeTap.writeLong(BigInt(blockSize));
+    await writeTap.writeString("neg");
+    await writeTap.writeLong(7n);
+    await writeTap.writeLong(0n);
+
+    const encoded = buffer.slice(0, writeTap.getPos());
+    const syncTap = new SyncReadableTap(encoded);
+    const results: [string, number][] = [];
+    readMapIntoSync(
+      syncTap,
+      (innerTap: SyncReadableTapLike) => Number(innerTap.readLong()),
+      (key: string, value: number) => {
+        results.push([key, value]);
+      },
+    );
+
+    assertEquals(results, [["neg", 7]]);
   });
 });

@@ -1,7 +1,5 @@
 import { bigIntToSafeNumber } from "./conversion.ts";
 import { compareUint8Arrays } from "./compare_bytes.ts";
-import { readUIntLE } from "./read_uint_le.ts";
-import { invert } from "./manipulate_bytes.ts";
 import { decode, encode } from "./text_encoding.ts";
 import type { IReadableBuffer, IWritableBuffer } from "./buffers/buffer.ts";
 import {
@@ -137,8 +135,6 @@ export interface ReadableTapLike {
   matchBytes(tap: ReadableTapLike): Promise<number>;
   /** Matches a string value. */
   matchString(tap: ReadableTapLike): Promise<number>;
-  /** Unpacks a long-encoded byte array. */
-  unpackLongBytes(): Promise<Uint8Array>;
 }
 
 /**
@@ -177,9 +173,8 @@ export interface WritableTapLike {
   /**
    * Writes a fixed-length byte sequence from the provided buffer.
    * @param buf Source buffer to copy from.
-   * @param len Optional number of bytes to write; defaults to the buffer length.
    */
-  writeFixed(buf: Uint8Array, len?: number): Promise<void>;
+  writeFixed(buf: Uint8Array): Promise<void>;
   /**
    * Writes a length-prefixed byte sequence backed by the provided buffer.
    * @param buf The bytes to write.
@@ -196,11 +191,6 @@ export interface WritableTapLike {
    * @param len Number of bytes from the string to write.
    */
   writeBinary(str: string, len: number): Promise<void>;
-  /**
-   * Encodes an 8-byte two's complement integer into zig-zag encoded varint bytes.
-   * @param arr Buffer containing the 8-byte value to encode; reused during processing.
-   */
-  packLongBytes(arr: Uint8Array): Promise<void>;
 }
 
 function assertValidPosition(pos: number): void {
@@ -595,43 +585,6 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
     const bytes2 = await tap.readFixed(l2);
     return compareUint8Arrays(bytes1, bytes2);
   }
-
-  /**
-   * Decodes the next zig-zag encoded long into an 8-byte two's complement buffer.
-   */
-  async unpackLongBytes(): Promise<Uint8Array> {
-    const res = new Uint8Array(8);
-    let n = 0;
-    let i = 0; // Byte index in target buffer.
-    let j = 6; // Bit offset in current target buffer byte.
-    let pos = this.pos;
-
-    let b = await this.getByteAt(pos++);
-    const neg = b & 1;
-    res.fill(0);
-
-    // Accumulate the zig-zag decoded bits into the 8-byte buffer, emitting a byte once filled.
-    n |= (b & 0x7f) >> 1;
-    while (b & 0x80) {
-      b = await this.getByteAt(pos++);
-      n |= (b & 0x7f) << j;
-      j += 7;
-      if (j >= 8) {
-        j -= 8;
-        res[i++] = n;
-        n >>= 8;
-      }
-    }
-    res[i] = n;
-
-    if (neg) {
-      // The low bit captured the sign; invert to restore the original negative value.
-      invert(res, 8);
-    }
-
-    this.pos = pos;
-    return res;
-  }
 }
 
 /**
@@ -689,10 +642,31 @@ export class WritableTap extends TapBase implements WritableTapLike {
 
   /**
    * Writes a zig-zag encoded 32-bit signed integer.
+   * Uses a 32-bit zig-zag + varint path to avoid BigInt casts for performance.
    * @param n Integer value to write.
    */
   async writeInt(n: number): Promise<void> {
-    await this.writeLong(BigInt(n));
+    if (
+      typeof n !== "number" ||
+      !Number.isInteger(n) ||
+      n < -2147483648 ||
+      n > 2147483647
+    ) {
+      throw new RangeError(
+        `Value ${n} out of range for Avro int (-2147483648..2147483647)`,
+      );
+    }
+    // Zigzag encode to an unsigned 32-bit integer:
+    // (n << 1) ^ (n >> 31)
+    let value = ((n << 1) ^ (n >> 31)) >>> 0;
+    const buf = new Uint8Array(5);
+    let i = 0;
+    while (value > 0x7f) {
+      buf[i++] = (value & 0x7f) | 0x80;
+      value >>>= 7;
+    }
+    buf[i++] = value;
+    await this.appendRawBytes(buf.subarray(0, i));
   }
 
   /**
@@ -741,14 +715,12 @@ export class WritableTap extends TapBase implements WritableTapLike {
   /**
    * Writes a fixed-length byte sequence from the provided buffer.
    * @param buf Source buffer to copy from.
-   * @param len Optional number of bytes to write; defaults to the buffer length.
    */
-  async writeFixed(buf: Uint8Array, len?: number): Promise<void> {
-    const length = len ?? buf.length;
-    if (length === 0) {
+  async writeFixed(buf: Uint8Array): Promise<void> {
+    if (buf.length === 0) {
       return;
     }
-    await this.appendRawBytes(buf.slice(0, length));
+    await this.appendRawBytes(buf);
   }
 
   /**
@@ -758,7 +730,7 @@ export class WritableTap extends TapBase implements WritableTapLike {
   async writeBytes(buf: Uint8Array): Promise<void> {
     const len = buf.length;
     await this.writeLong(BigInt(len));
-    await this.writeFixed(buf, len);
+    await this.writeFixed(buf);
   }
 
   /**
@@ -769,7 +741,7 @@ export class WritableTap extends TapBase implements WritableTapLike {
     const encoded = encode(str);
     const len = encoded.length;
     await this.writeLong(BigInt(len));
-    await this.writeFixed(encoded, len);
+    await this.writeFixed(encoded);
   }
 
   /**
@@ -786,67 +758,5 @@ export class WritableTap extends TapBase implements WritableTapLike {
       bytes[i] = str.charCodeAt(i) & 0xff;
     }
     await this.appendRawBytes(bytes);
-  }
-
-  /**
-   * Encodes an 8-byte two's complement integer into zig-zag encoded varint bytes.
-   * @param arr Buffer containing the 8-byte value to encode; reused during processing.
-   */
-  async packLongBytes(arr: Uint8Array): Promise<void> {
-    const bufView = new DataView(arr.buffer, arr.byteOffset, arr.byteLength);
-    const neg = (bufView.getUint8(7) & 0x80) >> 7;
-    let j = 1;
-    let k = 0;
-    let m = 3;
-    let n: number;
-
-    if (neg) {
-      // Temporarily convert to magnitude so the zig-zag representation can strip the sign bit.
-      invert(arr, 8);
-      n = 1;
-    } else {
-      n = 0;
-    }
-
-    const parts = [
-      readUIntLE(bufView, 0, 3),
-      readUIntLE(bufView, 3, 3),
-      readUIntLE(bufView, 6, 2),
-    ];
-
-    while (m && !parts[--m]) {
-      /* skip trailing zeros */
-    }
-
-    const emitted: number[] = [];
-
-    // Pack 24-bit chunks into the zig-zag bucket, flushing continuation bytes as needed.
-    while (k < m) {
-      n |= parts[k++] << j;
-      j += 24;
-      while (j > 7) {
-        emitted.push((n & 0x7f) | 0x80);
-        n >>= 7;
-        j -= 7;
-      }
-    }
-
-    n |= parts[m] << j;
-    do {
-      const byte = n & 0x7f;
-      n >>= 7;
-      if (n) {
-        emitted.push(byte | 0x80);
-      } else {
-        emitted.push(byte);
-      }
-    } while (n);
-
-    if (neg) {
-      // Restore the original negative representation in the supplied buffer.
-      invert(arr, 8);
-    }
-
-    await this.appendRawBytes(Uint8Array.from(emitted));
   }
 }

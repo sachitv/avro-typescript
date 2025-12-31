@@ -1,8 +1,11 @@
-import {
-  type ReadableTapLike,
-  WritableTap,
-  type WritableTapLike,
+import type {
+  ReadableTapLike,
+  WritableTapLike,
 } from "../../serialization/tap.ts";
+import type {
+  SyncReadableTapLike,
+  SyncWritableTapLike,
+} from "../../serialization/tap_sync.ts";
 import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
 import { NamedType } from "./named_type.ts";
@@ -18,6 +21,8 @@ export interface EnumTypeParams extends ResolvedNames {
   symbols: string[];
   /** Optional default value. */
   default?: string;
+  /** Whether to validate during writes. Defaults to true. */
+  validate?: boolean;
 }
 
 /**
@@ -39,7 +44,7 @@ export class EnumType extends NamedType<string> {
     }
 
     const { symbols, default: defaultValue, ...nameInfo } = params;
-    super(nameInfo);
+    super(nameInfo, params.validate ?? true);
     this.#symbols = symbols.slice();
     this.#indices = new Map<string, number>();
 
@@ -95,11 +100,10 @@ export class EnumType extends NamedType<string> {
   }
 
   /**
-   * Serializes the enum value by writing its index.
-   * @param tap The tap to write to.
-   * @param value The enum value to write.
+   * Writes enum value without type validation.
+   * Still validates that the symbol exists to avoid undefined behavior.
    */
-  public override async write(
+  public override async writeUnchecked(
     tap: WritableTapLike,
     value: string,
   ): Promise<void> {
@@ -111,10 +115,41 @@ export class EnumType extends NamedType<string> {
   }
 
   /**
+   * Writes enum value without type validation synchronously.
+   * Still validates that the symbol exists to avoid undefined behavior.
+   */
+  public override writeSyncUnchecked(
+    tap: SyncWritableTapLike,
+    value: string,
+  ): void {
+    const index = this.#indices.get(value);
+    if (index === undefined) {
+      throwInvalidError([], value, this);
+    }
+    tap.writeLong(BigInt(index));
+  }
+
+  /** Returns the encoded byte length for the given enum value. */
+  protected override byteLength(value: string): number {
+    const index = this.#indices.get(value);
+    if (index === undefined) {
+      throwInvalidError([], value, this);
+    }
+    return calculateVarintSize(index);
+  }
+
+  /**
    * Skips the enum value in the tap.
    */
   public override async skip(tap: ReadableTapLike): Promise<void> {
     await tap.skipLong();
+  }
+
+  /**
+   * Advances the sync tap past a stored enum index.
+   */
+  public override skipSync(tap: SyncReadableTapLike): void {
+    tap.skipLong();
   }
 
   /**
@@ -134,16 +169,19 @@ export class EnumType extends NamedType<string> {
   }
 
   /**
-   * Converts the enum value to its binary buffer representation.
+   * Reads an enum index synchronously and returns the matching symbol.
    */
-  public override async toBuffer(value: string): Promise<ArrayBuffer> {
-    this.check(value, throwInvalidError, []);
-    const index = this.#indices.get(value)!;
-    const size = calculateVarintSize(index);
-    const buffer = new ArrayBuffer(size);
-    const tap = new WritableTap(buffer);
-    await this.write(tap, value);
-    return buffer;
+  public override readSync(tap: SyncReadableTapLike): string {
+    const rawIndex = tap.readLong();
+    const index = Number(rawIndex);
+    if (
+      !Number.isSafeInteger(index) || index < 0 || index >= this.#symbols.length
+    ) {
+      throw new Error(
+        `Invalid enum index ${rawIndex.toString()} for ${this.getFullName()}`,
+      );
+    }
+    return this.#symbols[index];
   }
 
   /** Clones a value into a string. */
@@ -190,6 +228,16 @@ export class EnumType extends NamedType<string> {
   }
 
   /**
+   * Compares the enum indices stored in two sync taps.
+   */
+  public override matchSync(
+    tap1: SyncReadableTapLike,
+    tap2: SyncReadableTapLike,
+  ): number {
+    return tap1.matchLong(tap2);
+  }
+
+  /**
    * Creates a resolver for schema evolution between enum types.
    */
   public override createResolver(writerType: Type): Resolver {
@@ -225,6 +273,13 @@ export class EnumType extends NamedType<string> {
         public override async read(tap: ReadableTapLike): Promise<string> {
           return await this.#writer.read(tap);
         }
+
+        /**
+         * Reads a symbol via the underlying writer enum synchronously.
+         */
+        public override readSync(tap: SyncReadableTapLike): string {
+          return this.#writer.readSync(tap);
+        }
       }(this, writerType);
     } else if (this.#default !== undefined) {
       return new class extends Resolver<string> {
@@ -239,6 +294,18 @@ export class EnumType extends NamedType<string> {
 
         public override async read(tap: ReadableTapLike): Promise<string> {
           const writerSymbol = await this.#writer.read(tap);
+          if (this.#reader.#indices.has(writerSymbol)) {
+            return writerSymbol;
+          } else {
+            return this.#reader.#default!;
+          }
+        }
+
+        /**
+         * Reads a writer symbol and falls back to the reader default synchronously.
+         */
+        public override readSync(tap: SyncReadableTapLike): string {
+          const writerSymbol = this.#writer.readSync(tap);
           if (this.#reader.#indices.has(writerSymbol)) {
             return writerSymbol;
           } else {
