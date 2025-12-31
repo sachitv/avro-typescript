@@ -30,6 +30,7 @@ export type IsValidOptions = { errorHook?: ErrorHook };
  * Subclasses must implement the remaining abstract methods.
  */
 export abstract class BaseType<T = unknown> extends Type<T> {
+  /** Creates a new BaseType instance. */
   protected constructor(validate = true) {
     super(validate);
   }

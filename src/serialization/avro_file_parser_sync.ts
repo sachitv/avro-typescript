@@ -36,6 +36,11 @@ export class SyncAvroFileParser {
   #customDecoders: SyncDecoderRegistry;
   #builtInDecoders: SyncDecoderRegistry;
 
+  /**
+   * Creates a new synchronous Avro file parser.
+   * @param buffer The readable buffer containing the Avro container.
+   * @param options Configuration options including reader schema and decoders.
+   */
   constructor(buffer: ISyncReadable, options?: SyncAvroFileParserOptions) {
     this.#buffer = buffer;
     this.#readerSchema = options?.readerSchema;

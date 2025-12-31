@@ -29,6 +29,13 @@ export class SyncStreamWritableBufferAdapter implements ISyncWritable {
     this.#streamBuffer.writeBytes(data);
   }
 
+  /**
+   * Appends a slice of bytes to the buffer.
+   *
+   * @param data The source bytes.
+   * @param offset The starting offset in data.
+   * @param length The number of bytes to write.
+   */
   public appendBytesFrom(
     data: Uint8Array,
     offset: number,

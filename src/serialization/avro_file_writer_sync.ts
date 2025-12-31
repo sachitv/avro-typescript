@@ -19,11 +19,17 @@ const RESERVED_METADATA_KEYS = new Set(["avro.schema", "avro.codec"]);
  * Options accepted by {@link SyncAvroFileWriter}.
  */
 export interface SyncAvroWriterOptions {
+  /** The Avro schema for records to be written. */
   schema: SchemaLike;
+  /** The compression codec to use (default: "null"). */
   codec?: string;
+  /** Target block size in bytes before flushing (default: 64000). */
   blockSize?: number;
+  /** Custom 16-byte sync marker (defaults to random). */
   syncMarker?: Uint8Array;
+  /** Additional user metadata to include in the header. */
   metadata?: MetadataInit;
+  /** Custom codec encoders. */
   encoders?: SyncEncoderRegistry;
 }
 
@@ -48,6 +54,11 @@ export class SyncAvroFileWriter {
   #builtInEncoders: SyncEncoderRegistry;
   #customEncoders: SyncEncoderRegistry;
 
+  /**
+   * Creates a new synchronous Avro file writer.
+   * @param buffer The writable buffer to write the Avro container to.
+   * @param options Configuration options including schema and codec.
+   */
   constructor(buffer: ISyncWritable, options: SyncAvroWriterOptions) {
     if (!options || !options.schema) {
       throw new Error("Avro writer requires a schema.");

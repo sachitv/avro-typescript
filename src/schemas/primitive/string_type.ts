@@ -17,6 +17,7 @@ import { calculateVarintSize } from "../../internal/varint.ts";
  * String type.
  */
 export class StringType extends PrimitiveType<string> {
+  /** Creates a new string type. */
   constructor(validate = true) {
     super(validate);
   }
@@ -39,6 +40,7 @@ export class StringType extends PrimitiveType<string> {
     return await tap.readString();
   }
 
+  /** Writes a string value to the tap without validation. */
   public override async writeUnchecked(
     tap: WritableTapLike,
     value: string,
@@ -46,6 +48,7 @@ export class StringType extends PrimitiveType<string> {
     await tap.writeString(value);
   }
 
+  /** Returns the encoded byte length of the given value. */
   protected override byteLength(value: string): number {
     const length = utf8ByteLength(value);
     return calculateVarintSize(length) + length;
@@ -111,6 +114,7 @@ export class StringType extends PrimitiveType<string> {
     return tap.readString();
   }
 
+  /** Writes a string value synchronously to the tap without validation. */
   public override writeSyncUnchecked(
     tap: SyncWritableTapLike,
     value: string,

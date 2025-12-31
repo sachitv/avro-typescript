@@ -12,21 +12,39 @@ import {
   SyncInMemoryWritableBuffer,
 } from "../../src/serialization/buffers/in_memory_buffer_sync.ts";
 
+/** Identifies which Avro library implementation to benchmark. */
 export type BenchmarkLibrary = "avro-typescript" | "avsc" | "avro-js";
 type AvscSchema = Parameters<typeof avsc.Type.forSchema>[0];
 
+/**
+ * Abstraction for benchmarking serialization/deserialization across libraries.
+ */
 export interface SerializationTarget<TRecord> {
+  /** Unique identifier for the library being benchmarked. */
   id: BenchmarkLibrary;
+  /** Human-readable label for benchmark output. */
   label: string;
+  /** Transforms input record before serialization (e.g., for library-specific formats). */
   prepareInput(record: TRecord): TRecord;
+  /** Serializes a record to Avro binary format. */
   serialize(record: TRecord): Uint8Array;
+  /** Deserializes Avro binary data back to a record. */
   deserialize(payload: Uint8Array): unknown;
 }
 
+/**
+ * Per-library overrides for benchmark configuration.
+ */
 export type SerializationOverrides<TRecord> = {
   prepareInput?: (record: TRecord) => TRecord;
 };
 
+/**
+ * Creates serialization targets for all supported Avro libraries.
+ * @param schema The Avro schema to use for serialization.
+ * @param overrides Optional per-library configuration overrides.
+ * @returns Array of serialization targets for benchmarking.
+ */
 export function createSerializationTargets<TRecord>(
   schema: SchemaLike,
   overrides?: Partial<Record<BenchmarkLibrary, SerializationOverrides<TRecord>>>,

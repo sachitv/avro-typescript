@@ -11,6 +11,7 @@ import { BaseType } from "../base_type.ts";
  * Provides optimized serialization for types with known fixed byte sizes.
  */
 export abstract class FixedSizeBaseType<T = unknown> extends BaseType<T> {
+  /** Creates a new fixed-size base type. */
   constructor(validate = true) {
     super(validate);
   }
@@ -21,6 +22,7 @@ export abstract class FixedSizeBaseType<T = unknown> extends BaseType<T> {
    */
   public abstract sizeBytes(): number;
 
+  /** Returns the fixed byte length for any value of this type. */
   protected override byteLength(_value: T): number {
     return this.sizeBytes();
   }

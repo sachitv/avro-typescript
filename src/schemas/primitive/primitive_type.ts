@@ -5,6 +5,7 @@ import { throwInvalidError } from "../error.ts";
  * Abstract base class for primitive Avro types.
  */
 export abstract class PrimitiveType<T = unknown> extends BaseType<T> {
+  /** Creates a new primitive type. */
   constructor(validate = true) {
     super(validate);
   }

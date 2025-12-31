@@ -15,6 +15,7 @@ import type { ErrorHook } from "../error.ts";
  * Int type (32-bit).
  */
 export class IntType extends PrimitiveType<number> {
+  /** Creates a new int type. */
   constructor(validate = true) {
     super(validate);
   }
@@ -38,6 +39,7 @@ export class IntType extends PrimitiveType<number> {
     return await tap.readInt();
   }
 
+  /** Writes a 32-bit integer to the tap without validation. */
   public override async writeUnchecked(
     tap: WritableTapLike,
     value: number,
@@ -45,6 +47,7 @@ export class IntType extends PrimitiveType<number> {
     await tap.writeInt(value);
   }
 
+  /** Returns the encoded byte length of the given value. */
   protected override byteLength(value: number): number {
     return calculateVarintSize(value);
   }
@@ -86,6 +89,7 @@ export class IntType extends PrimitiveType<number> {
     return tap.readInt();
   }
 
+  /** Writes a 32-bit integer synchronously to the tap without validation. */
   public override writeSyncUnchecked(
     tap: SyncWritableTapLike,
     value: number,

@@ -14,6 +14,7 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
  * Boolean type.
  */
 export class BooleanType extends FixedSizeBaseType<boolean> {
+  /** Creates a new boolean type. */
   constructor(validate = true) {
     super(validate);
   }
@@ -40,6 +41,7 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     return await tap.readBoolean();
   }
 
+  /** Writes a boolean value to the tap without validation. */
   public override async writeUnchecked(
     tap: WritableTapLike,
     value: boolean,
@@ -107,6 +109,7 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
     return tap.readBoolean();
   }
 
+  /** Writes a boolean value synchronously to the tap without validation. */
   public override writeSyncUnchecked(
     tap: SyncWritableTapLike,
     value: boolean,

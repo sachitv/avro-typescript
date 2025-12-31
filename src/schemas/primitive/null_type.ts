@@ -14,6 +14,7 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
  * Null type.
  */
 export class NullType extends FixedSizeBaseType<null> {
+  /** Creates a new null type. */
   constructor(validate = true) {
     super(validate);
   }
@@ -40,6 +41,7 @@ export class NullType extends FixedSizeBaseType<null> {
     return await Promise.resolve(null);
   }
 
+  /** Writes a null value to the tap without validation. */
   public override async writeUnchecked(
     _tap: WritableTapLike,
     _value: null,
@@ -103,6 +105,7 @@ export class NullType extends FixedSizeBaseType<null> {
     return null;
   }
 
+  /** Writes a null value synchronously to the tap without validation. */
   public override writeSyncUnchecked(
     _tap: SyncWritableTapLike,
     _value: null,

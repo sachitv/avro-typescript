@@ -39,6 +39,15 @@ export class SyncFixedSizeStreamWriter implements ISyncStreamWritableBuffer {
     this.#offset += data.length;
   }
 
+  /**
+   * Writes a slice of bytes to the underlying target buffer.
+   *
+   * @param data The source bytes.
+   * @param offset The starting offset in data.
+   * @param length The number of bytes to write.
+   * @throws RangeError If the write would exceed the buffer capacity.
+   * @throws Error If the writer has been closed.
+   */
   public writeBytesFrom(
     data: Uint8Array,
     offset: number,

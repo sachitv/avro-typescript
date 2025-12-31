@@ -20,6 +20,7 @@ const MAX_LONG = (1n << 63n) - 1n;
  * Long type (64-bit).
  */
 export class LongType extends PrimitiveType<bigint> {
+  /** Creates a new long type. */
   constructor(validate = true) {
     super(validate);
   }
@@ -43,6 +44,7 @@ export class LongType extends PrimitiveType<bigint> {
     return await tap.readLong();
   }
 
+  /** Writes a long value to the tap without validation. */
   public override async writeUnchecked(
     tap: WritableTapLike,
     value: bigint,
@@ -50,6 +52,7 @@ export class LongType extends PrimitiveType<bigint> {
     await tap.writeLong(value);
   }
 
+  /** Returns the encoded byte length of the given value. */
   protected override byteLength(value: bigint): number {
     return calculateVarintSize(value);
   }
@@ -127,6 +130,7 @@ export class LongType extends PrimitiveType<bigint> {
     return tap.readLong();
   }
 
+  /** Writes a long value synchronously to the tap without validation. */
   public override writeSyncUnchecked(
     tap: SyncWritableTapLike,
     value: bigint,

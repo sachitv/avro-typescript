@@ -36,8 +36,10 @@ export type JSONType =
  * Provides the common interface for serialization, deserialization, validation, and cloning.
  */
 export abstract class Type<T = unknown> {
+  /** Controls whether write operations validate values before serialization. */
   protected readonly validateWrites: boolean;
 
+  /** Creates a new Type instance. */
   protected constructor(validate = true) {
     this.validateWrites = validate;
   }

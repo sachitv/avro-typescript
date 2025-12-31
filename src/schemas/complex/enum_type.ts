@@ -129,6 +129,7 @@ export class EnumType extends NamedType<string> {
     tap.writeLong(BigInt(index));
   }
 
+  /** Returns the encoded byte length for the given enum value. */
   protected override byteLength(value: string): number {
     const index = this.#indices.get(value);
     if (index === undefined) {

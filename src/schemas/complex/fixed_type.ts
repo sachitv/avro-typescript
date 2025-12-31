@@ -131,6 +131,7 @@ export class FixedType extends NamedType<Uint8Array> {
     tap.writeFixed(value);
   }
 
+  /** Returns the fixed byte length. */
   protected override byteLength(_value: Uint8Array): number {
     return this.#size;
   }

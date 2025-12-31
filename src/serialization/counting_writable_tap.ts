@@ -22,23 +22,28 @@ import { utf8ByteLength } from "./text_encoding.ts";
  * ```
  */
 export class CountingWritableTap extends TapBase implements WritableTapLike {
+  /** Creates a new counting tap starting at position 0. */
   constructor() {
     super(0);
   }
 
+  /** Returns whether the tap is valid (always true for counting tap). */
   isValid(): Promise<boolean> {
     return Promise.resolve(true);
   }
 
+  /** Counts a boolean value (1 byte). */
   writeBoolean(_value: boolean): Promise<void> {
     this.pos += 1;
     return Promise.resolve();
   }
 
+  /** Counts an integer value using varint encoding. */
   writeInt(value: number): Promise<void> {
     return this.writeLong(BigInt(value));
   }
 
+  /** Counts a long value using zigzag + varint encoding. */
   writeLong(value: bigint): Promise<void> {
     // Calculate varint size for zigzag-encoded value
     let n = value < 0n ? ((-value) << 1n) - 1n : value << 1n;
@@ -51,21 +56,25 @@ export class CountingWritableTap extends TapBase implements WritableTapLike {
     return Promise.resolve();
   }
 
+  /** Counts a float value (4 bytes). */
   writeFloat(_value: number): Promise<void> {
     this.pos += 4;
     return Promise.resolve();
   }
 
+  /** Counts a double value (8 bytes). */
   writeDouble(_value: number): Promise<void> {
     this.pos += 8;
     return Promise.resolve();
   }
 
+  /** Counts a fixed-length byte sequence. */
   writeFixed(buf: Uint8Array): Promise<void> {
     this.pos += buf.length;
     return Promise.resolve();
   }
 
+  /** Counts a length-prefixed byte sequence. */
   writeBytes(buf: Uint8Array): Promise<void> {
     const len = buf.length;
     // Length prefix + data
@@ -74,6 +83,7 @@ export class CountingWritableTap extends TapBase implements WritableTapLike {
     });
   }
 
+  /** Counts a length-prefixed UTF-8 string. */
   writeString(str: string): Promise<void> {
     // Calculate UTF-8 byte length
     const len = utf8ByteLength(str);
@@ -82,6 +92,7 @@ export class CountingWritableTap extends TapBase implements WritableTapLike {
     });
   }
 
+  /** Counts raw binary bytes without length prefix. */
   writeBinary(_str: string, len: number): Promise<void> {
     if (len > 0) this.pos += len;
     return Promise.resolve();

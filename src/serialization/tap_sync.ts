@@ -35,59 +35,102 @@ function isISyncWritable(obj: unknown): obj is ISyncWritable {
   );
 }
 
+/**
+ * Interface for synchronous readable tap operations in Avro serialization.
+ */
 export interface SyncReadableTapLike {
+  /** Returns whether the cursor is positioned within the buffer bounds. */
   isValid(): boolean;
+  /** Returns whether more data can be read from the current position. */
   canReadMore(): boolean;
 
+  /** Returns the buffer contents from the start up to the current cursor. */
   getValue(): Uint8Array;
 
+  /** Reads the next byte as a boolean value and advances the cursor. */
   readBoolean(): boolean;
+  /** Skips a boolean value by advancing the cursor by one byte. */
   skipBoolean(): void;
 
+  /** Reads a variable-length zig-zag encoded 32-bit signed integer. */
   readInt(): number;
+  /** Reads a variable-length zig-zag encoded 64-bit signed integer as bigint. */
   readLong(): bigint;
+  /** Skips a zig-zag encoded 32-bit integer. */
   skipInt(): void;
+  /** Skips a zig-zag encoded 64-bit integer. */
   skipLong(): void;
 
+  /** Reads a 32-bit little-endian floating point number. */
   readFloat(): number;
+  /** Skips a 32-bit floating point value by advancing four bytes. */
   skipFloat(): void;
 
+  /** Reads a 64-bit little-endian floating point number. */
   readDouble(): number;
+  /** Skips a 64-bit floating point value by advancing eight bytes. */
   skipDouble(): void;
 
+  /** Reads a fixed-length byte sequence. */
   readFixed(len: number): Uint8Array;
+  /** Skips a fixed-length byte sequence. */
   skipFixed(len: number): void;
 
+  /** Reads a length-prefixed byte sequence. */
   readBytes(): Uint8Array;
+  /** Skips a length-prefixed byte sequence. */
   skipBytes(): void;
 
+  /** Reads a length-prefixed UTF-8 string. */
   readString(): string;
+  /** Skips a length-prefixed UTF-8 string. */
   skipString(): void;
 
+  /** Compares boolean values from this tap and another. */
   matchBoolean(tap: SyncReadableTapLike): number;
+  /** Compares 32-bit integer values from this tap and another. */
   matchInt(tap: SyncReadableTapLike): number;
+  /** Compares 64-bit integer values from this tap and another. */
   matchLong(tap: SyncReadableTapLike): number;
+  /** Compares 32-bit float values from this tap and another. */
   matchFloat(tap: SyncReadableTapLike): number;
+  /** Compares 64-bit double values from this tap and another. */
   matchDouble(tap: SyncReadableTapLike): number;
+  /** Compares fixed-length byte sequences from this tap and another. */
   matchFixed(tap: SyncReadableTapLike, len: number): number;
+  /** Compares length-prefixed byte sequences from this tap and another. */
   matchBytes(tap: SyncReadableTapLike): number;
+  /** Compares length-prefixed strings from this tap and another. */
   matchString(tap: SyncReadableTapLike): number;
 }
 
+/**
+ * Interface for synchronous writable tap operations in Avro serialization.
+ */
 export interface SyncWritableTapLike {
+  /** Returns whether the tap is valid for writing. */
   isValid(): boolean;
 
+  /** Writes a boolean value as a single byte. */
   writeBoolean(value: boolean): void;
 
+  /** Writes a zig-zag encoded 32-bit signed integer. */
   writeInt(value: number): void;
+  /** Writes a zig-zag encoded 64-bit signed integer. */
   writeLong(value: bigint): void;
 
+  /** Writes a 32-bit little-endian floating point number. */
   writeFloat(value: number): void;
+  /** Writes a 64-bit little-endian floating point number. */
   writeDouble(value: number): void;
 
+  /** Writes a fixed-length byte sequence. */
   writeFixed(buf: Uint8Array): void;
+  /** Writes a length-prefixed byte sequence. */
   writeBytes(buf: Uint8Array): void;
+  /** Writes a length-prefixed UTF-8 string. */
   writeString(str: string): void;
+  /** Writes raw binary bytes without a length prefix. */
   writeBinary(str: string, len: number): void;
 }
 
@@ -98,6 +141,11 @@ export interface SyncWritableTapLike {
 export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
   private readonly buffer: ISyncReadable;
 
+  /**
+   * Creates a new SyncReadableTap.
+   * @param buf The buffer to read from, either an ArrayBuffer or ISyncReadable.
+   * @param pos The initial position in the buffer (default 0).
+   */
   constructor(buf: ArrayBuffer | ISyncReadable, pos = 0) {
     super(pos);
     if (buf instanceof ArrayBuffer) {
@@ -111,6 +159,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     }
   }
 
+  /** Returns whether the cursor is positioned within the buffer bounds. */
   isValid(): boolean {
     try {
       this.buffer.read(this.pos, 0);
@@ -123,10 +172,12 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     }
   }
 
+  /** Returns whether more data can be read from the current position. */
   canReadMore(): boolean {
     return this.buffer.canReadMore(this.pos);
   }
 
+  /** Returns the buffer contents from the start up to the current cursor. */
   getValue(): Uint8Array {
     if (this.pos < 0) {
       throw new RangeError("Tap position is negative.");
@@ -134,25 +185,30 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     return this.buffer.read(0, this.pos)!;
   }
 
+  /** Retrieves the byte at the specified position in the buffer. */
   private getByteAt(position: number): number {
     const result = this.buffer.read(position, 1)!;
     return result[0]!;
   }
 
+  /** Reads the next byte as a boolean value and advances the cursor. */
   readBoolean(): boolean {
     const value = this.getByteAt(this.pos);
     this.pos += 1;
     return !!value;
   }
 
+  /** Skips a boolean value by advancing the cursor by one byte. */
   skipBoolean(): void {
     this.pos += 1;
   }
 
+  /** Reads a variable-length zig-zag encoded 32-bit signed integer. */
   readInt(): number {
     return bigIntToSafeNumber(this.readLong(), "readInt value");
   }
 
+  /** Reads a variable-length zig-zag encoded 64-bit signed integer as bigint. */
   readLong(): bigint {
     let pos = this.pos;
     let shift = 0n;
@@ -175,10 +231,12 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     return (result >> 1n) ^ -(result & 1n);
   }
 
+  /** Skips a zig-zag encoded 32-bit integer by delegating to skipLong. */
   skipInt(): void {
     this.skipLong();
   }
 
+  /** Skips a zig-zag encoded 64-bit integer, advancing past continuation bytes. */
   skipLong(): void {
     let pos = this.pos;
     while (this.getByteAt(pos++) & 0x80) {
@@ -187,6 +245,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     this.pos = pos;
   }
 
+  /** Reads a 32-bit little-endian floating point number. */
   readFloat(): number {
     const pos = this.pos;
     this.pos += 4;
@@ -195,10 +254,12 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     return view.getFloat32(0, true);
   }
 
+  /** Skips a 32-bit floating point value by advancing four bytes. */
   skipFloat(): void {
     this.pos += 4;
   }
 
+  /** Reads a 64-bit little-endian floating point number. */
   readDouble(): number {
     const pos = this.pos;
     this.pos += 8;
@@ -207,51 +268,61 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     return view.getFloat64(0, true);
   }
 
+  /** Skips a 64-bit floating point value by advancing eight bytes. */
   skipDouble(): void {
     this.pos += 8;
   }
 
+  /** Reads a fixed-length byte sequence. */
   readFixed(len: number): Uint8Array {
     const pos = this.pos;
     this.pos += len;
     return this.buffer.read(pos, len)!;
   }
 
+  /** Skips a fixed-length byte sequence. */
   skipFixed(len: number): void {
     this.pos += len;
   }
 
+  /** Reads a length-prefixed byte sequence. */
   readBytes(): Uint8Array {
     const length = bigIntToSafeNumber(this.readLong(), "readBytes length");
     return this.readFixed(length);
   }
 
+  /** Skips a length-prefixed byte sequence. */
   skipBytes(): void {
     const len = bigIntToSafeNumber(this.readLong(), "skipBytes length");
     this.pos += len;
   }
 
+  /** Reads a length-prefixed UTF-8 string. */
   readString(): string {
     const len = bigIntToSafeNumber(this.readLong(), "readString length");
     const bytes = this.readFixed(len);
     return decode(bytes);
   }
 
+  /** Skips a length-prefixed UTF-8 string. */
   skipString(): void {
     const len = bigIntToSafeNumber(this.readLong(), "skipString length");
     this.pos += len;
   }
 
+  /** Compares boolean values from this tap and another. */
   matchBoolean(tap: SyncReadableTapLike): number {
     const v1 = this.readBoolean();
     const v2 = tap.readBoolean();
     return Number(v1) - Number(v2);
   }
 
+  /** Compares 32-bit integer values from this tap and another. */
   matchInt(tap: SyncReadableTapLike): number {
     return this.matchLong(tap);
   }
 
+  /** Compares 64-bit integer values from this tap and another. */
   matchLong(tap: SyncReadableTapLike): number {
     const n1 = this.readLong();
     const n2 = tap.readLong();
@@ -264,6 +335,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     }
   }
 
+  /** Compares 32-bit float values from this tap and another. */
   matchFloat(tap: SyncReadableTapLike): number {
     const n1 = this.readFloat();
     const n2 = tap.readFloat();
@@ -276,6 +348,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     }
   }
 
+  /** Compares 64-bit double values from this tap and another. */
   matchDouble(tap: SyncReadableTapLike): number {
     const n1 = this.readDouble();
     const n2 = tap.readDouble();
@@ -288,16 +361,19 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     }
   }
 
+  /** Compares fixed-length byte sequences from this tap and another. */
   matchFixed(tap: SyncReadableTapLike, len: number): number {
     const f1 = this.readFixed(len);
     const f2 = tap.readFixed(len);
     return compareUint8Arrays(f1, f2);
   }
 
+  /** Compares length-prefixed byte sequences from this tap and another. */
   matchBytes(tap: SyncReadableTapLike): number {
     return this.matchString(tap);
   }
 
+  /** Compares length-prefixed strings from this tap and another. */
   matchString(tap: SyncReadableTapLike): number {
     const l1 = bigIntToSafeNumber(
       this.readLong(),
@@ -358,6 +434,11 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
   private static encodedStringBuffer = new Uint8Array(0);
   private static binaryBuffer = new Uint8Array(0);
 
+  /**
+   * Creates a new SyncWritableTap.
+   * @param buf The buffer to write to, either an ArrayBuffer or ISyncWritable.
+   * @param pos The initial position in the buffer (default 0).
+   */
   constructor(buf: ArrayBuffer | ISyncWritable, pos = 0) {
     super(pos);
     if (buf instanceof ArrayBuffer) {
@@ -371,10 +452,12 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
     }
   }
 
+  /** Returns whether the tap is valid for writing. */
   isValid(): boolean {
     return this.buffer.isValid();
   }
 
+  /** Appends raw bytes to the buffer and advances the cursor. */
   private appendRawBytes(
     bytes: Uint8Array,
     offset = 0,
@@ -385,6 +468,7 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
     this.pos += length;
   }
 
+  /** Writes a boolean value as a single byte. */
   writeBoolean(value: boolean): void {
     this.appendRawBytes(
       value ? SyncWritableTap.trueByte : SyncWritableTap.falseByte,
@@ -409,6 +493,7 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
     this.writeVarint32ZigZag(value);
   }
 
+  /** Encodes a 32-bit integer using zigzag + varint encoding. */
   private writeVarint32ZigZag(value: number): void {
     // Zigzag encode to an unsigned 32-bit integer:
     // (n << 1) ^ (n >> 31)
@@ -451,21 +536,25 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
     this.appendRawBytes(buf, 0, i);
   }
 
+  /** Writes a 32-bit little-endian floating point number. */
   writeFloat(value: number): void {
     SyncWritableTap.floatView.setFloat32(0, value, true);
     this.appendRawBytes(SyncWritableTap.float32Bytes);
   }
 
+  /** Writes a 64-bit little-endian floating point number. */
   writeDouble(value: number): void {
     SyncWritableTap.floatView.setFloat64(0, value, true);
     this.appendRawBytes(SyncWritableTap.float64Bytes);
   }
 
+  /** Writes a fixed-length byte sequence. */
   writeFixed(buf: Uint8Array): void {
     if (buf.length === 0) return;
     this.appendRawBytes(buf, 0, buf.length);
   }
 
+  /** Writes a length-prefixed byte sequence. */
   writeBytes(buf: Uint8Array): void {
     const len = buf.length;
     this.writeLong(BigInt(len));
@@ -535,6 +624,7 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
     this.appendRawBytes(encodedBuffer, 0, result.written);
   }
 
+  /** Writes raw binary bytes without a length prefix. */
   writeBinary(str: string, len: number): void {
     if (len <= 0) return;
     const bytes = SyncWritableTap.ensureBinaryBuffer(len);
@@ -544,6 +634,7 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
     this.appendRawBytes(bytes, 0, len);
   }
 
+  /** Ensures the encoded string buffer is at least minSize bytes. */
   private static ensureEncodedStringBuffer(minSize: number): Uint8Array {
     if (SyncWritableTap.encodedStringBuffer.length < minSize) {
       SyncWritableTap.encodedStringBuffer = new Uint8Array(minSize);
@@ -551,6 +642,7 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
     return SyncWritableTap.encodedStringBuffer;
   }
 
+  /** Ensures the binary buffer is at least size bytes. */
   private static ensureBinaryBuffer(size: number): Uint8Array {
     if (SyncWritableTap.binaryBuffer.length < size) {
       SyncWritableTap.binaryBuffer = new Uint8Array(size);

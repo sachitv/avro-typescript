@@ -16,6 +16,7 @@ import { calculateVarintSize } from "../../internal/varint.ts";
  * Bytes type.
  */
 export class BytesType extends PrimitiveType<Uint8Array> {
+  /** Creates a new bytes type. */
   constructor(validate = true) {
     super(validate);
   }
@@ -47,6 +48,7 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     return tap.readBytes();
   }
 
+  /** Writes a byte array to the tap without validation. */
   public override async writeUnchecked(
     tap: WritableTapLike,
     value: Uint8Array,
@@ -54,10 +56,12 @@ export class BytesType extends PrimitiveType<Uint8Array> {
     await tap.writeBytes(value);
   }
 
+  /** Returns the encoded byte length of the given value. */
   protected override byteLength(value: Uint8Array): number {
     return calculateVarintSize(value.length) + value.length;
   }
 
+  /** Writes a byte array synchronously to the tap without validation. */
   public override writeSyncUnchecked(
     tap: SyncWritableTapLike,
     value: Uint8Array,

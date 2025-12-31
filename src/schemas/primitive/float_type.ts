@@ -17,6 +17,7 @@ import { type ErrorHook, throwInvalidError } from "../error.ts";
  * Float type (32-bit).
  */
 export class FloatType extends FixedSizeBaseType<number> {
+  /** Creates a new float type. */
   constructor(validate = true) {
     super(validate);
   }
@@ -44,6 +45,7 @@ export class FloatType extends FixedSizeBaseType<number> {
     return tap.readFloat();
   }
 
+  /** Writes a float value to the tap without validation. */
   public override async writeUnchecked(
     tap: WritableTapLike,
     value: number,
@@ -51,6 +53,7 @@ export class FloatType extends FixedSizeBaseType<number> {
     await tap.writeFloat(value);
   }
 
+  /** Writes a float value synchronously to the tap without validation. */
   public override writeSyncUnchecked(
     tap: SyncWritableTapLike,
     value: number,
