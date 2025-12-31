@@ -219,7 +219,7 @@ describe("Tap primitive round-trips", () => {
     elems: [toUint8Array([1, 5, 255])],
     reader: async (tap) => await tap.readFixed(3),
     skipper: async (tap) => await tap.skipFixed(3),
-    writer: async (tap, value) => await tap.writeFixed(value.subarray(0, 3)),
+    writer: async (tap, value) => await tap.writeFixed(value),
     equals: expectUint8ArrayEqual,
     size: 3,
   });
@@ -528,11 +528,25 @@ describe("Numeric guard rails", () => {
 
   it("writeInt throws when value exceeds 32-bit range", async () => {
     const tap = newTap(16);
+    // 2147483648 is INT32_MAX + 1
     await assertRejects(async () => await tap.writeInt(2147483648), RangeError);
+    // -2147483649 is INT32_MIN - 1
     await assertRejects(
       async () => await tap.writeInt(-2147483649),
       RangeError,
     );
+    // 9007199254740991 exceeds INT32_MAX
+    await assertRejects(
+      async () => await tap.writeInt(Number.MAX_SAFE_INTEGER),
+      RangeError,
+    );
+    // -9007199254740991 is below INT32_MIN
+    await assertRejects(
+      async () => await tap.writeInt(Number.MIN_SAFE_INTEGER),
+      RangeError,
+    );
+    // 3.14 is not an integer
+    await assertRejects(async () => await tap.writeInt(3.14), RangeError);
   });
 });
 
