@@ -43,14 +43,6 @@ const expectUint8ArrayEqual = (
   expect(Array.from(actual!)).toEqual(Array.from(expected));
 };
 
-const expectTapEqual = async (actual: Tap, expected: Tap): Promise<void> => {
-  expect(actual.getPos()).toBe(expected.getPos());
-  expectUint8ArrayEqual(
-    await actual._testOnlyBuf(),
-    await expected._testOnlyBuf(),
-  );
-};
-
 class ErrorBuffer implements IReadableBuffer {
   constructor(private readonly error: Error) {}
 
@@ -537,7 +529,10 @@ describe("Numeric guard rails", () => {
   it("writeInt throws when value exceeds 32-bit range", async () => {
     const tap = newTap(16);
     await assertRejects(async () => await tap.writeInt(2147483648), RangeError);
-    await assertRejects(async () => await tap.writeInt(-2147483649), RangeError);
+    await assertRejects(
+      async () => await tap.writeInt(-2147483649),
+      RangeError,
+    );
   });
 });
 

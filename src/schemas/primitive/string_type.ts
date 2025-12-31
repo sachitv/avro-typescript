@@ -10,7 +10,7 @@ import { PrimitiveType } from "./primitive_type.ts";
 import type { JSONType, Type } from "../type.ts";
 import { Resolver } from "../resolver.ts";
 import type { ErrorHook } from "../error.ts";
-import { decode, encode } from "../../serialization/text_encoding.ts";
+import { decode, utf8ByteLength } from "../../serialization/text_encoding.ts";
 import { calculateVarintSize } from "../../internal/varint.ts";
 
 /**
@@ -47,7 +47,7 @@ export class StringType extends PrimitiveType<string> {
   }
 
   protected override byteLength(value: string): number {
-    const length = encode(value).length;
+    const length = utf8ByteLength(value);
     return calculateVarintSize(length) + length;
   }
 

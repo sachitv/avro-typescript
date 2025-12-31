@@ -1,6 +1,6 @@
 import { TapBase } from "./tap.ts";
 import type { SyncWritableTapLike } from "./sync_tap.ts";
-import { encode } from "./text_encoding.ts";
+import { utf8ByteLength } from "./text_encoding.ts";
 
 /**
  * A synchronous writable tap that counts encoded bytes without allocating buffers.
@@ -77,7 +77,7 @@ export class SyncCountingWritableTap extends TapBase
   }
 
   writeString(str: string): void {
-    const len = encode(str).length;
+    const len = utf8ByteLength(str);
     this.writeLong(BigInt(len));
     this.pos += len;
   }

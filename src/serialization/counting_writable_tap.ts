@@ -1,5 +1,5 @@
 import { TapBase, type WritableTapLike } from "./tap.ts";
-import { encode } from "./text_encoding.ts";
+import { utf8ByteLength } from "./text_encoding.ts";
 
 /**
  * A writable tap that counts encoded bytes without allocating buffers.
@@ -76,7 +76,7 @@ export class CountingWritableTap extends TapBase implements WritableTapLike {
 
   writeString(str: string): Promise<void> {
     // Calculate UTF-8 byte length
-    const len = encode(str).length;
+    const len = utf8ByteLength(str);
     return this.writeLong(BigInt(len)).then(() => {
       this.pos += len;
     });
@@ -86,5 +86,4 @@ export class CountingWritableTap extends TapBase implements WritableTapLike {
     if (len > 0) this.pos += len;
     return Promise.resolve();
   }
-
 }

@@ -9,6 +9,8 @@ import {
   SyncWritableTap,
 } from "../../../serialization/sync_tap.ts";
 import { ReadBufferError } from "../../../serialization/buffers/sync_buffer.ts";
+import { calculateVarintSize } from "../../../internal/varint.ts";
+import { utf8ByteLength } from "../../../serialization/text_encoding.ts";
 
 describe("StringType", () => {
   const type = new StringType();
@@ -34,6 +36,26 @@ describe("StringType", () => {
     assertEquals(buf.byteLength, 82);
     const tap = new Tap(buf);
     assertEquals(await type.read(tap), value);
+  });
+
+  it("toBuffer should allocate enough space for surrogate pairs", async () => {
+    const value = "\ud83d\ude80".repeat(40);
+    const buf = await type.toBuffer(value);
+    const expectedLength = calculateVarintSize(utf8ByteLength(value)) +
+      utf8ByteLength(value);
+    assertEquals(buf.byteLength, expectedLength);
+    const tap = new Tap(buf);
+    assertEquals(await type.read(tap), value);
+  });
+
+  it("toBuffer should allocate enough space for unpaired surrogates", async () => {
+    const value = "\ud800".repeat(40);
+    const buf = await type.toBuffer(value);
+    const expectedLength = calculateVarintSize(utf8ByteLength(value)) +
+      utf8ByteLength(value);
+    assertEquals(buf.byteLength, expectedLength);
+    const tap = new Tap(buf);
+    assertEquals(await type.read(tap), "\ufffd".repeat(40));
   });
 
   it("toBuffer should throw ValidationError for invalid value", async () => {
