@@ -41,6 +41,12 @@ export async function readArrayInto<T>(
   }
 }
 
+/**
+ * Synchronous helper function to read an array from a tap.
+ * @param tap The tap to read from.
+ * @param readElement Function to read a single element.
+ * @param collect Function to collect each read element.
+ */
 export function readArrayIntoSync<T>(
   tap: SyncReadableTapLike,
   readElement: (tap: SyncReadableTapLike) => T,
@@ -146,12 +152,12 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     value: T[],
   ): Promise<void> {
     if (value.length > 0) {
-      await tap.writeInt(value.length);
+      await tap.writeLong(BigInt(value.length));
       for (const element of value) {
         await this.#itemsType.writeUnchecked(tap, element);
       }
     }
-    await tap.writeInt(0);
+    await tap.writeLong(0n);
   }
 
   /**
@@ -162,12 +168,12 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     value: T[],
   ): void {
     if (value.length > 0) {
-      tap.writeInt(value.length);
+      tap.writeLong(BigInt(value.length));
       for (const element of value) {
         this.#itemsType.writeSyncUnchecked(tap, element);
       }
     }
-    tap.writeInt(0);
+    tap.writeLong(0n);
   }
 
   /**

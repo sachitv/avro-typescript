@@ -51,6 +51,12 @@ export async function readMapInto<T>(
   }
 }
 
+/**
+ * Synchronous helper function to read a map from a tap.
+ * @param tap The tap to read from.
+ * @param readValue Function to read a single value.
+ * @param collect Function to collect each key-value pair.
+ */
 export function readMapIntoSync<T>(
   tap: SyncReadableTapLike,
   readValue: (tap: SyncReadableTapLike) => T,
@@ -149,13 +155,13 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     value: Map<string, T>,
   ): Promise<void> {
     if (value.size > 0) {
-      await tap.writeInt(value.size);
+      await tap.writeLong(BigInt(value.size));
       for (const [key, entry] of value) {
         await tap.writeString(key);
         await this.#valuesType.writeUnchecked(tap, entry);
       }
     }
-    await tap.writeInt(0);
+    await tap.writeLong(0n);
   }
 
   /**
@@ -166,13 +172,13 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     value: Map<string, T>,
   ): void {
     if (value.size > 0) {
-      tap.writeInt(value.size);
+      tap.writeLong(BigInt(value.size));
       for (const [key, entry] of value) {
         tap.writeString(key);
         this.#valuesType.writeSyncUnchecked(tap, entry);
       }
     }
-    tap.writeInt(0);
+    tap.writeLong(0n);
   }
 
   /**
