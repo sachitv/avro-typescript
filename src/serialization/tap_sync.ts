@@ -187,12 +187,12 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
         0,
       );
     }
-    return this.buffer.read(0, this.pos)!;
+    return this.buffer.read(0, this.pos);
   }
 
   /** Retrieves the byte at the specified position in the buffer. */
   private getByteAt(position: number): number {
-    const result = this.buffer.read(position, 1)!;
+    const result = this.buffer.read(position, 1);
     return result[0]!;
   }
 
@@ -254,7 +254,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
   readFloat(): number {
     const pos = this.pos;
     this.pos += 4;
-    const bytes = this.buffer.read(pos, 4)!;
+    const bytes = this.buffer.read(pos, 4);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return view.getFloat32(0, true);
   }
@@ -268,7 +268,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
   readDouble(): number {
     const pos = this.pos;
     this.pos += 8;
-    const bytes = this.buffer.read(pos, 8)!;
+    const bytes = this.buffer.read(pos, 8);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return view.getFloat64(0, true);
   }
@@ -282,7 +282,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
   readFixed(len: number): Uint8Array {
     const pos = this.pos;
     this.pos += len;
-    return this.buffer.read(pos, len)!;
+    return this.buffer.read(pos, len);
   }
 
   /** Skips a fixed-length byte sequence. */
