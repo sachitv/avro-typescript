@@ -26,6 +26,19 @@ import {
  */
 
 // =============================================================================
+// BENCHMARK CONFIGURATION
+// =============================================================================
+
+/**
+ * Number of iterations per benchmark.
+ * Higher values = more accurate results but slower execution.
+ * - 100000: High accuracy (slow, ~5-10 min)
+ * - 10000: Good accuracy (moderate, ~30-60 sec)
+ * - 1000: Quick comparison (fast, ~5-10 sec)
+ */
+const BENCH_ITERATIONS = 10000;
+
+// =============================================================================
 // SCHEMA DEFINITIONS
 // =============================================================================
 
@@ -152,6 +165,138 @@ const recordWithArrayOfRecordsSchema: SchemaLike = {
       },
     },
   ],
+};
+
+// --- 4. Array of Records with varying depths ---
+
+// Array of records - 1 level deep
+const arrayOfRecordsDepth1Schema: SchemaLike = {
+  type: "array",
+  items: {
+    type: "record",
+    name: "RecordDepth1",
+    fields: [
+      { name: "id", type: "int" },
+      { name: "name", type: "string" },
+      { name: "value", type: "double" },
+    ],
+  },
+};
+
+// Array of array of records - 2 levels deep
+const arrayOfRecordsDepth2Schema: SchemaLike = {
+  type: "array",
+  items: {
+    type: "array",
+    items: {
+      type: "record",
+      name: "RecordDepth2",
+      fields: [
+        { name: "id", type: "int" },
+        { name: "name", type: "string" },
+        { name: "value", type: "double" },
+      ],
+    },
+  },
+};
+
+// Array of array of array of records - 3 levels deep
+const arrayOfRecordsDepth3Schema: SchemaLike = {
+  type: "array",
+  items: {
+    type: "array",
+    items: {
+      type: "array",
+      items: {
+        type: "record",
+        name: "RecordDepth3",
+        fields: [
+          { name: "id", type: "int" },
+          { name: "name", type: "string" },
+          { name: "value", type: "double" },
+        ],
+      },
+    },
+  },
+};
+
+// Array of array of array of array of records - 4 levels deep
+const arrayOfRecordsDepth4Schema: SchemaLike = {
+  type: "array",
+  items: {
+    type: "array",
+    items: {
+      type: "array",
+      items: {
+        type: "array",
+        items: {
+          type: "record",
+          name: "RecordDepth4",
+          fields: [
+            { name: "id", type: "int" },
+            { name: "name", type: "string" },
+            { name: "value", type: "double" },
+          ],
+        },
+      },
+    },
+  },
+};
+
+// --- 5. Array of Arrays (ints) with varying depths ---
+
+// Array of arrays - 1 level deep (array of array of int)
+const arrayOfArraysDepth1Schema: SchemaLike = {
+  type: "array",
+  items: {
+    type: "array",
+    items: "int",
+  },
+};
+
+// Array of arrays - 2 levels deep
+const arrayOfArraysDepth2Schema: SchemaLike = {
+  type: "array",
+  items: {
+    type: "array",
+    items: {
+      type: "array",
+      items: "int",
+    },
+  },
+};
+
+// Array of arrays - 3 levels deep
+const arrayOfArraysDepth3Schema: SchemaLike = {
+  type: "array",
+  items: {
+    type: "array",
+    items: {
+      type: "array",
+      items: {
+        type: "array",
+        items: "int",
+      },
+    },
+  },
+};
+
+// Array of arrays - 4 levels deep
+const arrayOfArraysDepth4Schema: SchemaLike = {
+  type: "array",
+  items: {
+    type: "array",
+    items: {
+      type: "array",
+      items: {
+        type: "array",
+        items: {
+          type: "array",
+          items: "int",
+        },
+      },
+    },
+  },
 };
 
 // =============================================================================
@@ -281,7 +426,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
     name: `${groupName} (avsc)`,
     group: groupName,
     baseline: true,
-    n: 100000,
+    n: BENCH_ITERATIONS,
   }, () => {
     types.avsc.toBuffer(nodeData);
   });
@@ -290,7 +435,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
   Deno.bench({
     name: `${groupName} (avro-js)`,
     group: groupName,
-    n: 100000,
+    n: BENCH_ITERATIONS,
   }, () => {
     types.avroJs.toBuffer(nodeData);
   });
@@ -299,7 +444,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
   Deno.bench({
     name: `${groupName} (avro-ts, validate=true)`,
     group: groupName,
-    n: 100000,
+    n: BENCH_ITERATIONS,
   }, () => {
     types.avroTs.toSyncBuffer(avroTsData);
   });
@@ -307,7 +452,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
   Deno.bench({
     name: `${groupName} (avro-ts, validate=false)`,
     group: groupName,
-    n: 100000,
+    n: BENCH_ITERATIONS,
   }, () => {
     types.avroTsUnchecked.toSyncBuffer(avroTsData);
   });
@@ -315,7 +460,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
   Deno.bench({
     name: `${groupName} (avro-ts, compiled, validate=true)`,
     group: groupName,
-    n: 100000,
+    n: BENCH_ITERATIONS,
   }, () => {
     types.avroTsCompiled.toSyncBuffer(avroTsData);
   });
@@ -323,7 +468,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
   Deno.bench({
     name: `${groupName} (avro-ts, compiled, validate=false)`,
     group: groupName,
-    n: 100000,
+    n: BENCH_ITERATIONS,
   }, () => {
     types.avroTsCompiledUnchecked.toSyncBuffer(avroTsData);
   });
@@ -331,7 +476,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
   Deno.bench({
     name: `${groupName} (avro-ts, interpreted, validate=true)`,
     group: groupName,
-    n: 100000,
+    n: BENCH_ITERATIONS,
   }, () => {
     types.avroTsInterpreted.toSyncBuffer(avroTsData);
   });
@@ -339,7 +484,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
   Deno.bench({
     name: `${groupName} (avro-ts, interpreted, validate=false)`,
     group: groupName,
-    n: 100000,
+    n: BENCH_ITERATIONS,
   }, () => {
     types.avroTsInterpretedUnchecked.toSyncBuffer(avroTsData);
   });
@@ -350,7 +495,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
     Deno.bench({
       name: `${groupName} (avro-ts, writeSync, validate=true)`,
       group: groupName,
-      n: 100000,
+      n: BENCH_ITERATIONS,
     }, () => {
       const writable = new SyncInMemoryWritableBuffer(buffer);
       const tap = new SyncWritableTap(writable);
@@ -363,7 +508,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
     Deno.bench({
       name: `${groupName} (avro-ts, writeSync, validate=false)`,
       group: groupName,
-      n: 100000,
+      n: BENCH_ITERATIONS,
     }, () => {
       const writable = new SyncInMemoryWritableBuffer(buffer);
       const tap = new SyncWritableTap(writable);
@@ -377,7 +522,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
     Deno.bench({
       name: `${groupName} (avro-ts, writeSync, reuse buffer, validate=true)`,
       group: groupName,
-      n: 100000,
+      n: BENCH_ITERATIONS,
     }, () => {
       const writable = new SyncInMemoryWritableBuffer(buffer);
       const tap = new SyncWritableTap(writable);
@@ -390,7 +535,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
     Deno.bench({
       name: `${groupName} (avro-ts, writeSync, reuse buffer, validate=false)`,
       group: groupName,
-      n: 100000,
+      n: BENCH_ITERATIONS,
     }, () => {
       const writable = new SyncInMemoryWritableBuffer(buffer);
       const tap = new SyncWritableTap(writable);
@@ -637,4 +782,130 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
   });
 }
 
+// =============================================================================
+// 4. ARRAY OF RECORDS BENCHMARKS (by depth)
+// =============================================================================
 
+// --- Array of Records (depth 1) ---
+{
+  const types = createLibraryTypes(arrayOfRecordsDepth1Schema);
+  const data = types.avroTs.random();
+  const nodeData = toNodeFormat(data);
+
+  runFullComparisonBenchmark({
+    groupName: "array-of-records: depth 1",
+    types,
+    avroTsData: data,
+    nodeData,
+    bufferSize: 2048,
+  });
+}
+
+// --- Array of Records (depth 2) ---
+{
+  const types = createLibraryTypes(arrayOfRecordsDepth2Schema);
+  const data = types.avroTs.random();
+  const nodeData = toNodeFormat(data);
+
+  runFullComparisonBenchmark({
+    groupName: "array-of-records: depth 2",
+    types,
+    avroTsData: data,
+    nodeData,
+    bufferSize: 4096,
+  });
+}
+
+// --- Array of Records (depth 3) ---
+{
+  const types = createLibraryTypes(arrayOfRecordsDepth3Schema);
+  const data = types.avroTs.random();
+  const nodeData = toNodeFormat(data);
+
+  runFullComparisonBenchmark({
+    groupName: "array-of-records: depth 3",
+    types,
+    avroTsData: data,
+    nodeData,
+    bufferSize: 8192,
+  });
+}
+
+// --- Array of Records (depth 4) ---
+{
+  const types = createLibraryTypes(arrayOfRecordsDepth4Schema);
+  const data = types.avroTs.random();
+  const nodeData = toNodeFormat(data);
+
+  runFullComparisonBenchmark({
+    groupName: "array-of-records: depth 4",
+    types,
+    avroTsData: data,
+    nodeData,
+    bufferSize: 16384,
+  });
+}
+
+// =============================================================================
+// 5. ARRAY OF ARRAYS BENCHMARKS (by depth)
+// =============================================================================
+
+// --- Array of Arrays (depth 1) ---
+{
+  const types = createLibraryTypes(arrayOfArraysDepth1Schema);
+  const data = types.avroTs.random();
+  const nodeData = toNodeFormat(data);
+
+  runFullComparisonBenchmark({
+    groupName: "array-of-arrays: depth 1",
+    types,
+    avroTsData: data,
+    nodeData,
+    bufferSize: 2048,
+  });
+}
+
+// --- Array of Arrays (depth 2) ---
+{
+  const types = createLibraryTypes(arrayOfArraysDepth2Schema);
+  const data = types.avroTs.random();
+  const nodeData = toNodeFormat(data);
+
+  runFullComparisonBenchmark({
+    groupName: "array-of-arrays: depth 2",
+    types,
+    avroTsData: data,
+    nodeData,
+    bufferSize: 4096,
+  });
+}
+
+// --- Array of Arrays (depth 3) ---
+{
+  const types = createLibraryTypes(arrayOfArraysDepth3Schema);
+  const data = types.avroTs.random();
+  const nodeData = toNodeFormat(data);
+
+  runFullComparisonBenchmark({
+    groupName: "array-of-arrays: depth 3",
+    types,
+    avroTsData: data,
+    nodeData,
+    bufferSize: 8192,
+  });
+}
+
+// --- Array of Arrays (depth 4) ---
+{
+  const types = createLibraryTypes(arrayOfArraysDepth4Schema);
+  const data = types.avroTs.random();
+  const nodeData = toNodeFormat(data);
+
+  runFullComparisonBenchmark({
+    groupName: "array-of-arrays: depth 4",
+    types,
+    avroTsData: data,
+    nodeData,
+    bufferSize: 16384,
+  });
+}
