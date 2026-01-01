@@ -3,7 +3,7 @@ import { compareUint8Arrays } from "./compare_bytes.ts";
 import { decode, encoder } from "./text_encoding.ts";
 import { TapBase } from "./tap.ts";
 import type { ISyncReadable, ISyncWritable } from "./buffers/buffer_sync.ts";
-import { ReadBufferError } from "./buffers/buffer_sync.ts";
+import { ReadBufferError } from "./buffers/buffer_error.ts";
 import {
   SyncInMemoryReadableBuffer,
   SyncInMemoryWritableBuffer,
