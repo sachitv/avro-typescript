@@ -542,7 +542,10 @@ describe("SyncReadableTap vs ReadableTap parity", () => {
       new SyncInMemoryReadableBuffer(empty),
     );
 
-    await assertRejects(async () => await asyncReader.readLong(), Error);
+    await assertRejects(
+      async () => await asyncReader.readLong(),
+      ReadBufferError,
+    );
     assertThrows(() => syncReader.readLong(), ReadBufferError);
   });
 });
