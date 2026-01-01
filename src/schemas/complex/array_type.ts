@@ -152,12 +152,18 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     value: T[],
   ): Promise<void> {
     if (value.length > 0) {
-      await tap.writeLong(BigInt(value.length));
+      // Use writeInt for block counts that fit in 32-bit range (avoids BigInt overhead)
+      if (value.length <= 0x7FFFFFFF) {
+        await tap.writeInt(value.length);
+      } else {
+        await tap.writeLong(BigInt(value.length));
+      }
       for (const element of value) {
         await this.#itemsType.writeUnchecked(tap, element);
       }
     }
-    await tap.writeLong(0n);
+    // Terminal 0 marker always fits in an int
+    await tap.writeInt(0);
   }
 
   /**
@@ -168,12 +174,18 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     value: T[],
   ): void {
     if (value.length > 0) {
-      tap.writeLong(BigInt(value.length));
+      // Use writeInt for block counts that fit in 32-bit range (avoids BigInt overhead)
+      if (value.length <= 0x7FFFFFFF) {
+        tap.writeInt(value.length);
+      } else {
+        tap.writeLong(BigInt(value.length));
+      }
       for (const element of value) {
         this.#itemsType.writeSyncUnchecked(tap, element);
       }
     }
-    tap.writeLong(0n);
+    // Terminal 0 marker always fits in an int
+    tap.writeInt(0);
   }
 
   /**

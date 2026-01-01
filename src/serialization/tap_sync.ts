@@ -562,7 +562,12 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
   /** Writes a length-prefixed byte sequence. */
   writeBytes(buf: Uint8Array): void {
     const len = buf.length;
-    this.writeLong(BigInt(len));
+    // Use writeInt for lengths that fit in 32-bit range (avoids BigInt overhead)
+    if (len <= 0x7FFFFFFF) {
+      this.writeInt(len);
+    } else {
+      this.writeLong(BigInt(len));
+    }
     this.writeFixed(buf);
   }
 

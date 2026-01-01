@@ -155,13 +155,19 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     value: Map<string, T>,
   ): Promise<void> {
     if (value.size > 0) {
-      await tap.writeLong(BigInt(value.size));
+      // Use writeInt for block counts that fit in 32-bit range (avoids BigInt overhead)
+      if (value.size <= 0x7FFFFFFF) {
+        await tap.writeInt(value.size);
+      } else {
+        await tap.writeLong(BigInt(value.size));
+      }
       for (const [key, entry] of value) {
         await tap.writeString(key);
         await this.#valuesType.writeUnchecked(tap, entry);
       }
     }
-    await tap.writeLong(0n);
+    // Terminal 0 marker always fits in an int
+    await tap.writeInt(0);
   }
 
   /**
@@ -172,13 +178,19 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
     value: Map<string, T>,
   ): void {
     if (value.size > 0) {
-      tap.writeLong(BigInt(value.size));
+      // Use writeInt for block counts that fit in 32-bit range (avoids BigInt overhead)
+      if (value.size <= 0x7FFFFFFF) {
+        tap.writeInt(value.size);
+      } else {
+        tap.writeLong(BigInt(value.size));
+      }
       for (const [key, entry] of value) {
         tap.writeString(key);
         this.#valuesType.writeSyncUnchecked(tap, entry);
       }
     }
-    tap.writeLong(0n);
+    // Terminal 0 marker always fits in an int
+    tap.writeInt(0);
   }
 
   /**

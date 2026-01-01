@@ -773,3 +773,37 @@ describe("SyncWritableTap.writeInt validation", () => {
     expect(() => tap.writeInt(-2147483649)).toThrow(RangeError);
   });
 });
+
+describe("SyncWritableTap large length writeLong fallback", () => {
+  it("writeBytes uses writeLong when length > 0x7FFFFFFF", () => {
+    // Create a mock Uint8Array-like object with a huge length but no actual data
+    const hugeLength = 0x80000000; // 2^31, just over the threshold
+    const mockBuf = {
+      length: hugeLength,
+    } as unknown as Uint8Array;
+
+    // Track which write methods are called
+    const calls: Array<{ method: string; value: number | bigint }> = [];
+
+    const tap = new SyncWritableTap(new LenientWritableBuffer());
+
+    // Override writeInt and writeLong to track calls
+    const originalWriteInt = tap.writeInt.bind(tap);
+    const originalWriteLong = tap.writeLong.bind(tap);
+    tap.writeInt = (value: number) => {
+      calls.push({ method: "writeInt", value });
+      return originalWriteInt(value);
+    };
+    tap.writeLong = (value: bigint) => {
+      calls.push({ method: "writeLong", value });
+      return originalWriteLong(value);
+    };
+
+    tap.writeBytes(mockBuf);
+
+    // Should have called writeLong for the length
+    expect(calls.length).toBe(1);
+    expect(calls[0].method).toBe("writeLong");
+    expect(calls[0].value).toBe(BigInt(hugeLength));
+  });
+});

@@ -5,6 +5,7 @@ import { ReadBufferError, WriteBufferError } from "../buffers/buffer_error.ts";
 import { ReadableTap, WritableTap } from "../tap.ts";
 import type { IReadableBuffer, IWritableBuffer } from "../buffers/buffer.ts";
 import { TestTap as Tap } from "./test_tap.ts";
+import { encoder } from "../text_encoding.ts";
 
 type EqualsFn<T> = (actual: T, expected: T) => void;
 
@@ -1049,5 +1050,92 @@ describe("Cursor management", () => {
     expect(tap.getPos()).toBe(1);
     tap._testOnlyResetPos();
     expect(tap.getPos()).toBe(0);
+  });
+});
+
+describe("WritableTap large length writeLong fallback", () => {
+  it("writeBytes uses writeLong when length > 0x7FFFFFFF", async () => {
+    // Create a mock Uint8Array-like object with a huge length but no actual data
+    const hugeLength = 0x80000000; // 2^31, just over the threshold
+    const mockBuf = {
+      length: hugeLength,
+    } as unknown as Uint8Array;
+
+    // Track which write methods are called
+    const calls: Array<{ method: string; value: number | bigint }> = [];
+    const mockBuffer: IWritableBuffer = {
+      appendBytes: () => Promise.resolve(),
+      isValid: () => Promise.resolve(true),
+      canAppendMore: () => Promise.resolve(true),
+    };
+
+    const tap = new WritableTap(mockBuffer);
+    // Override writeInt and writeLong to track calls
+    const originalWriteInt = tap.writeInt.bind(tap);
+    const originalWriteLong = tap.writeLong.bind(tap);
+    // deno-lint-ignore require-await
+    tap.writeInt = async (value: number) => {
+      calls.push({ method: "writeInt", value });
+      return originalWriteInt(value);
+    };
+    // deno-lint-ignore require-await
+    tap.writeLong = async (value: bigint) => {
+      calls.push({ method: "writeLong", value });
+      return originalWriteLong(value);
+    };
+
+    await tap.writeBytes(mockBuf);
+
+    // Should have called writeLong for the length
+    expect(calls.length).toBe(1);
+    expect(calls[0].method).toBe("writeLong");
+    expect(calls[0].value).toBe(BigInt(hugeLength));
+  });
+
+  it("writeString uses writeLong when encoded length > 0x7FFFFFFF", async () => {
+    // Mock encoder.encode to return a Uint8Array-like object with huge length
+    const hugeLength = 0x80000000; // 2^31, just over the threshold
+    const originalEncode = encoder.encode.bind(encoder);
+
+    const mockBuffer: IWritableBuffer = {
+      appendBytes: () => Promise.resolve(),
+      isValid: () => Promise.resolve(true),
+      canAppendMore: () => Promise.resolve(true),
+    };
+
+    const tap = new WritableTap(mockBuffer);
+
+    // Track which write methods are called
+    const calls: Array<{ method: string; value: number | bigint }> = [];
+    const originalWriteInt = tap.writeInt.bind(tap);
+    const originalWriteLong = tap.writeLong.bind(tap);
+    // deno-lint-ignore require-await
+    tap.writeInt = async (value: number) => {
+      calls.push({ method: "writeInt", value });
+      return originalWriteInt(value);
+    };
+    // deno-lint-ignore require-await
+    tap.writeLong = async (value: bigint) => {
+      calls.push({ method: "writeLong", value });
+      return originalWriteLong(value);
+    };
+
+    try {
+      // Mock encoder.encode to return a fake huge Uint8Array
+      // deno-lint-ignore no-explicit-any
+      (encoder as any).encode = (_str: string) => {
+        return { length: hugeLength } as unknown as Uint8Array;
+      };
+
+      await tap.writeString("test");
+    } finally {
+      // Restore original encoder.encode
+      encoder.encode = originalEncode;
+    }
+
+    // Should have called writeLong for the length
+    expect(calls.length).toBe(1);
+    expect(calls[0].method).toBe("writeLong");
+    expect(calls[0].value).toBe(BigInt(hugeLength));
   });
 });

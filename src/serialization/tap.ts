@@ -713,7 +713,12 @@ export class WritableTap extends TapBase implements WritableTapLike {
    */
   async writeBytes(buf: Uint8Array): Promise<void> {
     const len = buf.length;
-    await this.writeLong(BigInt(len));
+    // Use writeInt for lengths that fit in 32-bit range (avoids BigInt overhead)
+    if (len <= 0x7FFFFFFF) {
+      await this.writeInt(len);
+    } else {
+      await this.writeLong(BigInt(len));
+    }
     await this.writeFixed(buf);
   }
 
@@ -724,7 +729,12 @@ export class WritableTap extends TapBase implements WritableTapLike {
   async writeString(str: string): Promise<void> {
     const encoded = encode(str);
     const len = encoded.length;
-    await this.writeLong(BigInt(len));
+    // Use writeInt for lengths that fit in 32-bit range (avoids BigInt overhead)
+    if (len <= 0x7FFFFFFF) {
+      await this.writeInt(len);
+    } else {
+      await this.writeLong(BigInt(len));
+    }
     await this.writeFixed(encoded);
   }
 
