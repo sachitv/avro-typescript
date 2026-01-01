@@ -220,7 +220,7 @@ describe("InMemoryBufferBase (via implementations)", () => {
       const buffer = new ArrayBuffer(10);
       const readable = new InMemoryReadableBuffer(buffer);
       await assertRejects(
-        () => readable.read(8, 3),
+        () => readable.read(0, 11),
         ReadBufferError,
         "Operation exceeds buffer bounds",
       );
@@ -230,7 +230,7 @@ describe("InMemoryBufferBase (via implementations)", () => {
       const buffer = new ArrayBuffer(10);
       const readable = new InMemoryReadableBuffer(buffer);
       await assertRejects(
-        () => readable.read(10, 1),
+        () => readable.read(5, 6),
         ReadBufferError,
         "Operation exceeds buffer bounds",
       );
