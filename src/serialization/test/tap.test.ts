@@ -691,10 +691,10 @@ describe("Construction & buffer compatibility", () => {
     expect(() => new ReadableTap(buf, Number.MAX_SAFE_INTEGER + 1)).toThrow(
       ReadBufferError,
     );
-    expect(() => new WritableTap(buf, -1)).toThrow(ReadBufferError);
-    expect(() => new WritableTap(buf, 1.5)).toThrow(ReadBufferError);
+    expect(() => new WritableTap(buf, -1)).toThrow(WriteBufferError);
+    expect(() => new WritableTap(buf, 1.5)).toThrow(WriteBufferError);
     expect(() => new WritableTap(buf, Number.MAX_SAFE_INTEGER + 1)).toThrow(
-      ReadBufferError,
+      WriteBufferError,
     );
   });
 

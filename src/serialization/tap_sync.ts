@@ -182,8 +182,8 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     if (this.pos < 0) {
       throw new ReadBufferError(
         "Tap position is negative.",
-        0,
         this.pos,
+        0,
         0,
       );
     }

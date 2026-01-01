@@ -2,7 +2,7 @@ import { bigIntToSafeNumber } from "./conversion.ts";
 import { compareUint8Arrays } from "./compare_bytes.ts";
 import { decode, encode } from "./text_encoding.ts";
 import type { IReadableBuffer, IWritableBuffer } from "./buffers/buffer.ts";
-import { ReadBufferError } from "./buffers/buffer_error.ts";
+import { ReadBufferError, WriteBufferError } from "./buffers/buffer_error.ts";
 import {
   InMemoryReadableBuffer,
   InMemoryWritableBuffer,
@@ -194,17 +194,18 @@ export interface WritableTapLike {
   writeBinary(str: string, len: number): Promise<void>;
 }
 
-function assertValidPosition(pos: number): void {
+function assertValidPosition(pos: number, isWritable = false): void {
   if (
     !Number.isFinite(pos) || !Number.isInteger(pos) || pos < 0 ||
     Math.abs(pos) > Number.MAX_SAFE_INTEGER
   ) {
-    throw new ReadBufferError(
-      "Tap position must be an integer within the safe number range.",
-      pos,
-      0,
-      0,
-    );
+    const message =
+      "Tap position must be an integer within the safe number range.";
+    if (isWritable) {
+      throw new WriteBufferError(message, pos, 0, 0);
+    } else {
+      throw new ReadBufferError(message, pos, 0, 0);
+    }
   }
 }
 
@@ -583,7 +584,7 @@ export class WritableTap extends TapBase implements WritableTapLike {
    * @param pos The initial position in the buffer (default 0).
    */
   constructor(buf: ArrayBuffer | IWritableBuffer, pos = 0) {
-    assertValidPosition(pos);
+    assertValidPosition(pos, true);
     let buffer: IWritableBuffer;
     if (buf instanceof ArrayBuffer) {
       buffer = new InMemoryWritableBuffer(buf, pos);
