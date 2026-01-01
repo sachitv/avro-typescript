@@ -1,11 +1,15 @@
 /**
  * Interface describing a random-access readable buffer.
  */
+
 export interface IReadableBuffer {
   /**
    * Reads a portion of the buffer starting at offset with the given size.
+   *
+   * @throws ReadBufferError when the requested range is invalid or exceeds the
+   * available bounds.
    */
-  read(offset: number, size: number): Promise<Uint8Array | undefined>;
+  read(offset: number, size: number): Promise<Uint8Array>;
 
   /**
    * Checks if more data can be read starting at the given offset.
@@ -16,10 +20,13 @@ export interface IReadableBuffer {
 /**
  * Interface describing an append-only writable buffer.
  */
+
 export interface IWritableBuffer {
   /**
    * Appends bytes to the buffer, advancing its internal write cursor when the
    * operation succeeds.
+   *
+   * @throws WriteBufferError when the buffer cannot accept the requested bytes.
    */
   appendBytes(data: Uint8Array): Promise<void>;
 

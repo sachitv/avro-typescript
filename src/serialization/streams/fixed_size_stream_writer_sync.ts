@@ -1,3 +1,4 @@
+import { WriteBufferError } from "../buffers/buffer_sync.ts";
 import type { ISyncStreamWritableBuffer } from "./streams_sync.ts";
 
 /**
@@ -22,7 +23,7 @@ export class SyncFixedSizeStreamWriter implements ISyncStreamWritableBuffer {
    * Writes bytes to the underlying target buffer.
    *
    * @param data The bytes to write.
-   * @throws RangeError If the write would exceed the buffer capacity.
+   * @throws WriteBufferError If the write would exceed the buffer capacity.
    * @throws Error If the writer has been closed.
    */
   public writeBytes(data: Uint8Array): void {
@@ -33,7 +34,12 @@ export class SyncFixedSizeStreamWriter implements ISyncStreamWritableBuffer {
       return;
     }
     if (this.#offset + data.length > this.#target.length) {
-      throw new RangeError("Write operation exceeds buffer capacity");
+      throw new WriteBufferError(
+        "Write operation exceeds buffer capacity",
+        this.#offset,
+        data.length,
+        this.#target.length,
+      );
     }
     this.#target.set(data, this.#offset);
     this.#offset += data.length;
@@ -45,7 +51,8 @@ export class SyncFixedSizeStreamWriter implements ISyncStreamWritableBuffer {
    * @param data The source bytes.
    * @param offset The starting offset in data.
    * @param length The number of bytes to write.
-   * @throws RangeError If the write would exceed the buffer capacity.
+   * @throws RangeError If the source range parameters are invalid.
+   * @throws WriteBufferError If the write would exceed the buffer capacity.
    * @throws Error If the writer has been closed.
    */
   public writeBytesFrom(
@@ -68,7 +75,12 @@ export class SyncFixedSizeStreamWriter implements ISyncStreamWritableBuffer {
       );
     }
     if (this.#offset + length > this.#target.length) {
-      throw new RangeError("Write operation exceeds buffer capacity");
+      throw new WriteBufferError(
+        "Write operation exceeds buffer capacity",
+        this.#offset,
+        length,
+        this.#target.length,
+      );
     }
     for (let i = 0; i < length; i++) {
       this.#target[this.#offset + i] = data[offset + i]!;

@@ -1,4 +1,5 @@
 import type { IStreamReadableBuffer } from "./streams.ts";
+import { ReadBufferError } from "../buffers/buffer_error.ts";
 import type { IReadableBuffer } from "../buffers/buffer.ts";
 
 /**
@@ -30,30 +31,53 @@ export class ForwardOnlyStreamReadableBufferAdapter implements IReadableBuffer {
    *
    * @param offset The byte offset to start reading from (must be current position).
    * @param size The number of bytes to read.
-   * @returns A Promise that resolves to a new Uint8Array containing the read bytes, or undefined if the read would exceed buffer bounds.
-   * @throws Error if attempting to read backwards or seek forward.
+   * @returns A Promise that resolves to a new Uint8Array containing the read bytes.
+   * @throws ReadBufferError when the requested range is invalid or exceeds buffered bounds.
+   * @throws ReadBufferError if attempting to read backwards or seek forward.
    */
   public async read(
     offset: number,
     size: number,
-  ): Promise<Uint8Array | undefined> {
+  ): Promise<Uint8Array> {
+    // Validate parameters
     if (offset < 0 || size < 0) {
-      return undefined;
+      throw new ReadBufferError(
+        "Offset and size must be non-negative",
+        offset,
+        size,
+        this.#currentPosition + (this.#bufferedData?.length ?? 0),
+      );
     }
-
+    const bufferedLength = this.#bufferedData?.length ?? 0;
     if (offset < this.#currentPosition) {
-      throw new Error("Cannot read backwards from current position");
+      const bufferEnd = this.#currentPosition + bufferedLength;
+      throw new ReadBufferError(
+        "Cannot read backwards from current position",
+        offset,
+        size,
+        bufferEnd,
+      );
     }
-
     if (offset > this.#currentPosition) {
-      throw new Error("Cannot seek forward; reads must be sequential");
+      const bufferEnd = this.#currentPosition + bufferedLength;
+      throw new ReadBufferError(
+        "Cannot seek forward; reads must be sequential",
+        offset,
+        size,
+        bufferEnd,
+      );
     }
 
     // At this point, offset must equal currentPosition due to the checks above
     await this.#ensureBufferedUpTo(this.#currentPosition + size);
 
     if (this.#bufferedData === null || size > this.#bufferedData.length) {
-      return undefined;
+      throw new ReadBufferError(
+        "Operation exceeds buffer bounds",
+        offset,
+        size,
+        this.#currentPosition + (this.#bufferedData?.length ?? 0),
+      );
     }
 
     const result = this.#bufferedData.slice(0, size);
@@ -73,14 +97,28 @@ export class ForwardOnlyStreamReadableBufferAdapter implements IReadableBuffer {
    * Only allows reading at the current position; throws errors for backward or forward seeking.
    * @param offset - The offset to check for readability
    * @returns Promise resolving to true if data is available at the current position, false otherwise
+   * @throws ReadBufferError if attempting to read backwards or seek forward
    */
   public async canReadMore(offset: number): Promise<boolean> {
+    const bufferedLength = this.#bufferedData?.length ?? 0;
     if (offset < this.#currentPosition) {
-      throw new Error("Cannot read backwards from current position");
+      const bufferEnd = this.#currentPosition + bufferedLength;
+      throw new ReadBufferError(
+        "Cannot read backwards from current position",
+        offset,
+        1,
+        bufferEnd,
+      );
     }
 
     if (offset > this.#currentPosition) {
-      throw new Error("Cannot seek forward; reads must be sequential");
+      const bufferEnd = this.#currentPosition + bufferedLength;
+      throw new ReadBufferError(
+        "Cannot seek forward; reads must be sequential",
+        offset,
+        1,
+        bufferEnd,
+      );
     }
 
     await this.#ensureBufferedUpTo(this.#currentPosition + 1);

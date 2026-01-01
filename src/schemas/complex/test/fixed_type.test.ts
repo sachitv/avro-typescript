@@ -2,6 +2,7 @@ import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { FixedType } from "../fixed_type.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
+import { ReadBufferError } from "../../../serialization/buffers/buffer_error.ts";
 import {
   SyncReadableTap,
   SyncWritableTap,
@@ -176,16 +177,23 @@ describe("FixedType", () => {
 
       await assertRejects(
         async () => await fixedType.read(tap),
-        RangeError,
-        "Operation exceeds buffer bounds",
+        ReadBufferError,
       );
     });
 
-    // This test checks that fixed type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
+    // This test checks that fixed type read failures throw ReadBufferError, as the tap throws on buffer read failures instead of returning undefined.
     it("should throw when read fails", async () => {
       const fixedType = createFixedType("Test", 4);
       const mockBuffer = {
-        read: (_offset: number, _size: number) => Promise.resolve(undefined),
+        read: (offset: number, size: number) =>
+          Promise.reject(
+            new ReadBufferError(
+              "Operation exceeds buffer bounds",
+              offset,
+              size,
+              0,
+            ),
+          ),
         // This is unused here.
         canReadMore: (_offset: number) => Promise.resolve(false),
       };
@@ -194,8 +202,8 @@ describe("FixedType", () => {
         async () => {
           await fixedType.read(tap);
         },
-        RangeError,
-        "Attempt to read beyond buffer bounds.",
+        ReadBufferError,
+        "Operation exceeds buffer bounds",
       );
     });
   });

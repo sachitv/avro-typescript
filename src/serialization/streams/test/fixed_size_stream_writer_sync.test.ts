@@ -1,5 +1,6 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { WriteBufferError } from "../../buffers/buffer_sync.ts";
 import { SyncFixedSizeStreamWriter } from "../fixed_size_stream_writer_sync.ts";
 
 describe("SyncFixedSizeStreamWriter", () => {
@@ -17,7 +18,7 @@ describe("SyncFixedSizeStreamWriter", () => {
     writer.writeBytes(new Uint8Array([1, 2]));
     assertThrows(
       () => writer.writeBytes(new Uint8Array([3])),
-      RangeError,
+      WriteBufferError,
       "Write operation exceeds buffer capacity",
     );
   });
@@ -67,7 +68,7 @@ describe("SyncFixedSizeStreamWriter", () => {
       const writer = new SyncFixedSizeStreamWriter(new Uint8Array(2));
       assertThrows(
         () => writer.writeBytesFrom(new Uint8Array([1, 2, 3, 4]), 0, 4),
-        RangeError,
+        WriteBufferError,
         "Write operation exceeds buffer capacity",
       );
     });

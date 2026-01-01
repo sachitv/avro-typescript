@@ -3,7 +3,7 @@ import { compareUint8Arrays } from "./compare_bytes.ts";
 import { decode, encoder } from "./text_encoding.ts";
 import { TapBase } from "./tap.ts";
 import type { ISyncReadable, ISyncWritable } from "./buffers/buffer_sync.ts";
-import { ReadBufferError } from "./buffers/buffer_sync.ts";
+import { ReadBufferError } from "./buffers/buffer_error.ts";
 import {
   SyncInMemoryReadableBuffer,
   SyncInMemoryWritableBuffer,
@@ -180,14 +180,19 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
   /** Returns the buffer contents from the start up to the current cursor. */
   getValue(): Uint8Array {
     if (this.pos < 0) {
-      throw new RangeError("Tap position is negative.");
+      throw new ReadBufferError(
+        "Tap position is negative.",
+        this.pos,
+        0,
+        0,
+      );
     }
-    return this.buffer.read(0, this.pos)!;
+    return this.buffer.read(0, this.pos);
   }
 
   /** Retrieves the byte at the specified position in the buffer. */
   private getByteAt(position: number): number {
-    const result = this.buffer.read(position, 1)!;
+    const result = this.buffer.read(position, 1);
     return result[0]!;
   }
 
@@ -249,7 +254,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
   readFloat(): number {
     const pos = this.pos;
     this.pos += 4;
-    const bytes = this.buffer.read(pos, 4)!;
+    const bytes = this.buffer.read(pos, 4);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return view.getFloat32(0, true);
   }
@@ -263,7 +268,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
   readDouble(): number {
     const pos = this.pos;
     this.pos += 8;
-    const bytes = this.buffer.read(pos, 8)!;
+    const bytes = this.buffer.read(pos, 8);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return view.getFloat64(0, true);
   }
@@ -277,7 +282,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
   readFixed(len: number): Uint8Array {
     const pos = this.pos;
     this.pos += len;
-    return this.buffer.read(pos, len)!;
+    return this.buffer.read(pos, len);
   }
 
   /** Skips a fixed-length byte sequence. */

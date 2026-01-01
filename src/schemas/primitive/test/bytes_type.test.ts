@@ -9,6 +9,7 @@ import {
 import { BytesType } from "../bytes_type.ts";
 import { StringType } from "../string_type.ts";
 import { ValidationError } from "../../error.ts";
+import { ReadBufferError } from "../../../serialization/buffers/buffer_error.ts";
 
 describe("BytesType", () => {
   const type = new BytesType();
@@ -55,24 +56,24 @@ describe("BytesType", () => {
         async () => {
           await type.read(tap);
         },
-        RangeError,
+        ReadBufferError,
         "Operation exceeds buffer bounds",
       );
     });
 
-    // This test ensures bytes type read failures throw RangeError, as the tap throws directly on read failures.
+    // This test ensures bytes type read failures throw ReadBufferError, as the tap throws directly on read failures.
     it("should throw when readBytes fails", async () => {
       // Mock tap that throws for readBytes
       const mockTap = {
         readBytes: () =>
           Promise.reject(
-            new RangeError("Attempt to read beyond buffer bounds."),
+            new ReadBufferError("Operation exceeds buffer bounds", 0, 1, 0),
           ),
       } as unknown as ReadableTapLike;
       await assertRejects(
         async () => await type.read(mockTap),
-        RangeError,
-        "Attempt to read beyond buffer bounds.",
+        ReadBufferError,
+        "Operation exceeds buffer bounds",
       );
     });
   });
@@ -193,12 +194,12 @@ describe("BytesType", () => {
       const readTap = new Tap(buf);
       await assertRejects(
         async () => await resolver.read(readTap),
-        RangeError,
+        ReadBufferError,
         "Operation exceeds buffer bounds",
       );
     });
 
-    // This test ensures bytes type read failures throw RangeError, as the tap throws directly on read failures.
+    // This test ensures bytes type read failures throw ReadBufferError, as the tap throws directly on read failures.
     it("should throw when readString fails in resolver", async () => {
       const stringType = new StringType();
       const resolver = type.createResolver(stringType);
@@ -206,13 +207,13 @@ describe("BytesType", () => {
       const mockTap = {
         readString: () =>
           Promise.reject(
-            new RangeError("Attempt to read beyond buffer bounds."),
+            new ReadBufferError("Operation exceeds buffer bounds", 0, 1, 0),
           ),
       } as unknown as ReadableTapLike;
       await assertRejects(
         async () => await resolver.read(mockTap),
-        RangeError,
-        "Attempt to read beyond buffer bounds.",
+        ReadBufferError,
+        "Operation exceeds buffer bounds",
       );
     });
 

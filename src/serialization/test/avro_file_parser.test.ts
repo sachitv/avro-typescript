@@ -9,6 +9,7 @@ import {
   InMemoryReadableBuffer,
   InMemoryWritableBuffer,
 } from "../buffers/in_memory_buffer.ts";
+import { ReadBufferError } from "../buffers/buffer_error.ts";
 import { WritableTap } from "../tap.ts";
 import { createType } from "../../type/create_type.ts";
 import type { ParsedAvroHeader } from "../avro_file_parser.ts";
@@ -415,7 +416,7 @@ it("should throw error for truncated file in iterRecords", async () => {
         // Should not reach here
       }
     },
-    RangeError,
+    ReadBufferError,
   );
 });
 
