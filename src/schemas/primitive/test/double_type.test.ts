@@ -59,12 +59,12 @@ describe("DoubleType", () => {
         async () => {
           await type.read(tap);
         },
-        RangeError,
+        ReadBufferError,
         "Operation exceeds buffer bounds",
       );
     });
 
-    // This test checks that double type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
+    // This test checks that double type read failures throw ReadBufferError, as the tap throws on buffer read failures instead of returning undefined.
     it("should throw when read fails", async () => {
       const mockBuffer = {
         read: (offset: number, size: number) =>
@@ -84,8 +84,8 @@ describe("DoubleType", () => {
         async () => {
           await type.read(tap);
         },
-        RangeError,
-        "Attempt to read beyond buffer bounds.",
+        ReadBufferError,
+        "Operation exceeds buffer bounds",
       );
     });
   });
@@ -215,12 +215,12 @@ describe("DoubleType", () => {
         async () => {
           await resolver.read(tap);
         },
-        RangeError,
+        ReadBufferError,
         "Operation exceeds buffer bounds",
       );
     });
 
-    // This test checks that double type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
+    // This test checks that double type read failures throw ReadBufferError, as the tap throws on buffer read failures instead of returning undefined.
     it("should throw when read fails in FloatType resolver", async () => {
       const floatType = new FloatType();
       const resolver = type.createResolver(floatType);
@@ -242,8 +242,8 @@ describe("DoubleType", () => {
         async () => {
           await resolver.read(tap);
         },
-        RangeError,
-        "Attempt to read beyond buffer bounds.",
+        ReadBufferError,
+        "Operation exceeds buffer bounds",
       );
     });
 

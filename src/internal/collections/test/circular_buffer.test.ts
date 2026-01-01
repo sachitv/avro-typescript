@@ -1,6 +1,7 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { CircularBuffer } from "../circular_buffer.ts";
+import { ReadBufferError } from "../../../serialization/buffers/buffer_error.ts";
 
 describe("CircularBuffer", () => {
   describe("constructor", () => {
@@ -71,7 +72,7 @@ describe("CircularBuffer", () => {
       const buffer = new CircularBuffer(3);
       assertThrows(
         () => buffer.push(new Uint8Array([1, 2, 3, 4])),
-        RangeError,
+        ReadBufferError,
         "Data size 4 exceeds buffer capacity 3",
       );
     });
@@ -111,7 +112,7 @@ describe("CircularBuffer", () => {
 
       assertThrows(
         () => buffer.get(-1, 2),
-        RangeError,
+        ReadBufferError,
         "Start position -1 is before window start 0",
       );
     });
@@ -122,7 +123,7 @@ describe("CircularBuffer", () => {
 
       assertThrows(
         () => buffer.get(1, 3),
-        RangeError,
+        ReadBufferError,
         "Requested range [1, 4) extends beyond window end 3",
       );
     });

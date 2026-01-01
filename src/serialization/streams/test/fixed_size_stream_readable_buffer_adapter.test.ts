@@ -123,7 +123,7 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
         "Offset and size must be non-negative",
       );
 
-      // Size > window should throw ReadBufferError (unified buffer errors)
+      // Size > window should throw ReadBufferError
       await assertRejects(
         () => adapter.read(0, 100),
         ReadBufferError,
@@ -250,7 +250,7 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
       // Read data that causes window advancement
       await adapter.read(10, 5); // offset 10, size 5, fills to 15, window slides
 
-      // Now try to read before current window start (should throw)
+      // Now try to read before current window start (should throw ReadBufferError)
       await assertRejects(
         () => adapter.read(3, 2),
         ReadBufferError,
@@ -328,7 +328,7 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
       );
     });
 
-    it("re-throws non-RangeError from push", async () => {
+    it("re-throws non-ReadBufferError from push", async () => {
       const chunks = [new Uint8Array([1, 2, 3])];
       let chunkIndex = 0;
       const mockStream = {
@@ -365,6 +365,74 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
         () => adapter.read(0, 3),
         TypeError,
         "Mock push error",
+      );
+    });
+  });
+
+  describe("canReadMore", () => {
+    it("returns true when data is available", async () => {
+      const chunks = [new Uint8Array([1, 2, 3, 4, 5])];
+      let chunkIndex = 0;
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => {
+          if (chunkIndex < chunks.length) {
+            return chunks[chunkIndex++];
+          }
+          return undefined;
+        },
+        close: async () => {},
+      };
+      const adapter = new FixedSizeStreamReadableBufferAdapter(mockStream, 10);
+
+      assertEquals(await adapter.canReadMore(0), true);
+      assertEquals(await adapter.canReadMore(2), true);
+      assertEquals(await adapter.canReadMore(4), true);
+    });
+
+    it("returns false at EOF", async () => {
+      const chunks = [new Uint8Array([1, 2, 3])];
+      let chunkIndex = 0;
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => {
+          if (chunkIndex < chunks.length) {
+            return chunks[chunkIndex++];
+          }
+          return undefined;
+        },
+        close: async () => {},
+      };
+      const adapter = new FixedSizeStreamReadableBufferAdapter(mockStream, 10);
+
+      assertEquals(await adapter.canReadMore(3), false);
+      assertEquals(await adapter.canReadMore(5), false);
+    });
+
+    it("returns false for negative offset", async () => {
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => undefined,
+        close: async () => {},
+      };
+      const adapter = new FixedSizeStreamReadableBufferAdapter(mockStream, 10);
+
+      assertEquals(await adapter.canReadMore(-1), false);
+    });
+
+    it("rethrows non-ReadBufferError exceptions", async () => {
+      const mockStream = {
+        readNext: () => {
+          throw new Error("stream error");
+        },
+        close: async () => {},
+      };
+      const adapter = new FixedSizeStreamReadableBufferAdapter(mockStream, 10);
+
+      await assertRejects(
+        () => adapter.canReadMore(0),
+        Error,
+        "stream error",
       );
     });
   });

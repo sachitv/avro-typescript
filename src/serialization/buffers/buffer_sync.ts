@@ -10,8 +10,9 @@ export { ReadBufferError, WriteBufferError } from "./buffer_error.ts";
 export interface ISyncReadable {
   /**
    * Reads a portion of the buffer starting at offset with the given size.
-   * Throws a ReadBufferError when the requested range exceeds the bounds of
-   * the buffer.
+   *
+   * @throws ReadBufferError when the requested range is invalid or exceeds the
+   * available bounds.
    */
   read(offset: number, size: number): Uint8Array;
 
@@ -28,6 +29,8 @@ export interface ISyncWritable {
   /**
    * Appends bytes to the buffer, advancing its internal write cursor when the
    * operation succeeds.
+   *
+   * @throws WriteBufferError when the buffer cannot accept the requested bytes.
    */
   appendBytes(data: Uint8Array): void;
 

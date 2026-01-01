@@ -806,7 +806,7 @@ describe("readMapInto", () => {
     );
   });
 
-  // This test verifies that map key read failures throw RangeError, using simplified code since the tap throws on read failures instead of returning undefined.
+  // This test verifies that map key read failures throw ReadBufferError, as the tap throws on read failures instead of returning undefined.
   it("throws when readString fails for map key", async () => {
     let callCount = 0;
     const mockBuffer = {
@@ -833,8 +833,8 @@ describe("readMapInto", () => {
       async () => {
         await intMap.read(tap);
       },
-      RangeError,
-      "Attempt to read beyond buffer bounds.",
+      ReadBufferError,
+      "Operation exceeds buffer bounds",
     );
   });
 
@@ -871,7 +871,7 @@ describe("readMapInto", () => {
           () => {},
         );
       },
-      RangeError,
+      ReadBufferError,
       "Operation exceeds buffer bounds",
     );
   });

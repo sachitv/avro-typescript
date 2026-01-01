@@ -22,7 +22,7 @@ export interface ReadableTapLike {
   canReadMore(): Promise<boolean>;
   /**
    * Returns the buffer contents from the start up to the current cursor.
-   * @throws RangeError if the cursor has advanced past the buffer length.
+   * @throws ReadBufferError if the cursor has advanced past the buffer length.
    */
   getValue(): Promise<Uint8Array>;
   /**
@@ -51,7 +51,7 @@ export interface ReadableTapLike {
   skipLong(): Promise<void>;
   /**
    * Reads a 32-bit little-endian floating point number.
-   * @throws RangeError if the read would exceed the buffer.
+   * @throws ReadBufferError if the read would exceed the buffer.
    */
   readFloat(): Promise<number>;
   /**
@@ -60,7 +60,7 @@ export interface ReadableTapLike {
   skipFloat(): void;
   /**
    * Reads a 64-bit little-endian floating point number.
-   * @throws RangeError if the read would exceed the buffer.
+   * @throws ReadBufferError if the read would exceed the buffer.
    */
   readDouble(): Promise<number>;
   /**
@@ -70,7 +70,7 @@ export interface ReadableTapLike {
   /**
    * Reads a fixed-length byte sequence into a new buffer.
    * @param len Number of bytes to read.
-   * @throws RangeError if the read exceeds the buffer.
+   * @throws ReadBufferError if the read exceeds the buffer.
    */
   readFixed(len: number): Promise<Uint8Array>;
   /**
@@ -80,7 +80,7 @@ export interface ReadableTapLike {
   skipFixed(len: number): void;
   /**
    * Reads a length-prefixed byte sequence.
-   * @throws RangeError if insufficient data remains.
+   * @throws ReadBufferError if insufficient data remains.
    */
   readBytes(): Promise<Uint8Array>;
   /**
@@ -89,7 +89,7 @@ export interface ReadableTapLike {
   skipBytes(): Promise<void>;
   /**
    * Reads a length-prefixed UTF-8 string.
-   * @throws RangeError when the buffer is exhausted prematurely.
+   * @throws ReadBufferError when the buffer is exhausted prematurely.
    */
   readString(): Promise<string>;
   /**
@@ -199,8 +199,11 @@ function assertValidPosition(pos: number): void {
     !Number.isFinite(pos) || !Number.isInteger(pos) || pos < 0 ||
     Math.abs(pos) > Number.MAX_SAFE_INTEGER
   ) {
-    throw new RangeError(
+    throw new ReadBufferError(
       "Tap position must be an integer within the safe number range.",
+      pos,
+      0,
+      0,
     );
   }
 }
@@ -278,7 +281,7 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
       await this.buffer.read(this.pos, 0);
       return true;
     } catch (err) {
-      if (err instanceof ReadBufferError || err instanceof RangeError) {
+      if (err instanceof ReadBufferError) {
         return false;
       }
       throw err;
@@ -604,14 +607,7 @@ export class WritableTap extends TapBase implements WritableTapLike {
       return;
     }
     this.pos += bytes.length;
-    try {
-      await this.buffer.appendBytes(bytes);
-    } catch (err) {
-      if (err instanceof RangeError) {
-        throw err;
-      }
-      throw err;
-    }
+    await this.buffer.appendBytes(bytes);
   }
 
   /** Checks if the buffer is valid. */

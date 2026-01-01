@@ -293,7 +293,7 @@ describe("BooleanType", () => {
       const buffer = new ArrayBuffer(0);
       await assertRejects(
         () => type.fromBuffer(buffer),
-        RangeError,
+        ReadBufferError,
         "Operation exceeds buffer bounds",
       );
     });

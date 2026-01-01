@@ -81,15 +81,21 @@ export class FixedSizeStreamReadableBufferAdapter implements IReadableBuffer {
 
     // Check if requested size exceeds window size - throw error immediately
     if (size > this.#windowSize) {
-      throw new RangeError(
+      throw new ReadBufferError(
         `Requested size ${size} exceeds window size ${this.#windowSize}`,
+        offset,
+        size,
+        this.#windowSize,
       );
     }
 
     // Check if offset is before the current window start - raise error
     if (offset < this.#circularBuffer.windowStart()) {
-      throw new RangeError(
+      throw new ReadBufferError(
         `Cannot read data before window start. Offset ${offset} is before window start ${this.#circularBuffer.windowStart()}`,
+        offset,
+        size,
+        this.#circularBuffer.windowEnd(),
       );
     }
 
@@ -137,16 +143,7 @@ export class FixedSizeStreamReadableBufferAdapter implements IReadableBuffer {
    * Extracts a contiguous range of bytes from the circular buffer.
    */
   #extractFromBuffer(offset: number, size: number): Uint8Array {
-    const result = this.#circularBuffer.get(offset, size);
-    if (!result) {
-      throw new ReadBufferError(
-        `Operation exceeds buffer bounds. offset=${offset}, size=${size}, bufferLength=${this.#circularBuffer.windowEnd()}`,
-        offset,
-        size,
-        this.#circularBuffer.windowEnd(),
-      );
-    }
-    return result;
+    return this.#circularBuffer.get(offset, size);
   }
 
   /**
@@ -163,9 +160,12 @@ export class FixedSizeStreamReadableBufferAdapter implements IReadableBuffer {
       try {
         this.#circularBuffer.push(chunk);
       } catch (error) {
-        if (error instanceof RangeError) {
-          throw new RangeError(
+        if (error instanceof ReadBufferError) {
+          throw new ReadBufferError(
             `Cannot buffer chunk of size ${chunk.length}: ${error.message}`,
+            this.#circularBuffer.windowEnd(),
+            chunk.length,
+            this.#windowSize,
           );
         }
         throw error;

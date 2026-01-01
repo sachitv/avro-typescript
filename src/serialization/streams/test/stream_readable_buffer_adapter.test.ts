@@ -112,6 +112,69 @@ describe("StreamReadableBufferAdapter", () => {
       await assertRejects(() => adapter.read(-5, -1), ReadBufferError);
     });
 
+    it("throws ReadBufferError for negative offset with buffered data", async () => {
+      const chunks = [new Uint8Array([1, 2, 3, 4, 5])];
+      let chunkIndex = 0;
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => {
+          if (chunkIndex < chunks.length) {
+            return chunks[chunkIndex++];
+          }
+          return undefined;
+        },
+        close: async () => {},
+      };
+      const adapter = new StreamReadableBufferAdapter(mockStream);
+
+      // Read some data first to populate bufferedData
+      await adapter.read(0, 3);
+
+      // Now try negative offset
+      await assertRejects(() => adapter.read(-1, 1), ReadBufferError);
+    });
+
+    it("throws ReadBufferError when exceeding buffer after fill", async () => {
+      const chunks = [new Uint8Array([1, 2, 3])];
+      let chunkIndex = 0;
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => {
+          if (chunkIndex < chunks.length) {
+            return chunks[chunkIndex++];
+          }
+          return undefined;
+        },
+        close: async () => {},
+      };
+      const adapter = new StreamReadableBufferAdapter(mockStream);
+
+      // Try to read beyond what's available
+      await assertRejects(() => adapter.read(0, 10), ReadBufferError);
+    });
+
+    it("throws ReadBufferError for partial buffer after multiple reads", async () => {
+      const chunks = [new Uint8Array([1, 2, 3])];
+      let chunkIndex = 0;
+      const mockStream = {
+        // deno-lint-ignore require-await
+        readNext: async () => {
+          if (chunkIndex < chunks.length) {
+            return chunks[chunkIndex++];
+          }
+          return undefined;
+        },
+        close: async () => {},
+      };
+      const adapter = new StreamReadableBufferAdapter(mockStream);
+
+      // First read to buffer some data
+      await adapter.read(0, 2);
+
+      // Try to read beyond what's buffered (3 total bytes, already buffered)
+      await assertRejects(() => adapter.read(0, 10), ReadBufferError);
+    });
+
     it("uses cached data when already buffered", async () => {
       const chunks = [new Uint8Array([1, 2, 3, 4, 5])];
       let chunkIndex = 0;
@@ -173,8 +236,7 @@ describe("StreamReadableBufferAdapter", () => {
       const length = await adapter.length();
       assertEquals(length, 0);
 
-      const result = await adapter.read(0, 1);
-      assertEquals(result, undefined);
+      await assertRejects(() => adapter.read(0, 1), ReadBufferError);
     });
 
     it("handles multiple chunks for large reads", async () => {
@@ -219,9 +281,8 @@ describe("StreamReadableBufferAdapter", () => {
       const result1 = await adapter.read(0, 3);
       assertEquals(result1, new Uint8Array([1, 2, 3]));
 
-      // Read beyond EOF
-      const result2 = await adapter.read(3, 1);
-      assertEquals(result2, undefined);
+      // Read beyond EOF should throw for random-access reads
+      await assertRejects(() => adapter.read(3, 1), ReadBufferError);
     });
 
     it("handles zero-size reads", async () => {
@@ -310,6 +371,22 @@ describe("StreamReadableBufferAdapter", () => {
       const adapter = new StreamReadableBufferAdapter(mockStream);
 
       assertEquals(await adapter.canReadMore(-1), false);
+    });
+
+    it("rethrows non-ReadBufferError", async () => {
+      const mockStream = {
+        readNext: () => {
+          throw new Error("readNext failed");
+        },
+        close: async () => {},
+      };
+      const adapter = new StreamReadableBufferAdapter(mockStream);
+
+      await assertRejects(
+        () => adapter.canReadMore(0),
+        Error,
+        "readNext failed",
+      );
     });
 
     it("handles empty stream", async () => {

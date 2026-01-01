@@ -9,6 +9,7 @@ import {
   SyncInMemoryWritableBuffer,
 } from "../buffers/in_memory_buffer_sync.ts";
 import type { ISyncReadable, ISyncWritable } from "../buffers/buffer_sync.ts";
+import { ReadBufferError } from "../buffers/buffer_sync.ts";
 import { encoder } from "../text_encoding.ts";
 
 class LenientWritableBuffer implements ISyncWritable {
@@ -242,6 +243,29 @@ describe("SyncTap primitive round-trips", () => {
 });
 
 describe("SyncTap numeric guard rails", () => {
+  it("getValue throws ReadBufferError on read failure", () => {
+    const buffer: ISyncReadable = {
+      read: () => {
+        throw new ReadBufferError("mock read failed", 0, 0, 0);
+      },
+      canReadMore: () => false,
+    };
+
+    const tap = new SyncReadableTap(buffer, 0);
+    assertThrows(() => tap.getValue(), ReadBufferError, "mock read failed");
+  });
+
+  it("readBoolean throws ReadBufferError on read failure", () => {
+    const buffer: ISyncReadable = {
+      read: () => {
+        throw new ReadBufferError("mock read failed", 0, 1, 0);
+      },
+      canReadMore: () => false,
+    };
+
+    const tap = new SyncReadableTap(buffer, 0);
+    assertThrows(() => tap.readBoolean(), ReadBufferError, "mock read failed");
+  });
   it("readInt throws when value exceeds safe integer range", () => {
     const buffer = new ArrayBuffer(16);
     const writer = new SyncWritableTap(
@@ -560,9 +584,9 @@ describe("SyncWritableTap vs WritableTap parity", () => {
 
     await assertRejects(
       async () => await asyncTap.writeBinary("\x01\x02", 2),
-      RangeError,
+      Error,
     );
-    assertThrows(() => syncTap.writeBinary("\x01\x02", 2), RangeError);
+    assertThrows(() => syncTap.writeBinary("\x01\x02", 2), Error);
   });
 
   it("writeBinary with len 0", () => {
@@ -697,7 +721,7 @@ describe("SyncReadableTap helper coverage", () => {
       new SyncInMemoryReadableBuffer(new ArrayBuffer(4)),
       -1,
     );
-    expect(() => negativeTap.getValue()).toThrow(RangeError);
+    expect(() => negativeTap.getValue()).toThrow(ReadBufferError);
   });
 
   it("canReadMore avoids reading the underlying buffer", () => {
@@ -953,15 +977,15 @@ describe("SyncReadableTap vs ReadableTap parity", () => {
     expect(strSync).toBe(strAsync);
   });
 
-  it("verifies both readers throw RangeError in the same situations", async () => {
+  it("verifies both readers throw ReadBufferError in the same situations", async () => {
     const empty = new ArrayBuffer(0);
     const asyncReader = new ReadableTap(empty);
     const syncReader = new SyncReadableTap(
       new SyncInMemoryReadableBuffer(empty),
     );
 
-    await assertRejects(async () => await asyncReader.readLong(), RangeError);
-    assertThrows(() => syncReader.readLong());
+    await assertRejects(async () => await asyncReader.readLong(), Error);
+    assertThrows(() => syncReader.readLong(), ReadBufferError);
   });
 });
 

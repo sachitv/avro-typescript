@@ -106,12 +106,12 @@ describe("StringType", () => {
     const readTap = new Tap(buf);
     await assertRejects(
       () => type.read(readTap),
-      RangeError,
+      ReadBufferError,
       "Operation exceeds buffer bounds",
     );
   });
 
-  // This test ensures string type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
+  // This test ensures string type read failures throw ReadBufferError, as the tap throws on buffer read failures instead of returning undefined.
   it("should throw when read fails", async () => {
     const mockBuffer = {
       read: (offset: number, size: number) =>
@@ -131,8 +131,8 @@ describe("StringType", () => {
       async () => {
         await type.read(tap);
       },
-      RangeError,
-      "Attempt to read beyond buffer bounds.",
+      ReadBufferError,
+      "Operation exceeds buffer bounds",
     );
   });
 
@@ -199,12 +199,12 @@ describe("StringType", () => {
       const readTap = new Tap(buf);
       await assertRejects(
         () => resolver.read(readTap),
-        RangeError,
+        ReadBufferError,
         "Operation exceeds buffer bounds",
       );
     });
 
-    // This test ensures string type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
+    // This test ensures string type read failures throw ReadBufferError, as the tap throws on buffer read failures instead of returning undefined.
     it("should throw when read fails in resolver", async () => {
       const bytesType = new BytesType();
       const resolver = type.createResolver(bytesType);
@@ -224,8 +224,8 @@ describe("StringType", () => {
       const tap = new ReadableTap(mockBuffer);
       await assertRejects(
         () => resolver.read(tap),
-        RangeError,
-        "Attempt to read beyond buffer bounds.",
+        ReadBufferError,
+        "Operation exceeds buffer bounds",
       );
     });
   });

@@ -73,12 +73,12 @@ describe("FloatType", () => {
         async () => {
           await type.read(tap);
         },
-        RangeError,
+        ReadBufferError,
         "Operation exceeds buffer bounds",
       );
     });
 
-    // This test verifies that float type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
+    // This test verifies that float type read failures throw ReadBufferError, as the tap throws on buffer read failures instead of returning undefined.
     it("should throw when read fails", async () => {
       const mockBuffer = {
         read: (offset: number, size: number) =>
@@ -98,8 +98,8 @@ describe("FloatType", () => {
         async () => {
           await type.read(tap);
         },
-        RangeError,
-        "Attempt to read beyond buffer bounds.",
+        ReadBufferError,
+        "Operation exceeds buffer bounds",
       );
     });
   });

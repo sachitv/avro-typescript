@@ -64,21 +64,17 @@ export class StreamReadableBufferAdapter implements IReadableBuffer {
     // Load chunks until the necessary data is available
     await this.#ensureBufferedUpTo(offset + size);
 
+    // bufferData is guaranteed to be non-null after ensureBufferedUpTo
+    const bufLen = this.#bufferedData!.length;
+
     // Check if we have enough data after buffering
-    if (
-      this.#bufferedData === null || offset + size > this.#bufferedData.length
-    ) {
-      throw new ReadBufferError(
-        `Operation exceeds buffer bounds. offset=${offset}, size=${size}, bufferLength=${
-          this.#bufferedData?.length ?? 0
-        }`,
-        offset,
-        size,
-        this.#bufferedData?.length ?? 0,
-      );
+    if (offset + size > bufLen) {
+      const msg =
+        `Operation exceeds buffer bounds. offset=${offset}, size=${size}, bufferLength=${bufLen}`;
+      throw new ReadBufferError(msg, offset, size, bufLen);
     }
 
-    return this.#bufferedData.slice(offset, offset + size);
+    return this.#bufferedData!.slice(offset, offset + size);
   }
 
   /**

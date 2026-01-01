@@ -136,12 +136,16 @@ export class InMemoryWritableBuffer extends InMemoryBufferBase
    * Creates a new writable buffer with the specified ArrayBuffer and initial offset.
    * @param buf The underlying ArrayBuffer to write to.
    * @param offset The starting offset within the buffer (default: 0).
+   * @throws WriteBufferError If the initial offset is invalid.
    */
   constructor(buf: ArrayBuffer, offset = 0) {
     super(buf);
     if (offset < 0 || offset > this.view.length) {
-      throw new RangeError(
+      throw new WriteBufferError(
         `Initial offset must be within buffer bounds. Got offset=${offset}, bufferLength=${this.view.length}`,
+        offset,
+        0,
+        this.view.length,
       );
     }
     this.#initialOffset = offset;

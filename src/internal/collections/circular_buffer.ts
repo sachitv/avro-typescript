@@ -1,3 +1,5 @@
+import { ReadBufferError } from "../../serialization/buffers/buffer_error.ts";
+
 /**
  * A circular buffer implementation that maintains a rolling window of Uint8Array data.
  * Uses copyWithin for efficient window sliding and provides memory-efficient random access.
@@ -62,7 +64,7 @@ export class CircularBuffer {
   /**
    * Adds data to the buffer, sliding the window if necessary.
    * @param data Uint8Array to add
-   * @throws RangeError if data size exceeds buffer capacity
+   * @throws ReadBufferError if data size exceeds buffer capacity
    */
   public push(data: Uint8Array): void {
     if (data.length === 0) {
@@ -77,12 +79,15 @@ export class CircularBuffer {
   /**
    * Validates that the data size doesn't exceed buffer capacity.
    * @param dataSize Size of data to validate
-   * @throws RangeError if data size exceeds capacity
+   * @throws ReadBufferError if data size exceeds capacity
    */
   #validateDataSize(dataSize: number): void {
     if (dataSize > this.#capacity) {
-      throw new RangeError(
+      throw new ReadBufferError(
         `Data size ${dataSize} exceeds buffer capacity ${this.#capacity}`,
+        this.#windowEnd,
+        dataSize,
+        this.#capacity,
       );
     }
   }
@@ -122,8 +127,9 @@ export class CircularBuffer {
    * @param start Start position relative to the overall data stream
    * @param size Number of bytes to retrieve
    * @returns Readonly view of the requested bytes (shallow copy, no allocation)
-   * @throws RangeError if start is before window start or size is negative
-   * @throws RangeError if requested range extends beyond window end
+   * @throws ReadBufferError if start is before window start
+   * @throws RangeError if size is negative
+   * @throws ReadBufferError if requested range extends beyond window end
    */
   public get(start: number, size: number): Readonly<Uint8Array> {
     this.#validateGetParameters(start, size);
@@ -137,12 +143,16 @@ export class CircularBuffer {
    * Validates get() method parameters.
    * @param start Start position to validate
    * @param size Size to validate
-   * @throws RangeError if parameters are invalid
+   * @throws ReadBufferError if start is before window start
+   * @throws RangeError if size is negative
    */
   #validateGetParameters(start: number, size: number): void {
     if (start < this.#windowStart) {
-      throw new RangeError(
+      throw new ReadBufferError(
         `Start position ${start} is before window start ${this.#windowStart}`,
+        start,
+        size,
+        this.#windowEnd,
       );
     }
     if (size < 0) {
@@ -154,13 +164,16 @@ export class CircularBuffer {
    * Validates that the requested range is within the window.
    * @param start Start position to validate
    * @param size Size to validate
-   * @throws RangeError if range extends beyond window
+   * @throws ReadBufferError if range extends beyond window
    */
   #validateGetRange(start: number, size: number): void {
     const end = start + size;
     if (end > this.#windowEnd) {
-      throw new RangeError(
+      throw new ReadBufferError(
         `Requested range [${start}, ${end}) extends beyond window end ${this.#windowEnd}`,
+        start,
+        size,
+        this.#windowEnd,
       );
     }
   }

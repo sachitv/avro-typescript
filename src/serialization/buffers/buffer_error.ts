@@ -6,7 +6,7 @@
  */
 
 /** Error thrown when a readable buffer operation fails. */
-export class ReadBufferError extends RangeError {
+export class ReadBufferError extends Error {
   /** The offset where the read operation failed. */
   public readonly offset: number;
   /** The size requested for the read operation. */
@@ -14,6 +14,7 @@ export class ReadBufferError extends RangeError {
   /** The total buffer length (or best-effort upper bound). */
   public readonly bufferLength: number;
 
+  /** Creates a new ReadBufferError. */
   constructor(
     message: string,
     offset: number,
@@ -29,7 +30,7 @@ export class ReadBufferError extends RangeError {
 }
 
 /** Error thrown when a writable buffer operation fails. */
-export class WriteBufferError extends RangeError {
+export class WriteBufferError extends Error {
   /** The offset where the write operation failed. */
   public readonly offset: number;
   /** The size of data being written. */
@@ -37,6 +38,7 @@ export class WriteBufferError extends RangeError {
   /** The total buffer length (or best-effort upper bound). */
   public readonly bufferLength: number;
 
+  /** Creates a new WriteBufferError. */
   constructor(
     message: string,
     offset: number,

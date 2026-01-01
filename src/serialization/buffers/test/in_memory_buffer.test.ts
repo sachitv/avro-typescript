@@ -118,7 +118,7 @@ describe("InMemoryBufferBase (via implementations)", () => {
       const buffer = new ArrayBuffer(10);
       assertThrows(
         () => new InMemoryWritableBuffer(buffer, -1),
-        RangeError,
+        WriteBufferError,
         "Initial offset must be within buffer bounds",
       );
     });
@@ -302,7 +302,7 @@ describe("InMemoryWritableBuffer", () => {
       const buffer = new ArrayBuffer(100);
       assertThrows(
         () => new InMemoryWritableBuffer(buffer, -1),
-        RangeError,
+        WriteBufferError,
         "Initial offset must be within buffer bounds",
       );
     });
@@ -311,7 +311,7 @@ describe("InMemoryWritableBuffer", () => {
       const buffer = new ArrayBuffer(100);
       assertThrows(
         () => new InMemoryWritableBuffer(buffer, 101),
-        RangeError,
+        WriteBufferError,
         "Initial offset must be within buffer bounds",
       );
     });
