@@ -1,4 +1,5 @@
 import type { IReadableBuffer } from "../buffers/buffer.ts";
+import { ReadBufferError } from "../buffers/buffer_error.ts";
 import type { IStreamReadableBuffer } from "./streams.ts";
 import { CircularBuffer } from "../../internal/collections/circular_buffer.ts";
 
@@ -62,14 +63,20 @@ export class FixedSizeStreamReadableBufferAdapter implements IReadableBuffer {
    *
    * @param offset The byte offset to start reading from (0-based, stream-relative)
    * @param size The number of bytes to read
-   * @returns A Promise that resolves to a new Uint8Array containing the read bytes, or undefined if the read would exceed buffer bounds
+   * @returns A Promise that resolves to a new Uint8Array containing the read bytes.
+   * @throws ReadBufferError if the requested range is out of bounds.
    */
   public async read(
     offset: number,
     size: number,
-  ): Promise<Uint8Array | undefined> {
+  ): Promise<Uint8Array> {
     if (offset < 0 || size < 0) {
-      return undefined;
+      throw new ReadBufferError(
+        `Offset and size must be non-negative. Got offset=${offset}, size=${size}`,
+        offset,
+        size,
+        this.#circularBuffer.windowEnd(),
+      );
     }
 
     // Check if requested size exceeds window size - throw error immediately
@@ -97,7 +104,12 @@ export class FixedSizeStreamReadableBufferAdapter implements IReadableBuffer {
 
     // Check if the requested range is available after filling
     if (offset + size > this.#circularBuffer.windowEnd()) {
-      return undefined;
+      throw new ReadBufferError(
+        `Operation exceeds buffer bounds. offset=${offset}, size=${size}, bufferLength=${this.#circularBuffer.windowEnd()}`,
+        offset,
+        size,
+        this.#circularBuffer.windowEnd(),
+      );
     }
 
     // Extract data from buffer
@@ -110,15 +122,31 @@ export class FixedSizeStreamReadableBufferAdapter implements IReadableBuffer {
    * @returns True if at least one byte can be read from the offset.
    */
   public async canReadMore(offset: number): Promise<boolean> {
-    const result = await this.read(offset, 1);
-    return result !== undefined;
+    try {
+      await this.read(offset, 1);
+      return true;
+    } catch (err) {
+      if (err instanceof ReadBufferError) {
+        return false;
+      }
+      throw err;
+    }
   }
 
   /**
    * Extracts a contiguous range of bytes from the circular buffer.
    */
-  #extractFromBuffer(offset: number, size: number): Uint8Array | undefined {
-    return this.#circularBuffer.get(offset, size);
+  #extractFromBuffer(offset: number, size: number): Uint8Array {
+    const result = this.#circularBuffer.get(offset, size);
+    if (!result) {
+      throw new ReadBufferError(
+        `Operation exceeds buffer bounds. offset=${offset}, size=${size}, bufferLength=${this.#circularBuffer.windowEnd()}`,
+        offset,
+        size,
+        this.#circularBuffer.windowEnd(),
+      );
+    }
+    return result;
   }
 
   /**

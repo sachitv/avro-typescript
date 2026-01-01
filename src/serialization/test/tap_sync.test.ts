@@ -8,7 +8,6 @@ import {
   SyncInMemoryReadableBuffer,
   SyncInMemoryWritableBuffer,
 } from "../buffers/in_memory_buffer_sync.ts";
-import { WriteBufferError } from "../buffers/buffer_sync.ts";
 import type { ISyncReadable, ISyncWritable } from "../buffers/buffer_sync.ts";
 import { encoder } from "../text_encoding.ts";
 
@@ -563,7 +562,7 @@ describe("SyncWritableTap vs WritableTap parity", () => {
       async () => await asyncTap.writeBinary("\x01\x02", 2),
       RangeError,
     );
-    assertThrows(() => syncTap.writeBinary("\x01\x02", 2), WriteBufferError);
+    assertThrows(() => syncTap.writeBinary("\x01\x02", 2), RangeError);
   });
 
   it("writeBinary with len 0", () => {

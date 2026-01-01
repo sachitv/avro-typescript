@@ -2,6 +2,7 @@ import { bigIntToSafeNumber } from "./conversion.ts";
 import { compareUint8Arrays } from "./compare_bytes.ts";
 import { decode, encode } from "./text_encoding.ts";
 import type { IReadableBuffer, IWritableBuffer } from "./buffers/buffer.ts";
+import { ReadBufferError } from "./buffers/buffer_error.ts";
 import {
   InMemoryReadableBuffer,
   InMemoryWritableBuffer,
@@ -274,10 +275,10 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
    */
   async isValid(): Promise<boolean> {
     try {
-      const probe = await this.buffer.read(this.pos, 0);
-      return probe !== undefined;
+      await this.buffer.read(this.pos, 0);
+      return true;
     } catch (err) {
-      if (err instanceof RangeError) {
+      if (err instanceof ReadBufferError || err instanceof RangeError) {
         return false;
       }
       throw err;
@@ -300,31 +301,20 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
       return new Uint8Array();
     }
     const bytes = await this.buffer.read(0, readLength);
-    if (bytes) {
-      return bytes.slice();
-    } else {
-      return new Uint8Array();
-    }
+    return bytes.slice();
   }
 
   /**
    * Returns the buffer contents from the start up to the current cursor.
-   * @throws RangeError if the cursor has advanced past the buffer length.
+   * @throws ReadBufferError if the cursor has advanced past the buffer length.
    */
   async getValue(): Promise<Uint8Array> {
-    const bytes = await this.buffer.read(0, this.pos);
-    if (!bytes) {
-      throw new RangeError("Tap position exceeds buffer length.");
-    }
-    return bytes;
+    return await this.buffer.read(0, this.pos);
   }
 
   /** Retrieves the byte at the specified position in the buffer. */
   private async getByteAt(position: number): Promise<number> {
     const bytes = await this.buffer.read(position, 1);
-    if (!bytes) {
-      throw new RangeError("Attempt to read beyond buffer bounds.");
-    }
     return bytes[0];
   }
 
@@ -396,15 +386,12 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
 
   /**
    * Reads a 32-bit little-endian floating point number.
-   * @throws RangeError if the read would exceed the buffer.
+   * @throws ReadBufferError if the read would exceed the buffer.
    */
   async readFloat(): Promise<number> {
     const pos = this.pos;
     this.pos += 4;
     const bytes = await this.buffer.read(pos, 4);
-    if (!bytes) {
-      throw new RangeError("Attempt to read beyond buffer bounds.");
-    }
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return view.getFloat32(0, true);
   }
@@ -418,15 +405,12 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
 
   /**
    * Reads a 64-bit little-endian floating point number.
-   * @throws RangeError if the read would exceed the buffer.
+   * @throws ReadBufferError if the read would exceed the buffer.
    */
   async readDouble(): Promise<number> {
     const pos = this.pos;
     this.pos += 8;
     const bytes = await this.buffer.read(pos, 8);
-    if (!bytes) {
-      throw new RangeError("Attempt to read beyond buffer bounds.");
-    }
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return view.getFloat64(0, true);
   }
@@ -441,16 +425,12 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
   /**
    * Reads a fixed-length byte sequence into a new buffer.
    * @param len Number of bytes to read.
-   * @throws RangeError if the read exceeds the buffer.
+   * @throws ReadBufferError if the read exceeds the buffer.
    */
   async readFixed(len: number): Promise<Uint8Array> {
     const pos = this.pos;
     this.pos += len;
-    const bytes = await this.buffer.read(pos, len);
-    if (!bytes) {
-      throw new RangeError("Attempt to read beyond buffer bounds.");
-    }
-    return bytes;
+    return await this.buffer.read(pos, len);
   }
 
   /**
@@ -463,7 +443,7 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
 
   /**
    * Reads a length-prefixed byte sequence.
-   * @throws RangeError if insufficient data remains.
+   * @throws ReadBufferError if insufficient data remains.
    */
   async readBytes(): Promise<Uint8Array> {
     const length = bigIntToSafeNumber(
@@ -491,7 +471,7 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
 
   /**
    * Reads a length-prefixed UTF-8 string.
-   * @throws RangeError when the buffer is exhausted prematurely.
+   * @throws ReadBufferError when the buffer is exhausted prematurely.
    */
   async readString(): Promise<string> {
     const len = bigIntToSafeNumber(await this.readLong(), "readString length");
@@ -624,7 +604,14 @@ export class WritableTap extends TapBase implements WritableTapLike {
       return;
     }
     this.pos += bytes.length;
-    await this.buffer.appendBytes(bytes);
+    try {
+      await this.buffer.appendBytes(bytes);
+    } catch (err) {
+      if (err instanceof RangeError) {
+        throw err;
+      }
+      throw err;
+    }
   }
 
   /** Checks if the buffer is valid. */

@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { ReadBufferError } from "../../../serialization/buffers/buffer_error.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import { ReadableTap } from "../../../serialization/tap.ts";
 import {
@@ -66,7 +67,15 @@ describe("DoubleType", () => {
     // This test checks that double type read failures throw RangeError, as the tap throws on buffer read failures instead of returning undefined.
     it("should throw when read fails", async () => {
       const mockBuffer = {
-        read: (_offset: number, _size: number) => Promise.resolve(undefined),
+        read: (offset: number, size: number) =>
+          Promise.reject(
+            new ReadBufferError(
+              "Operation exceeds buffer bounds",
+              offset,
+              size,
+              0,
+            ),
+          ),
         // This is unused here.
         canReadMore: (_offset: number) => Promise.resolve(false),
       };
@@ -216,7 +225,15 @@ describe("DoubleType", () => {
       const floatType = new FloatType();
       const resolver = type.createResolver(floatType);
       const mockBuffer = {
-        read: (_offset: number, _size: number) => Promise.resolve(undefined),
+        read: (offset: number, size: number) =>
+          Promise.reject(
+            new ReadBufferError(
+              "Operation exceeds buffer bounds",
+              offset,
+              size,
+              0,
+            ),
+          ),
         // This is unused here.
         canReadMore: (_offset: number) => Promise.resolve(false),
       };

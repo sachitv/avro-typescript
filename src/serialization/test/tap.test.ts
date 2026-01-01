@@ -1,15 +1,16 @@
 import { describe, it } from "@std/testing/bdd";
 import { expect } from "@std/expect";
 import { assertRejects } from "@std/assert";
+import { ReadBufferError } from "../buffers/buffer_error.ts";
 import { ReadableTap, WritableTap } from "../tap.ts";
 import type { IReadableBuffer, IWritableBuffer } from "../buffers/buffer.ts";
 import { TestTap as Tap } from "./test_tap.ts";
 
-type EqualsFn<T> = (actual: T | undefined, expected: T) => void;
+type EqualsFn<T> = (actual: T, expected: T) => void;
 
 interface WriterReaderOptions<T> {
   elems: T[];
-  reader: (tap: Tap) => Promise<T | undefined>;
+  reader: (tap: Tap) => Promise<T>;
   skipper: (tap: Tap, elem: T) => void;
   writer: (tap: Tap, elem: T) => Promise<void>;
   size?: number;
@@ -47,7 +48,7 @@ class ErrorBuffer implements IReadableBuffer {
   constructor(private readonly error: Error) {}
 
   // deno-lint-ignore require-await
-  async read(): Promise<Uint8Array | undefined> {
+  async read(_offset: number, _size: number): Promise<Uint8Array> {
     throw this.error;
   }
 
@@ -61,9 +62,14 @@ class UndefinedReadBuffer implements IReadableBuffer {
   constructor(private readonly limit: number) {}
 
   // deno-lint-ignore require-await
-  async read(offset: number, size: number): Promise<Uint8Array | undefined> {
+  async read(offset: number, size: number): Promise<Uint8Array> {
     if (offset + size > this.limit) {
-      return undefined;
+      throw new ReadBufferError(
+        "Operation exceeds buffer bounds",
+        offset,
+        size,
+        this.limit,
+      );
     }
     return new Uint8Array(size);
   }
@@ -401,7 +407,10 @@ describe("Tap comparator helpers", () => {
   it("matchFixed rejects when data is unavailable", async () => {
     const tap1 = tapFromBytes([1, 2]);
     const tap2 = tapFromBytes([1]);
-    await assertRejects(async () => await tap1.matchFixed(tap2, 4), RangeError);
+    await assertRejects(
+      async () => await tap1.matchFixed(tap2, 4),
+      RangeError,
+    );
   });
 
   it("matchFixed returns 1 when first array is greater", async () => {
@@ -446,12 +455,18 @@ describe("Tap comparator helpers", () => {
 
   it("matchFixed throws when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
-      read: () => Promise.resolve(undefined),
+      read: (_offset: number, _size: number) =>
+        Promise.reject(
+          new ReadBufferError("Operation exceeds buffer bounds", 0, 1, 0),
+        ),
       canReadMore: () => Promise.resolve(false),
     };
     const tap1 = new ReadableTap(mockBuffer);
     const tap2 = new ReadableTap(mockBuffer);
-    await assertRejects(async () => await tap1.matchFixed(tap2, 1), RangeError);
+    await assertRejects(
+      async () => await tap1.matchFixed(tap2, 1),
+      RangeError,
+    );
   });
 });
 
@@ -564,7 +579,16 @@ describe("Construction & buffer compatibility", () => {
     const total = 10;
     const mockBuffer: IReadableBuffer = {
       read: (offset: number, size: number) => {
-        if (offset + size > total) return Promise.resolve(undefined);
+        if (offset + size > total) {
+          return Promise.reject(
+            new ReadBufferError(
+              "Operation exceeds buffer bounds",
+              offset,
+              size,
+              total,
+            ),
+          );
+        }
         return Promise.resolve(new Uint8Array(size).fill(42));
       },
       canReadMore: (offset: number) => Promise.resolve(offset < total),
@@ -699,7 +723,15 @@ describe("ReadableTap buffer exposure", () => {
 
   it("_testOnlyBuf returns empty array when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
-      read: () => Promise.resolve(undefined),
+      read: (offset: number, size: number) =>
+        Promise.reject(
+          new ReadBufferError(
+            "Operation exceeds buffer bounds",
+            offset,
+            size,
+            0,
+          ),
+        ),
       canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
@@ -709,7 +741,15 @@ describe("ReadableTap buffer exposure", () => {
 
   it("_testOnlyBuf returns empty array when bytes is undefined", async () => {
     const mockBuffer: IReadableBuffer = {
-      read: () => Promise.resolve(undefined),
+      read: (offset: number, size: number) =>
+        Promise.reject(
+          new ReadBufferError(
+            "Operation exceeds buffer bounds",
+            offset,
+            size,
+            0,
+          ),
+        ),
       canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
@@ -740,7 +780,15 @@ describe("ReadableTap buffer exposure", () => {
 describe("ReadableTap fallbacks", () => {
   it("readFloat throws when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
-      read: () => Promise.resolve(undefined),
+      read: (offset: number, size: number) =>
+        Promise.reject(
+          new ReadBufferError(
+            "Operation exceeds buffer bounds",
+            offset,
+            size,
+            0,
+          ),
+        ),
       canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
@@ -749,7 +797,15 @@ describe("ReadableTap fallbacks", () => {
 
   it("readDouble throws when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
-      read: () => Promise.resolve(undefined),
+      read: (offset: number, size: number) =>
+        Promise.reject(
+          new ReadBufferError(
+            "Operation exceeds buffer bounds",
+            offset,
+            size,
+            0,
+          ),
+        ),
       canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
@@ -759,12 +815,19 @@ describe("ReadableTap fallbacks", () => {
   it("matchString throws when content read fails", async () => {
     let callCount = 0;
     const mockBuffer: IReadableBuffer = {
-      read: (_offset: number, _size: number) => {
+      read: (offset: number, size: number) => {
         callCount++;
         if (callCount <= 2) { // Allow readLong to succeed for both taps
           return Promise.resolve(new Uint8Array([2])); // Varint for 1
         }
-        return Promise.resolve(undefined); // Fail content read
+        return Promise.reject(
+          new ReadBufferError(
+            "Operation exceeds buffer bounds",
+            offset,
+            size,
+            0,
+          ),
+        );
       },
       canReadMore: () => Promise.resolve(true),
     };
@@ -775,7 +838,15 @@ describe("ReadableTap fallbacks", () => {
 
   it("readString throws when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
-      read: () => Promise.resolve(undefined),
+      read: (offset: number, size: number) =>
+        Promise.reject(
+          new ReadBufferError(
+            "Operation exceeds buffer bounds",
+            offset,
+            size,
+            0,
+          ),
+        ),
       canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
@@ -784,7 +855,15 @@ describe("ReadableTap fallbacks", () => {
 
   it("readBytes throws when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
-      read: () => Promise.resolve(undefined),
+      read: (offset: number, size: number) =>
+        Promise.reject(
+          new ReadBufferError(
+            "Operation exceeds buffer bounds",
+            offset,
+            size,
+            0,
+          ),
+        ),
       canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
@@ -793,7 +872,15 @@ describe("ReadableTap fallbacks", () => {
 
   it("readFixed throws when read fails", async () => {
     const mockBuffer: IReadableBuffer = {
-      read: () => Promise.resolve(undefined),
+      read: (offset: number, size: number) =>
+        Promise.reject(
+          new ReadBufferError(
+            "Operation exceeds buffer bounds",
+            offset,
+            size,
+            0,
+          ),
+        ),
       canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
@@ -869,9 +956,17 @@ describe("canReadMore", () => {
     expect(await tap.canReadMore()).toBe(true);
   });
 
-  it("works with mock buffer that returns undefined", async () => {
+  it("works with mock buffer that throws ReadBufferError", async () => {
     const mockBuffer: IReadableBuffer = {
-      read: () => Promise.resolve(undefined),
+      read: (offset: number, size: number) =>
+        Promise.reject(
+          new ReadBufferError(
+            "Operation exceeds buffer bounds",
+            offset,
+            size,
+            0,
+          ),
+        ),
       canReadMore: () => Promise.resolve(false),
     };
     const tap = new ReadableTap(mockBuffer);
@@ -880,7 +975,8 @@ describe("canReadMore", () => {
 
   it("works with mock buffer that returns empty Uint8Array", async () => {
     const mockBuffer: IReadableBuffer = {
-      read: () => Promise.resolve(new Uint8Array(0)),
+      read: (_offset: number, size: number) =>
+        Promise.resolve(new Uint8Array(size)),
       canReadMore: () => Promise.resolve(true),
     };
     const tap = new ReadableTap(mockBuffer);

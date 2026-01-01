@@ -1,4 +1,5 @@
 import type { IReadableBuffer } from "./buffer.ts";
+import { ReadBufferError } from "./buffer_error.ts";
 
 /**
  * A read-only buffer implementation that provides random access read operations
@@ -10,7 +11,7 @@ import type { IReadableBuffer } from "./buffer.ts";
  * Key features:
  * - Blob-backed: Reads data directly from the Blob asynchronously.
  * - Random access: Supports reading at arbitrary byte offsets.
- * - Bounds checking: Operations that would exceed buffer bounds are safely ignored or return undefined.
+ * - Bounds checking: Operations that exceed buffer bounds throw ReadBufferError.
  * - Memory efficient: Doesn't load data into memory.
  *
  * @example
@@ -50,13 +51,29 @@ export class BlobReadableBuffer implements IReadableBuffer {
    *
    * @param offset The byte offset to start reading from (0-based).
    * @param size The number of bytes to read.
-   * @returns A Promise that resolves to a new Uint8Array containing the read bytes, or undefined if the read would exceed buffer bounds.
+   * @returns A Promise that resolves to a new Uint8Array containing the read bytes.
+   * @throws ReadBufferError if the requested range is out of bounds.
    */
   public async read(
     offset: number,
     size: number,
-  ): Promise<Uint8Array | undefined> {
-    if (offset + size > this.#blob.size) return undefined;
+  ): Promise<Uint8Array> {
+    if (offset < 0 || size < 0) {
+      throw new ReadBufferError(
+        `Offset and size must be non-negative. Got offset=${offset}, size=${size}`,
+        offset,
+        size,
+        this.#blob.size,
+      );
+    }
+    if (offset + size > this.#blob.size) {
+      throw new ReadBufferError(
+        `Operation exceeds buffer bounds. offset=${offset}, size=${size}, bufferLength=${this.#blob.size}`,
+        offset,
+        size,
+        this.#blob.size,
+      );
+    }
 
     // Read directly from the Blob
     const sliced = this.#blob.slice(offset, offset + size);
@@ -70,7 +87,14 @@ export class BlobReadableBuffer implements IReadableBuffer {
    * @returns True if at least one byte can be read from the offset.
    */
   public async canReadMore(offset: number): Promise<boolean> {
-    const result = await this.read(offset, 1);
-    return result !== undefined;
+    try {
+      await this.read(offset, 1);
+      return true;
+    } catch (err) {
+      if (err instanceof ReadBufferError) {
+        return false;
+      }
+      throw err;
+    }
   }
 }

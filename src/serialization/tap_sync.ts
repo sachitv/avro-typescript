@@ -3,7 +3,7 @@ import { compareUint8Arrays } from "./compare_bytes.ts";
 import { decode, encoder } from "./text_encoding.ts";
 import { TapBase } from "./tap.ts";
 import type { ISyncReadable, ISyncWritable } from "./buffers/buffer_sync.ts";
-import { ReadBufferError } from "./buffers/buffer_sync.ts";
+import { ReadBufferError, WriteBufferError } from "./buffers/buffer_sync.ts";
 import {
   SyncInMemoryReadableBuffer,
   SyncInMemoryWritableBuffer,
@@ -182,13 +182,27 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     if (this.pos < 0) {
       throw new RangeError("Tap position is negative.");
     }
-    return this.buffer.read(0, this.pos)!;
+    try {
+      return this.buffer.read(0, this.pos)!;
+    } catch (err) {
+      if (err instanceof ReadBufferError) {
+        throw new RangeError(err.message);
+      }
+      throw err;
+    }
   }
 
   /** Retrieves the byte at the specified position in the buffer. */
   private getByteAt(position: number): number {
-    const result = this.buffer.read(position, 1)!;
-    return result[0]!;
+    try {
+      const result = this.buffer.read(position, 1)!;
+      return result[0]!;
+    } catch (err) {
+      if (err instanceof ReadBufferError) {
+        throw new RangeError(err.message);
+      }
+      throw err;
+    }
   }
 
   /** Reads the next byte as a boolean value and advances the cursor. */
@@ -464,7 +478,14 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
     length = bytes.length - offset,
   ): void {
     if (length <= 0) return;
-    this.buffer.appendBytesFrom(bytes, offset, length);
+    try {
+      this.buffer.appendBytesFrom(bytes, offset, length);
+    } catch (err) {
+      if (err instanceof WriteBufferError) {
+        throw new RangeError(err.message);
+      }
+      throw err;
+    }
     this.pos += length;
   }
 

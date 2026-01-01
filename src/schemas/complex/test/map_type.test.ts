@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
+import { ReadBufferError } from "../../../serialization/buffers/buffer_error.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import { ReadableTap } from "../../../serialization/tap.ts";
 import {
@@ -809,15 +810,20 @@ describe("readMapInto", () => {
   it("throws when readString fails for map key", async () => {
     let callCount = 0;
     const mockBuffer = {
-      read: (_offset: number, _size: number) => {
+      read: (offset: number, size: number) => {
         callCount++;
         if (callCount === 1) {
           // For readLong varint, return some bytes for 1n
           return Promise.resolve(new Uint8Array([2])); // varint for 1
-        } else {
-          // For readString, return undefined
-          return Promise.resolve(undefined);
         }
+        return Promise.reject(
+          new ReadBufferError(
+            "Operation exceeds buffer bounds",
+            offset,
+            size,
+            0,
+          ),
+        );
       },
       // This is unused here.
       canReadMore: (_offset: number) => Promise.resolve(true),

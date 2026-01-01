@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { ReadBufferError } from "../../buffers/buffer_error.ts";
 import { FixedSizeStreamReadableBufferAdapter } from "../fixed_size_stream_readable_buffer_adapter.ts";
 
 describe("FixedSizeStreamReadableBufferAdapter", () => {
@@ -85,12 +86,10 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
       const adapter = new FixedSizeStreamReadableBufferAdapter(mockStream, 10);
 
       const result = await adapter.read(1, 2);
-      assert(result !== undefined);
       assertEquals(result, new Uint8Array([2, 3]));
     });
 
     it("throws error for reads before window start", async () => {
-      // Test the basic case: negative offset should return undefined
       const mockStream = {
         // deno-lint-ignore require-await
         readNext: async () => new Uint8Array([1, 2, 3]),
@@ -98,11 +97,14 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
       };
       const adapter = new FixedSizeStreamReadableBufferAdapter(mockStream, 10);
 
-      // Negative offset should return undefined (not throw)
-      assertEquals(await adapter.read(-1, 1), undefined);
+      await assertRejects(
+        () => adapter.read(-1, 1),
+        ReadBufferError,
+        "Offset and size must be non-negative",
+      );
     });
 
-    it("returns undefined for invalid parameters", async () => {
+    it("throws for invalid parameters", async () => {
       const mockStream = {
         // deno-lint-ignore require-await
         readNext: async () => new Uint8Array([1, 2, 3]),
@@ -110,13 +112,21 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
       };
       const adapter = new FixedSizeStreamReadableBufferAdapter(mockStream, 10);
 
-      assertEquals(await adapter.read(-1, 1), undefined);
-      assertEquals(await adapter.read(0, -1), undefined);
+      await assertRejects(
+        () => adapter.read(-1, 1),
+        ReadBufferError,
+        "Offset and size must be non-negative",
+      );
+      await assertRejects(
+        () => adapter.read(0, -1),
+        ReadBufferError,
+        "Offset and size must be non-negative",
+      );
 
-      // Size > window should throw RangeError
+      // Size > window should throw ReadBufferError (unified buffer errors)
       await assertRejects(
         () => adapter.read(0, 100),
-        RangeError,
+        ReadBufferError,
         "Requested size 100 exceeds window size 10",
       );
     });
@@ -129,8 +139,11 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
       };
       const adapter = new FixedSizeStreamReadableBufferAdapter(mockStream, 10);
 
-      const result = await adapter.read(0, 1);
-      assertEquals(result, undefined);
+      await assertRejects(
+        () => adapter.read(0, 1),
+        ReadBufferError,
+        "Operation exceeds buffer bounds",
+      );
     });
 
     it("advances window when reading beyond current buffer", async () => {
@@ -154,12 +167,10 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
 
       // Read first chunk
       const result1 = await adapter.read(0, 3);
-      assert(result1 !== undefined);
       assertEquals(result1, new Uint8Array([1, 2, 3]));
 
       // Read beyond current buffer - should advance window
       const result2 = await adapter.read(3, 3);
-      assert(result2 !== undefined);
       assertEquals(result2, new Uint8Array([4, 5, 6]));
     });
 
@@ -184,12 +195,10 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
 
       // Read first 3 bytes
       const result1 = await adapter.read(0, 3);
-      assert(result1 !== undefined);
       assertEquals(result1, new Uint8Array([1, 2, 3]));
 
       // Read next 2 bytes (should fill more and shift window)
       const result2 = await adapter.read(3, 2);
-      assert(result2 !== undefined);
       assertEquals(result2, new Uint8Array([4, 5]));
     });
 
@@ -208,10 +217,10 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
       };
       const adapter = new FixedSizeStreamReadableBufferAdapter(mockStream, 3);
 
-      // Try to read a large chunk (larger than window) - should throw RangeError
+      // Try to read a large chunk (larger than window) - should throw ReadBufferError
       await assertRejects(
         () => adapter.read(0, 5),
-        RangeError,
+        ReadBufferError,
         "Requested size 5 exceeds window size 3",
       );
     });
@@ -244,7 +253,7 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
       // Now try to read before current window start (should throw)
       await assertRejects(
         () => adapter.read(3, 2),
-        RangeError,
+        ReadBufferError,
         "Cannot read data before window start",
       );
     });
@@ -266,12 +275,10 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
 
       // Read a range to buffer data
       const result1 = await adapter.read(0, 5);
-      assert(result1 !== undefined);
       assertEquals(result1, new Uint8Array([1, 2, 3, 4, 5]));
 
       // Now read a subset within the buffered range (should not fill again)
       const result2 = await adapter.read(2, 3);
-      assert(result2 !== undefined);
       assertEquals(result2, new Uint8Array([3, 4, 5]));
     });
 
@@ -291,8 +298,11 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
       const adapter = new FixedSizeStreamReadableBufferAdapter(mockStream, 10);
 
       // Try to read beyond available data
-      const result = await adapter.read(3, 5); // offset 3, size 5 -> needs up to 8, but only 5 available
-      assertEquals(result, undefined);
+      await assertRejects(
+        () => adapter.read(3, 5),
+        ReadBufferError,
+        "Operation exceeds buffer bounds",
+      );
     });
 
     it("handles push error when chunk exceeds buffer capacity", async () => {
@@ -313,7 +323,7 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
       // Try to read, which will attempt to buffer the large chunk
       await assertRejects(
         () => adapter.read(0, 5),
-        RangeError,
+        ReadBufferError,
         "Cannot buffer chunk of size 15",
       );
     });
@@ -386,12 +396,10 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
 
       // Read some initial data
       const result1 = await adapter.read(0, 5);
-      assert(result1 !== undefined);
       assertEquals(result1, data.slice(0, 5));
 
       // Read data that requires advancing the window
       const result2 = await adapter.read(15, 5);
-      assert(result2 !== undefined);
       assertEquals(result2, data.slice(15, 20));
 
       // Try to read data that would be before current window (should fail)

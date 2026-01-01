@@ -1,4 +1,5 @@
 import type { IReadableBuffer, IWritableBuffer } from "./buffer.ts";
+import { ReadBufferError, WriteBufferError } from "./buffer_error.ts";
 
 /**
  * Shared strict in-memory buffer base with common functionality.
@@ -56,13 +57,19 @@ export class InMemoryReadableBuffer extends InMemoryBufferBase
    */
   private checkBounds(offset: number, size: number): void {
     if (offset < 0 || size < 0) {
-      throw new RangeError(
+      throw new ReadBufferError(
         `Offset and size must be non-negative. Got offset=${offset}, size=${size}`,
+        offset,
+        size,
+        this.view.length,
       );
     }
     if (offset + size > this.view.length) {
-      throw new RangeError(
+      throw new ReadBufferError(
         `Operation exceeds buffer bounds. offset=${offset}, size=${size}, bufferLength=${this.view.length}`,
+        offset,
+        size,
+        this.view.length,
       );
     }
   }
@@ -149,11 +156,19 @@ export class InMemoryWritableBuffer extends InMemoryBufferBase
    */
   protected checkWriteBounds(offset: number, data: Uint8Array): void {
     if (offset < 0) {
-      throw new RangeError(`Offset must be non-negative. Got offset=${offset}`);
+      throw new WriteBufferError(
+        `Offset must be non-negative. Got offset=${offset}`,
+        offset,
+        data.length,
+        this.view.length,
+      );
     }
     if (offset + data.length > this.view.length) {
-      throw new RangeError(
+      throw new WriteBufferError(
         `Write operation exceeds buffer bounds. offset=${offset}, dataSize=${data.length}, bufferLength=${this.view.length}`,
+        offset,
+        data.length,
+        this.view.length,
       );
     }
   }

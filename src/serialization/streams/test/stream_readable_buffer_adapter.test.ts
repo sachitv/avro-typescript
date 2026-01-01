@@ -1,5 +1,6 @@
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { ReadBufferError } from "../../buffers/buffer_error.ts";
 import { StreamReadableBufferAdapter } from "../stream_readable_buffer_adapter.ts";
 
 describe("StreamReadableBufferAdapter", () => {
@@ -57,11 +58,10 @@ describe("StreamReadableBufferAdapter", () => {
       const adapter = new StreamReadableBufferAdapter(mockStream);
 
       const result = await adapter.read(1, 3);
-      assert(result !== undefined);
       assertEquals(result, new Uint8Array([2, 3, 4]));
     });
 
-    it("returns undefined for out of bounds", async () => {
+    it("throws ReadBufferError for out of bounds", async () => {
       const chunks = [new Uint8Array([1, 2, 3])];
       let chunkIndex = 0;
       const mockStream = {
@@ -76,11 +76,10 @@ describe("StreamReadableBufferAdapter", () => {
       };
       const adapter = new StreamReadableBufferAdapter(mockStream);
 
-      const result = await adapter.read(10, 1);
-      assertEquals(result, undefined);
+      await assertRejects(() => adapter.read(10, 1), ReadBufferError);
     });
 
-    it("returns undefined for negative offset", async () => {
+    it("throws ReadBufferError for negative offset", async () => {
       const mockStream = {
         // deno-lint-ignore require-await
         readNext: async () => undefined,
@@ -88,11 +87,10 @@ describe("StreamReadableBufferAdapter", () => {
       };
       const adapter = new StreamReadableBufferAdapter(mockStream);
 
-      const result = await adapter.read(-1, 1);
-      assertEquals(result, undefined);
+      await assertRejects(() => adapter.read(-1, 1), ReadBufferError);
     });
 
-    it("returns undefined for negative size", async () => {
+    it("throws ReadBufferError for negative size", async () => {
       const mockStream = {
         // deno-lint-ignore require-await
         readNext: async () => undefined,
@@ -100,11 +98,10 @@ describe("StreamReadableBufferAdapter", () => {
       };
       const adapter = new StreamReadableBufferAdapter(mockStream);
 
-      const result = await adapter.read(0, -1);
-      assertEquals(result, undefined);
+      await assertRejects(() => adapter.read(0, -1), ReadBufferError);
     });
 
-    it("returns undefined for both negative offset and size", async () => {
+    it("throws ReadBufferError for negative offset and size", async () => {
       const mockStream = {
         // deno-lint-ignore require-await
         readNext: async () => undefined,
@@ -112,8 +109,7 @@ describe("StreamReadableBufferAdapter", () => {
       };
       const adapter = new StreamReadableBufferAdapter(mockStream);
 
-      const result = await adapter.read(-5, -1);
-      assertEquals(result, undefined);
+      await assertRejects(() => adapter.read(-5, -1), ReadBufferError);
     });
 
     it("uses cached data when already buffered", async () => {

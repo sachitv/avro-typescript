@@ -1,4 +1,5 @@
 import type { IReadableBuffer } from "../buffers/buffer.ts";
+import { ReadBufferError } from "../buffers/buffer_error.ts";
 import type { IStreamReadableBuffer } from "./streams.ts";
 
 /**
@@ -37,14 +38,20 @@ export class StreamReadableBufferAdapter implements IReadableBuffer {
    *
    * @param offset The byte offset to start reading from (0-based).
    * @param size The number of bytes to read.
-   * @returns A Promise that resolves to a new Uint8Array containing the read bytes, or undefined if the read would exceed buffer bounds.
+   * @returns A Promise that resolves to a new Uint8Array containing the read bytes.
+   * @throws ReadBufferError if the requested range is out of bounds.
    */
   public async read(
     offset: number,
     size: number,
-  ): Promise<Uint8Array | undefined> {
+  ): Promise<Uint8Array> {
     if (offset < 0 || size < 0) {
-      return undefined;
+      throw new ReadBufferError(
+        `Offset and size must be non-negative. Got offset=${offset}, size=${size}`,
+        offset,
+        size,
+        this.#bufferedData?.length ?? 0,
+      );
     }
 
     // Check if the section is already cached
@@ -61,7 +68,14 @@ export class StreamReadableBufferAdapter implements IReadableBuffer {
     if (
       this.#bufferedData === null || offset + size > this.#bufferedData.length
     ) {
-      return undefined;
+      throw new ReadBufferError(
+        `Operation exceeds buffer bounds. offset=${offset}, size=${size}, bufferLength=${
+          this.#bufferedData?.length ?? 0
+        }`,
+        offset,
+        size,
+        this.#bufferedData?.length ?? 0,
+      );
     }
 
     return this.#bufferedData.slice(offset, offset + size);
@@ -73,8 +87,15 @@ export class StreamReadableBufferAdapter implements IReadableBuffer {
    * @returns True if at least one byte can be read from the offset.
    */
   public async canReadMore(offset: number): Promise<boolean> {
-    const result = await this.read(offset, 1);
-    return result !== undefined;
+    try {
+      await this.read(offset, 1);
+      return true;
+    } catch (err) {
+      if (err instanceof ReadBufferError) {
+        return false;
+      }
+      throw err;
+    }
   }
 
   /**
