@@ -72,7 +72,7 @@ describe("InMemoryBufferBase (via implementations)", () => {
       const buffer = new ArrayBuffer(10);
       const readable = new InMemoryReadableBuffer(buffer);
       await assertRejects(
-        () => readable.read(-1, -1),
+        () => readable.read(-5, -1),
         ReadBufferError,
         "Offset and size must be non-negative",
       );
@@ -226,7 +226,7 @@ describe("InMemoryBufferBase (via implementations)", () => {
       );
     });
 
-    it("throws on offset at buffer end with size > 0", async () => {
+    it("throws on offset + size exceeding buffer", async () => {
       const buffer = new ArrayBuffer(10);
       const readable = new InMemoryReadableBuffer(buffer);
       await assertRejects(
@@ -424,7 +424,7 @@ describe("InMemoryWritableBuffer", () => {
       await writable.appendBytes(new Uint8Array([1, 2, 3, 4, 5]));
 
       await assertRejects(
-        () => writable.appendBytes(new Uint8Array(11)),
+        () => writable.appendBytes(new Uint8Array([1, 2, 3, 4, 5, 6])),
         WriteBufferError,
         "Write operation exceeds buffer bounds",
       );

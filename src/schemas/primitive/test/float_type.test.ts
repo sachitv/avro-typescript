@@ -12,7 +12,6 @@ import { IntType } from "../int_type.ts";
 import { LongType } from "../long_type.ts";
 import { ValidationError } from "../../error.ts";
 import { BooleanType } from "../boolean_type.ts";
-// (intentionally no sync ReadBufferError import)
 
 describe("FloatType", () => {
   const type = new FloatType();

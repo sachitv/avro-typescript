@@ -9,7 +9,6 @@ import {
   SyncReadableTap,
   SyncWritableTap,
 } from "../../../serialization/tap_sync.ts";
-// (intentionally no sync ReadBufferError import)
 import { calculateVarintSize } from "../../../internal/varint.ts";
 import { utf8ByteLength } from "../../../serialization/text_encoding.ts";
 
