@@ -231,8 +231,9 @@ export class SyncInMemoryWritableBuffer extends SyncInMemoryBufferBase
       );
     }
     this.checkWriteBoundsSize(this.#offset, length);
-    // Use TypedArray.set() for bulk copy instead of byte-by-byte loop
-    this.view.set(data.subarray(offset, offset + length), this.#offset);
+    for (let i = 0; i < length; i++) {
+      this.view[this.#offset + i] = data[offset + i]!;
+    }
     this.#offset += length;
   }
 
