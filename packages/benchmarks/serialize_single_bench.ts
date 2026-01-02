@@ -36,7 +36,7 @@ import {
  * - 10000: Good accuracy (moderate, ~30-60 sec)
  * - 1000: Quick comparison (fast, ~5-10 sec)
  */
-const BENCH_ITERATIONS = 10000;
+const BENCH_ITERATIONS = 1000;
 
 // =============================================================================
 // SCHEMA DEFINITIONS
@@ -545,13 +545,364 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 }
 
 // =============================================================================
+// DETERMINISTIC TEST DATA FIXTURES
+// =============================================================================
+
+/**
+ * Fixed test data to ensure deterministic, reproducible benchmarks.
+ * Using random data causes massive variance (65%+) between runs.
+ * 
+ * Design principles:
+ * - Arrays always have 10 elements (large, realistic workload)
+ * - Ints use large values (stress varint encoding)
+ * - Longs use true bigint values (> 2^31, cannot fit in int32)
+ * - Strings are realistic length (not too short)
+ */
+const FIXTURES = {
+  // Primitives
+  null: null,
+  boolean: true,
+  int: 1234567890, // Large int value
+  long: 9223372036854775807n, // Max int64 value (true bigint)
+  float: 3.14159,
+  double: 2.718281828459045,
+  bytes: new Uint8Array([
+    0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x57, 0x6f, 0x72, 0x6c,
+  ]), // "Hello Worl" - 10 bytes
+  string: "The quick brown fox jumps over the lazy dog",
+
+  // Enums
+  enum: "ACTIVE",
+
+  // Fixed
+  fixed: new Uint8Array([
+    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+    0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
+  ]), // 16 bytes
+
+  // Arrays - always 10 elements with large values
+  arrayOfInts: [
+    1000000001,
+    1000000002,
+    1000000003,
+    1000000004,
+    1000000005,
+    1000000006,
+    1000000007,
+    1000000008,
+    1000000009,
+    1000000010,
+  ],
+  arrayOfStrings: [
+    "string_01",
+    "string_02",
+    "string_03",
+    "string_04",
+    "string_05",
+    "string_06",
+    "string_07",
+    "string_08",
+    "string_09",
+    "string_10",
+  ],
+
+  // Maps (avro-typescript uses Map, avsc/avro-js use plain objects) - 10 entries
+  mapOfInts: new Map([
+    ["key_a", 1000001],
+    ["key_b", 1000002],
+    ["key_c", 1000003],
+    ["key_d", 1000004],
+    ["key_e", 1000005],
+    ["key_f", 1000006],
+    ["key_g", 1000007],
+    ["key_h", 1000008],
+    ["key_i", 1000009],
+    ["key_j", 1000010],
+  ]),
+  mapOfStrings: new Map([
+    ["key_01", "value_01"],
+    ["key_02", "value_02"],
+    ["key_03", "value_03"],
+    ["key_04", "value_04"],
+    ["key_05", "value_05"],
+    ["key_06", "value_06"],
+    ["key_07", "value_07"],
+    ["key_08", "value_08"],
+    ["key_09", "value_09"],
+    ["key_10", "value_10"],
+  ]),
+
+  // Records
+  simpleRecord: {
+    id: 9876543,
+    name: "Test Record Name",
+    value: 99.99,
+    active: true,
+    data: new Uint8Array([0xde, 0xad, 0xbe, 0xef, 0xca, 0xfe, 0xba, 0xbe]),
+  },
+
+  deeplyNestedRecord: {
+    id: 1000001,
+    name: "Level 1 Record",
+    level2: {
+      id: 2000002,
+      description: "Level 2 description with meaningful text",
+      level3: {
+        id: 3000003,
+        value: 123.456,
+        level4: {
+          id: 4000004,
+          data: new Uint8Array([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a]),
+          tags: [
+            "tag_001",
+            "tag_002",
+            "tag_003",
+            "tag_004",
+            "tag_005",
+            "tag_006",
+            "tag_007",
+            "tag_008",
+            "tag_009",
+            "tag_010",
+          ],
+        },
+      },
+    },
+  },
+
+  recordWithArrayOfRecords: {
+    id: 5000100,
+    title: "Parent Record Title",
+    items: [
+      { id: 5001001, name: "Item 001", value: 10.5 },
+      { id: 5001002, name: "Item 002", value: 20.5 },
+      { id: 5001003, name: "Item 003", value: 30.5 },
+      { id: 5001004, name: "Item 004", value: 40.5 },
+      { id: 5001005, name: "Item 005", value: 50.5 },
+      { id: 5001006, name: "Item 006", value: 60.5 },
+      { id: 5001007, name: "Item 007", value: 70.5 },
+      { id: 5001008, name: "Item 008", value: 80.5 },
+      { id: 5001009, name: "Item 009", value: 90.5 },
+      { id: 5001010, name: "Item 010", value: 100.5 },
+    ],
+  },
+
+  // Array of records - depth 1 (10 records)
+  arrayOfRecordsDepth1: [
+    { id: 6001001, name: "Record 001", value: 1.1 },
+    { id: 6001002, name: "Record 002", value: 2.2 },
+    { id: 6001003, name: "Record 003", value: 3.3 },
+    { id: 6001004, name: "Record 004", value: 4.4 },
+    { id: 6001005, name: "Record 005", value: 5.5 },
+    { id: 6001006, name: "Record 006", value: 6.6 },
+    { id: 6001007, name: "Record 007", value: 7.7 },
+    { id: 6001008, name: "Record 008", value: 8.8 },
+    { id: 6001009, name: "Record 009", value: 9.9 },
+    { id: 6001010, name: "Record 010", value: 10.1 },
+  ],
+
+  // Array of records - depth 2 (10x10 structure)
+  arrayOfRecordsDepth2: [
+    [
+      { id: 7001001, name: "R01-01", value: 1.01 },
+      { id: 7001002, name: "R01-02", value: 1.02 },
+      { id: 7001003, name: "R01-03", value: 1.03 },
+      { id: 7001004, name: "R01-04", value: 1.04 },
+      { id: 7001005, name: "R01-05", value: 1.05 },
+      { id: 7001006, name: "R01-06", value: 1.06 },
+      { id: 7001007, name: "R01-07", value: 1.07 },
+      { id: 7001008, name: "R01-08", value: 1.08 },
+      { id: 7001009, name: "R01-09", value: 1.09 },
+      { id: 7001010, name: "R01-10", value: 1.10 },
+    ],
+    [
+      { id: 7002001, name: "R02-01", value: 2.01 },
+      { id: 7002002, name: "R02-02", value: 2.02 },
+      { id: 7002003, name: "R02-03", value: 2.03 },
+      { id: 7002004, name: "R02-04", value: 2.04 },
+      { id: 7002005, name: "R02-05", value: 2.05 },
+      { id: 7002006, name: "R02-06", value: 2.06 },
+      { id: 7002007, name: "R02-07", value: 2.07 },
+      { id: 7002008, name: "R02-08", value: 2.08 },
+      { id: 7002009, name: "R02-09", value: 2.09 },
+      { id: 7002010, name: "R02-10", value: 2.10 },
+    ],
+    [
+      { id: 7003001, name: "R03-01", value: 3.01 },
+      { id: 7003002, name: "R03-02", value: 3.02 },
+      { id: 7003003, name: "R03-03", value: 3.03 },
+      { id: 7003004, name: "R03-04", value: 3.04 },
+      { id: 7003005, name: "R03-05", value: 3.05 },
+      { id: 7003006, name: "R03-06", value: 3.06 },
+      { id: 7003007, name: "R03-07", value: 3.07 },
+      { id: 7003008, name: "R03-08", value: 3.08 },
+      { id: 7003009, name: "R03-09", value: 3.09 },
+      { id: 7003010, name: "R03-10", value: 3.10 },
+    ],
+    [
+      { id: 7004001, name: "R04-01", value: 4.01 },
+      { id: 7004002, name: "R04-02", value: 4.02 },
+      { id: 7004003, name: "R04-03", value: 4.03 },
+      { id: 7004004, name: "R04-04", value: 4.04 },
+      { id: 7004005, name: "R04-05", value: 4.05 },
+      { id: 7004006, name: "R04-06", value: 4.06 },
+      { id: 7004007, name: "R04-07", value: 4.07 },
+      { id: 7004008, name: "R04-08", value: 4.08 },
+      { id: 7004009, name: "R04-09", value: 4.09 },
+      { id: 7004010, name: "R04-10", value: 4.10 },
+    ],
+    [
+      { id: 7005001, name: "R05-01", value: 5.01 },
+      { id: 7005002, name: "R05-02", value: 5.02 },
+      { id: 7005003, name: "R05-03", value: 5.03 },
+      { id: 7005004, name: "R05-04", value: 5.04 },
+      { id: 7005005, name: "R05-05", value: 5.05 },
+      { id: 7005006, name: "R05-06", value: 5.06 },
+      { id: 7005007, name: "R05-07", value: 5.07 },
+      { id: 7005008, name: "R05-08", value: 5.08 },
+      { id: 7005009, name: "R05-09", value: 5.09 },
+      { id: 7005010, name: "R05-10", value: 5.10 },
+    ],
+    [
+      { id: 7006001, name: "R06-01", value: 6.01 },
+      { id: 7006002, name: "R06-02", value: 6.02 },
+      { id: 7006003, name: "R06-03", value: 6.03 },
+      { id: 7006004, name: "R06-04", value: 6.04 },
+      { id: 7006005, name: "R06-05", value: 6.05 },
+      { id: 7006006, name: "R06-06", value: 6.06 },
+      { id: 7006007, name: "R06-07", value: 6.07 },
+      { id: 7006008, name: "R06-08", value: 6.08 },
+      { id: 7006009, name: "R06-09", value: 6.09 },
+      { id: 7006010, name: "R06-10", value: 6.10 },
+    ],
+    [
+      { id: 7007001, name: "R07-01", value: 7.01 },
+      { id: 7007002, name: "R07-02", value: 7.02 },
+      { id: 7007003, name: "R07-03", value: 7.03 },
+      { id: 7007004, name: "R07-04", value: 7.04 },
+      { id: 7007005, name: "R07-05", value: 7.05 },
+      { id: 7007006, name: "R07-06", value: 7.06 },
+      { id: 7007007, name: "R07-07", value: 7.07 },
+      { id: 7007008, name: "R07-08", value: 7.08 },
+      { id: 7007009, name: "R07-09", value: 7.09 },
+      { id: 7007010, name: "R07-10", value: 7.10 },
+    ],
+    [
+      { id: 7008001, name: "R08-01", value: 8.01 },
+      { id: 7008002, name: "R08-02", value: 8.02 },
+      { id: 7008003, name: "R08-03", value: 8.03 },
+      { id: 7008004, name: "R08-04", value: 8.04 },
+      { id: 7008005, name: "R08-05", value: 8.05 },
+      { id: 7008006, name: "R08-06", value: 8.06 },
+      { id: 7008007, name: "R08-07", value: 8.07 },
+      { id: 7008008, name: "R08-08", value: 8.08 },
+      { id: 7008009, name: "R08-09", value: 8.09 },
+      { id: 7008010, name: "R08-10", value: 8.10 },
+    ],
+    [
+      { id: 7009001, name: "R09-01", value: 9.01 },
+      { id: 7009002, name: "R09-02", value: 9.02 },
+      { id: 7009003, name: "R09-03", value: 9.03 },
+      { id: 7009004, name: "R09-04", value: 9.04 },
+      { id: 7009005, name: "R09-05", value: 9.05 },
+      { id: 7009006, name: "R09-06", value: 9.06 },
+      { id: 7009007, name: "R09-07", value: 9.07 },
+      { id: 7009008, name: "R09-08", value: 9.08 },
+      { id: 7009009, name: "R09-09", value: 9.09 },
+      { id: 7009010, name: "R09-10", value: 9.10 },
+    ],
+    [
+      { id: 7010001, name: "R10-01", value: 10.01 },
+      { id: 7010002, name: "R10-02", value: 10.02 },
+      { id: 7010003, name: "R10-03", value: 10.03 },
+      { id: 7010004, name: "R10-04", value: 10.04 },
+      { id: 7010005, name: "R10-05", value: 10.05 },
+      { id: 7010006, name: "R10-06", value: 10.06 },
+      { id: 7010007, name: "R10-07", value: 10.07 },
+      { id: 7010008, name: "R10-08", value: 10.08 },
+      { id: 7010009, name: "R10-09", value: 10.09 },
+      { id: 7010010, name: "R10-10", value: 10.10 },
+    ],
+  ],
+
+  // Array of records - depth 3 (10x10x10 = 1000 records total)
+  // Using compact notation for readability, but maintaining 10 elements per level
+  arrayOfRecordsDepth3: Array.from({ length: 10 }, (_, i) =>
+    Array.from({ length: 10 }, (_, j) =>
+      Array.from({ length: 10 }, (_, k) => ({
+        id: 8000000 + i * 10000 + j * 100 + k,
+        name: `R${String(i + 1).padStart(2, "0")}-${String(j + 1).padStart(2, "0")}-${String(k + 1).padStart(2, "0")}`,
+        value: (i + 1) + (j + 1) / 10 + (k + 1) / 100,
+      }))
+    )
+  ),
+
+  // Array of records - depth 4 (10x10x10x10 = 10,000 records total)
+  // This is a very large dataset to stress-test performance
+  arrayOfRecordsDepth4: Array.from({ length: 10 }, (_, i) =>
+    Array.from({ length: 10 }, (_, j) =>
+      Array.from({ length: 10 }, (_, k) =>
+        Array.from({ length: 10 }, (_, l) => ({
+          id: 9000000 + i * 100000 + j * 10000 + k * 100 + l,
+          name: `R${String(i + 1).padStart(2, "0")}-${String(j + 1).padStart(2, "0")}-${String(k + 1).padStart(2, "0")}-${String(l + 1).padStart(2, "0")}`,
+          value: (i + 1) + (j + 1) / 10 + (k + 1) / 100 + (l + 1) / 1000,
+        }))
+      )
+    )
+  ),
+
+  // Array of arrays - depth 1 (array<array<int>>) - 10x10 = 100 ints
+  arrayOfArraysDepth1: [
+    [1000001, 1000002, 1000003, 1000004, 1000005, 1000006, 1000007, 1000008, 1000009, 1000010],
+    [1000011, 1000012, 1000013, 1000014, 1000015, 1000016, 1000017, 1000018, 1000019, 1000020],
+    [1000021, 1000022, 1000023, 1000024, 1000025, 1000026, 1000027, 1000028, 1000029, 1000030],
+    [1000031, 1000032, 1000033, 1000034, 1000035, 1000036, 1000037, 1000038, 1000039, 1000040],
+    [1000041, 1000042, 1000043, 1000044, 1000045, 1000046, 1000047, 1000048, 1000049, 1000050],
+    [1000051, 1000052, 1000053, 1000054, 1000055, 1000056, 1000057, 1000058, 1000059, 1000060],
+    [1000061, 1000062, 1000063, 1000064, 1000065, 1000066, 1000067, 1000068, 1000069, 1000070],
+    [1000071, 1000072, 1000073, 1000074, 1000075, 1000076, 1000077, 1000078, 1000079, 1000080],
+    [1000081, 1000082, 1000083, 1000084, 1000085, 1000086, 1000087, 1000088, 1000089, 1000090],
+    [1000091, 1000092, 1000093, 1000094, 1000095, 1000096, 1000097, 1000098, 1000099, 1000100],
+  ],
+
+  // Array of arrays - depth 2 (array<array<array<int>>>) - 10x10x10 = 1000 ints
+  arrayOfArraysDepth2: Array.from({ length: 10 }, (_, i) =>
+    Array.from({ length: 10 }, (_, j) =>
+      Array.from({ length: 10 }, (_, k) => 2000000 + i * 10000 + j * 100 + k)
+    )
+  ),
+
+  // Array of arrays - depth 3 (array<array<array<array<int>>>>) - 10x10x10x10 = 10,000 ints
+  arrayOfArraysDepth3: Array.from({ length: 10 }, (_, i) =>
+    Array.from({ length: 10 }, (_, j) =>
+      Array.from({ length: 10 }, (_, k) =>
+        Array.from({ length: 10 }, (_, l) => 3000000 + i * 100000 + j * 10000 + k * 100 + l)
+      )
+    )
+  ),
+
+  // Array of arrays - depth 4 (array<array<array<array<array<int>>>>>) - 10x10x10x10x10 = 100,000 ints
+  arrayOfArraysDepth4: Array.from({ length: 10 }, (_, i) =>
+    Array.from({ length: 10 }, (_, j) =>
+      Array.from({ length: 10 }, (_, k) =>
+        Array.from({ length: 10 }, (_, l) =>
+          Array.from({ length: 10 }, (_, m) =>
+            4000000 + i * 1000000 + j * 100000 + k * 10000 + l * 100 + m
+          )
+        )
+      )
+    )
+  ),
+};
+
+// =============================================================================
 // 1. PRIMITIVE TYPE BENCHMARKS
 // =============================================================================
 
 // --- Null ---
 {
   const types = createLibraryTypes(primitiveSchemas.null);
-  const data = types.avroTs.random();
+  const data = FIXTURES.null;
   runFullComparisonBenchmark({
     groupName: "primitive: null",
     types,
@@ -563,7 +914,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Boolean ---
 {
   const types = createLibraryTypes(primitiveSchemas.boolean);
-  const data = types.avroTs.random();
+  const data = FIXTURES.boolean;
   runFullComparisonBenchmark({
     groupName: "primitive: boolean",
     types,
@@ -575,7 +926,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Int ---
 {
   const types = createLibraryTypes(primitiveSchemas.int);
-  const data = types.avroTs.random();
+  const data = FIXTURES.int;
   runFullComparisonBenchmark({
     groupName: "primitive: int",
     types,
@@ -587,7 +938,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Long ---
 {
   const types = createLibraryTypes(primitiveSchemas.long);
-  const data = types.avroTs.random() as bigint;
+  const data = FIXTURES.long;
   runFullComparisonBenchmark({
     groupName: "primitive: long",
     types,
@@ -599,7 +950,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Float ---
 {
   const types = createLibraryTypes(primitiveSchemas.float);
-  const data = types.avroTs.random();
+  const data = FIXTURES.float;
   runFullComparisonBenchmark({
     groupName: "primitive: float",
     types,
@@ -611,7 +962,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Double ---
 {
   const types = createLibraryTypes(primitiveSchemas.double);
-  const data = types.avroTs.random();
+  const data = FIXTURES.double;
   runFullComparisonBenchmark({
     groupName: "primitive: double",
     types,
@@ -623,7 +974,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Bytes ---
 {
   const types = createLibraryTypes(primitiveSchemas.bytes);
-  const data = types.avroTs.random() as Uint8Array;
+  const data = FIXTURES.bytes;
   runFullComparisonBenchmark({
     groupName: "primitive: bytes",
     types,
@@ -635,7 +986,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- String ---
 {
   const types = createLibraryTypes(primitiveSchemas.string);
-  const data = types.avroTs.random();
+  const data = FIXTURES.string;
   runFullComparisonBenchmark({
     groupName: "primitive: string",
     types,
@@ -651,7 +1002,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Enum ---
 {
   const types = createLibraryTypes(enumSchema);
-  const data = types.avroTs.random();
+  const data = FIXTURES.enum;
   runFullComparisonBenchmark({
     groupName: "complex: enum",
     types,
@@ -663,7 +1014,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Fixed ---
 {
   const types = createLibraryTypes(fixedSchema);
-  const data = types.avroTs.random() as Uint8Array;
+  const data = FIXTURES.fixed;
   runFullComparisonBenchmark({
     groupName: "complex: fixed",
     types,
@@ -675,7 +1026,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Array<int> ---
 {
   const types = createLibraryTypes(arrayOfIntsSchema);
-  const data = types.avroTs.random();
+  const data = FIXTURES.arrayOfInts;
   runFullComparisonBenchmark({
     groupName: "complex: array<int>",
     types,
@@ -687,7 +1038,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Array<string> ---
 {
   const types = createLibraryTypes(arrayOfStringsSchema);
-  const data = types.avroTs.random();
+  const data = FIXTURES.arrayOfStrings;
   runFullComparisonBenchmark({
     groupName: "complex: array<string>",
     types,
@@ -700,7 +1051,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // Note: avro-typescript uses Map, avsc/avro-js use plain objects
 {
   const types = createLibraryTypes(mapOfIntsSchema);
-  const avroTsData = types.avroTs.random() as Map<string, number>;
+  const avroTsData = FIXTURES.mapOfInts;
   const nodeData = Object.fromEntries(avroTsData.entries());
 
   runFullComparisonBenchmark({
@@ -715,7 +1066,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Map<string> ---
 {
   const types = createLibraryTypes(mapOfStringsSchema);
-  const avroTsData = types.avroTs.random() as Map<string, string>;
+  const avroTsData = FIXTURES.mapOfStrings;
   const nodeData = Object.fromEntries(avroTsData.entries());
 
   runFullComparisonBenchmark({
@@ -734,13 +1085,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Simple Record ---
 {
   const types = createLibraryTypes(simpleRecordSchema);
-  const avroTsData = types.avroTs.random() as {
-    id: number;
-    name: string;
-    value: number;
-    active: boolean;
-    data: Uint8Array;
-  };
+  const avroTsData = FIXTURES.simpleRecord;
   const nodeData = toNodeFormat(avroTsData);
 
   runFullComparisonBenchmark({
@@ -755,7 +1100,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Deeply Nested Record (4 levels) ---
 {
   const types = createLibraryTypes(deeplyNestedRecordSchema);
-  const avroTsData = types.avroTs.random();
+  const avroTsData = FIXTURES.deeplyNestedRecord;
   const nodeData = toNodeFormat(avroTsData);
 
   runFullComparisonBenchmark({
@@ -770,7 +1115,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Record with Array of Records ---
 {
   const types = createLibraryTypes(recordWithArrayOfRecordsSchema);
-  const avroTsData = types.avroTs.random();
+  const avroTsData = FIXTURES.recordWithArrayOfRecords;
   const nodeData = toNodeFormat(avroTsData);
 
   runFullComparisonBenchmark({
@@ -789,7 +1134,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Array of Records (depth 1) ---
 {
   const types = createLibraryTypes(arrayOfRecordsDepth1Schema);
-  const data = types.avroTs.random();
+  const data = FIXTURES.arrayOfRecordsDepth1;
   const nodeData = toNodeFormat(data);
 
   runFullComparisonBenchmark({
@@ -804,7 +1149,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Array of Records (depth 2) ---
 {
   const types = createLibraryTypes(arrayOfRecordsDepth2Schema);
-  const data = types.avroTs.random();
+  const data = FIXTURES.arrayOfRecordsDepth2;
   const nodeData = toNodeFormat(data);
 
   runFullComparisonBenchmark({
@@ -812,14 +1157,14 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
     types,
     avroTsData: data,
     nodeData,
-    bufferSize: 4096,
+    bufferSize: 8192,
   });
 }
 
 // --- Array of Records (depth 3) ---
 {
   const types = createLibraryTypes(arrayOfRecordsDepth3Schema);
-  const data = types.avroTs.random();
+  const data = FIXTURES.arrayOfRecordsDepth3;
   const nodeData = toNodeFormat(data);
 
   runFullComparisonBenchmark({
@@ -827,14 +1172,14 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
     types,
     avroTsData: data,
     nodeData,
-    bufferSize: 8192,
+    bufferSize: 65536,
   });
 }
 
 // --- Array of Records (depth 4) ---
 {
   const types = createLibraryTypes(arrayOfRecordsDepth4Schema);
-  const data = types.avroTs.random();
+  const data = FIXTURES.arrayOfRecordsDepth4;
   const nodeData = toNodeFormat(data);
 
   runFullComparisonBenchmark({
@@ -842,7 +1187,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
     types,
     avroTsData: data,
     nodeData,
-    bufferSize: 16384,
+    bufferSize: 524288,
   });
 }
 
@@ -853,7 +1198,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Array of Arrays (depth 1) ---
 {
   const types = createLibraryTypes(arrayOfArraysDepth1Schema);
-  const data = types.avroTs.random();
+  const data = FIXTURES.arrayOfArraysDepth1;
   const nodeData = toNodeFormat(data);
 
   runFullComparisonBenchmark({
@@ -868,7 +1213,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 // --- Array of Arrays (depth 2) ---
 {
   const types = createLibraryTypes(arrayOfArraysDepth2Schema);
-  const data = types.avroTs.random();
+  const data = FIXTURES.arrayOfArraysDepth2;
   const nodeData = toNodeFormat(data);
 
   runFullComparisonBenchmark({
@@ -876,14 +1221,14 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
     types,
     avroTsData: data,
     nodeData,
-    bufferSize: 4096,
+    bufferSize: 8192,
   });
 }
 
 // --- Array of Arrays (depth 3) ---
 {
   const types = createLibraryTypes(arrayOfArraysDepth3Schema);
-  const data = types.avroTs.random();
+  const data = FIXTURES.arrayOfArraysDepth3;
   const nodeData = toNodeFormat(data);
 
   runFullComparisonBenchmark({
@@ -891,14 +1236,14 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
     types,
     avroTsData: data,
     nodeData,
-    bufferSize: 8192,
+    bufferSize: 65536,
   });
 }
 
 // --- Array of Arrays (depth 4) ---
 {
   const types = createLibraryTypes(arrayOfArraysDepth4Schema);
-  const data = types.avroTs.random();
+  const data = FIXTURES.arrayOfArraysDepth4;
   const nodeData = toNodeFormat(data);
 
   runFullComparisonBenchmark({
@@ -906,6 +1251,6 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
     types,
     avroTsData: data,
     nodeData,
-    bufferSize: 16384,
+    bufferSize: 524288,
   });
 }
