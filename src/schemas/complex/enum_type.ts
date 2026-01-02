@@ -94,7 +94,7 @@ export class EnumType extends NamedType<string> {
   ): boolean {
     const isValid = typeof value === "string" && this.#indices.has(value);
     if (!isValid && errorHook) {
-      errorHook(path, value, this);
+      errorHook(path.slice(), value, this);
     }
     return isValid;
   }

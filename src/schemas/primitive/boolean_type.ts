@@ -29,7 +29,7 @@ export class BooleanType extends FixedSizeBaseType<boolean> {
   ): boolean {
     const isValid = typeof value === "boolean";
     if (!isValid && errorHook) {
-      errorHook(path, value, this);
+      errorHook(path.slice(), value, this);
     }
     return isValid;
   }

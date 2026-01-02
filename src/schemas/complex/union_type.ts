@@ -186,8 +186,14 @@ export class UnionType extends BaseType<UnionValue> {
 
     const branch = this.#branches[branchIndex];
     const branchValue = value[key];
-    const branchPath = errorHook ? [...path, key] : undefined;
-    const isValid = branch.type.check(branchValue, errorHook, branchPath);
+    // Optimization: Use push/pop instead of spread to avoid allocation during recursion
+    if (errorHook) {
+      path.push(key);
+    }
+    const isValid = branch.type.check(branchValue, errorHook, path);
+    if (errorHook) {
+      path.pop();
+    }
 
     if (!isValid && errorHook) {
       // Underlying type already invoked errorHook with extended path.

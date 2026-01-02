@@ -609,6 +609,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     if (!hasValue) {
       if (!field.hasDefault()) {
         if (errorHook) {
+          // Allocate path array only when reporting error
           errorHook([...path, name], undefined, this);
         }
         return false;
@@ -617,8 +618,14 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     }
 
     const fieldValue = record[name];
-    const nextPath = errorHook ? [...path, name] : undefined;
-    const valid = field.getType().check(fieldValue, errorHook, nextPath);
+    // Optimization: Use push/pop instead of spread to avoid allocation during recursion
+    if (errorHook) {
+      path.push(name);
+    }
+    const valid = field.getType().check(fieldValue, errorHook, path);
+    if (errorHook) {
+      path.pop();
+    }
     return valid || (errorHook !== undefined);
   }
 

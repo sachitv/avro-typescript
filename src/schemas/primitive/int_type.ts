@@ -29,7 +29,7 @@ export class IntType extends PrimitiveType<number> {
     const isValid = typeof value === "number" && Number.isInteger(value) &&
       value >= -2147483648 && value <= 2147483647;
     if (!isValid && errorHook) {
-      errorHook(path, value, this);
+      errorHook(path.slice(), value, this);
     }
     return isValid;
   }

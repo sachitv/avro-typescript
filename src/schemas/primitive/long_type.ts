@@ -34,7 +34,7 @@ export class LongType extends PrimitiveType<bigint> {
     const isValid = typeof value === "bigint" && value >= MIN_LONG &&
       value <= MAX_LONG;
     if (!isValid && errorHook) {
-      errorHook(path, value, this);
+      errorHook(path.slice(), value, this);
     }
     return isValid;
   }

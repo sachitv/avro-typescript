@@ -134,8 +134,15 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
         }
         return false;
       }
-      const entryPath = errorHook ? [...path, key] : undefined;
-      const validEntry = this.#valuesType.check(entry, errorHook, entryPath);
+      // Optimization: Use push/pop instead of spread to avoid allocating
+      // a new array for every map entry during recursion
+      if (errorHook) {
+        path.push(key);
+      }
+      const validEntry = this.#valuesType.check(entry, errorHook, path);
+      if (errorHook) {
+        path.pop();
+      }
       if (!validEntry) {
         if (!errorHook) {
           return false;

@@ -128,12 +128,19 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     let isValid = true;
     for (let i = 0; i < value.length; i++) {
       const element = value[i];
-      const elementPath = errorHook ? [...path, String(i)] : undefined;
+      // Optimization: Use push/pop instead of spread to avoid allocating
+      // a new array for every element during recursion
+      if (errorHook) {
+        path.push(String(i));
+      }
       const validElement = this.#itemsType.check(
         element,
         errorHook,
-        elementPath,
+        path,
       );
+      if (errorHook) {
+        path.pop();
+      }
       if (!validElement) {
         if (!errorHook) {
           return false;
