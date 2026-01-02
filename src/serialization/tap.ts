@@ -578,6 +578,26 @@ export class WritableTap extends TapBase implements WritableTapLike {
   /** The writable buffer backing this tap. */
   private readonly buffer: IWritableBuffer;
 
+  // Buffer pool optimization: Pre-allocated static buffers to avoid per-operation allocations
+  // Reduces GC pressure and improves performance for hot serialization paths
+  private static readonly floatBuffer = new ArrayBuffer(8);
+  private static readonly floatView = new DataView(WritableTap.floatBuffer);
+  private static readonly float32Bytes = new Uint8Array(
+    WritableTap.floatBuffer,
+    0,
+    4,
+  );
+  private static readonly float64Bytes = new Uint8Array(
+    WritableTap.floatBuffer,
+    0,
+    8,
+  );
+  private static readonly trueByte = new Uint8Array([1]);
+  private static readonly falseByte = new Uint8Array([0]);
+
+  private static readonly varintBufferLong = new Uint8Array(11); // Max 11 bytes for 64-bit long (2^70 needs 11 bytes)
+  private static readonly varintBufferInt = new Uint8Array(5); // Max 5 bytes for zigzag-encoded int32
+
   /**
    * Creates a new WritableTap instance.
    * @param buf The buffer to write to, either an ArrayBuffer or IWritableBuffer.
@@ -621,12 +641,15 @@ export class WritableTap extends TapBase implements WritableTapLike {
    * @param value Boolean value to write.
    */
   async writeBoolean(value: boolean): Promise<void> {
-    await this.appendRawBytes(Uint8Array.of(value ? 1 : 0));
+    await this.appendRawBytes(
+      value ? WritableTap.trueByte : WritableTap.falseByte,
+    );
   }
 
   /**
    * Writes a zig-zag encoded 32-bit signed integer.
    * Uses a 32-bit zig-zag + varint path to avoid BigInt casts for performance.
+   * Uses pre-allocated buffer to avoid allocations.
    * @param n Integer value to write.
    */
   async writeInt(n: number): Promise<void> {
@@ -643,7 +666,7 @@ export class WritableTap extends TapBase implements WritableTapLike {
     // Zigzag encode to an unsigned 32-bit integer:
     // (n << 1) ^ (n >> 31)
     let value = ((n << 1) ^ (n >> 31)) >>> 0;
-    const buf = new Uint8Array(5);
+    const buf = WritableTap.varintBufferInt;
     let i = 0;
     while (value > 0x7f) {
       buf[i++] = (value & 0x7f) | 0x80;
@@ -655,6 +678,7 @@ export class WritableTap extends TapBase implements WritableTapLike {
 
   /**
    * Writes a zig-zag encoded 64-bit signed integer.
+   * Uses pre-allocated buffer to avoid allocations.
    * @param value BigInt value to write.
    */
   async writeLong(value: bigint): Promise<void> {
@@ -665,35 +689,35 @@ export class WritableTap extends TapBase implements WritableTapLike {
       n <<= 1n;
     }
 
-    const bytes: number[] = [];
+    // Fast varint encoding using pre-allocated buffer
+    let i = 0;
+    const buf = WritableTap.varintBufferLong;
     while (n >= 0x80n) {
-      bytes.push(Number(n & 0x7fn) | 0x80);
+      buf[i++] = Number(n & 0x7fn) | 0x80;
       n >>= 7n;
     }
-    bytes.push(Number(n));
-    await this.appendRawBytes(Uint8Array.from(bytes));
+    buf[i++] = Number(n);
+    await this.appendRawBytes(buf.subarray(0, i));
   }
 
   /**
    * Writes a 32-bit little-endian floating point number.
+   * Uses pre-allocated buffer to avoid allocations.
    * @param value Float to write.
    */
   async writeFloat(value: number): Promise<void> {
-    const buffer = new ArrayBuffer(4);
-    const view = new DataView(buffer);
-    view.setFloat32(0, value, true);
-    await this.appendRawBytes(new Uint8Array(buffer));
+    WritableTap.floatView.setFloat32(0, value, true);
+    await this.appendRawBytes(WritableTap.float32Bytes);
   }
 
   /**
    * Writes a 64-bit little-endian floating point number.
+   * Uses pre-allocated buffer to avoid allocations.
    * @param value Double precision value to write.
    */
   async writeDouble(value: number): Promise<void> {
-    const buffer = new ArrayBuffer(8);
-    const view = new DataView(buffer);
-    view.setFloat64(0, value, true);
-    await this.appendRawBytes(new Uint8Array(buffer));
+    WritableTap.floatView.setFloat64(0, value, true);
+    await this.appendRawBytes(WritableTap.float64Bytes);
   }
 
   /**

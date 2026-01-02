@@ -9,6 +9,8 @@ import {
   SyncInMemoryWritableBuffer,
 } from "../../src/serialization/buffers/in_memory_buffer_sync.ts";
 import { SyncWritableTap } from "../../src/serialization/tap_sync.ts";
+import { InMemoryWritableBuffer } from "../../src/serialization/buffers/in_memory_buffer.ts";
+import { WritableTap } from "../../src/serialization/tap.ts";
 import {
   CompiledWriterStrategy,
   InterpretedWriterStrategy,
@@ -540,6 +542,33 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
       const writable = new SyncInMemoryWritableBuffer(buffer);
       const tap = new SyncWritableTap(writable);
       types.avroTsUnchecked.writeSync(tap, avroTsData);
+    });
+  }
+
+  // --- avro-typescript: async write (pre-allocated buffer) variants ---
+  {
+    const buffer = new ArrayBuffer(bufferSize);
+    Deno.bench({
+      name: `${groupName} (avro-ts, write async, validate=true)`,
+      group: groupName,
+      n: BENCH_ITERATIONS,
+    }, async () => {
+      const writable = new InMemoryWritableBuffer(buffer);
+      const tap = new WritableTap(writable);
+      await types.avroTs.write(tap, avroTsData);
+    });
+  }
+
+  {
+    const buffer = new ArrayBuffer(bufferSize);
+    Deno.bench({
+      name: `${groupName} (avro-ts, write async, validate=false)`,
+      group: groupName,
+      n: BENCH_ITERATIONS,
+    }, async () => {
+      const writable = new InMemoryWritableBuffer(buffer);
+      const tap = new WritableTap(writable);
+      await types.avroTsUnchecked.write(tap, avroTsData);
     });
   }
 }

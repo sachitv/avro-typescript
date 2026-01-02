@@ -77,6 +77,16 @@ const AVRO_TS_CONFIGS = [
     label: "writeSync reuse (no-val)",
     pattern: "avro-ts, writeSync, reuse buffer, validate=false)",
   },
+  {
+    key: "write-async-val",
+    label: "write async (val)",
+    pattern: "avro-ts, write async, validate=true)",
+  },
+  {
+    key: "write-async-noval",
+    label: "write async (no-val)",
+    pattern: "avro-ts, write async, validate=false)",
+  },
 ];
 
 function formatTime(avgNs: number): string {
@@ -331,6 +341,8 @@ try {
   console.log("| writeSync (no-val) | Pre-allocated buffer with `writeSync()`, `validate=false` |");
   console.log("| writeSync reuse (val) | Shared pre-allocated buffer with `writeSync()`, `validate=true` |");
   console.log("| writeSync reuse (no-val) | Shared pre-allocated buffer with `writeSync()`, `validate=false` |");
+  console.log("| write async (val) | Pre-allocated buffer with async `write()`, `validate=true` |");
+  console.log("| write async (no-val) | Pre-allocated buffer with async `write()`, `validate=false` |");
 
   console.log("\n✅ Benchmark completed successfully!");
 } catch (error) {
