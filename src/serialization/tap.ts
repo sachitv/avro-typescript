@@ -573,30 +573,63 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
 
 /**
  * Binary tap that exposes Avro-compatible write helpers on top of a writable buffer.
+ *
+ * **IMPORTANT - Concurrency Constraints:**
+ *
+ * WritableTap uses static shared buffers for optimal performance. As a result:
+ *
+ * 1. **Do NOT call write methods concurrently** across different WritableTap instances
+ * 2. **Do NOT call write methods concurrently** on the same WritableTap instance
+ *
+ * Concurrent writes will result in data corruption due to shared buffer state.
+ *
+ * **Safe usage patterns:**
+ * ```typescript
+ * // ✅ SAFE: Sequential async writes
+ * await tap1.writeInt(42);
+ * await tap2.writeInt(43);
+ *
+ * // ❌ UNSAFE: Concurrent async writes
+ * await Promise.all([
+ *   tap1.writeInt(42),
+ *   tap2.writeInt(43)
+ * ]); // Data corruption!
+ *
+ * // ❌ UNSAFE: Interleaved calls (even if not concurrent)
+ * const promise1 = tap1.writeInt(42);  // Starts, may yield
+ * const promise2 = tap2.writeInt(43);  // Corrupts tap1's buffer!
+ * await Promise.all([promise1, promise2]);
+ * ```
+ *
+ * **Why this matters:**
+ * The async write methods may yield control (via `await`) between setting up the
+ * shared buffer and actually writing it. If another write starts during this window,
+ * it will overwrite the shared buffer, corrupting the first write's data.
  */
 export class WritableTap extends TapBase implements WritableTapLike {
   /** The writable buffer backing this tap. */
   private readonly buffer: IWritableBuffer;
 
-  // Buffer pool optimization: Pre-allocated static buffers to avoid per-operation allocations
+  // Buffer pool optimization: Static shared buffers to avoid per-operation allocations
   // Reduces GC pressure and improves performance for hot serialization paths
-  private static readonly floatBuffer = new ArrayBuffer(8);
-  private static readonly floatView = new DataView(WritableTap.floatBuffer);
-  private static readonly float32Bytes = new Uint8Array(
+  // WARNING: These shared buffers make concurrent writes unsafe - see class documentation
+  private static floatBuffer = new ArrayBuffer(8);
+  private static floatView = new DataView(WritableTap.floatBuffer);
+  private static float32Bytes = new Uint8Array(
     WritableTap.floatBuffer,
     0,
     4,
   );
-  private static readonly float64Bytes = new Uint8Array(
+  private static float64Bytes = new Uint8Array(
     WritableTap.floatBuffer,
     0,
     8,
   );
-  private static readonly trueByte = new Uint8Array([1]);
-  private static readonly falseByte = new Uint8Array([0]);
+  private static trueByte = new Uint8Array([1]);
+  private static falseByte = new Uint8Array([0]);
 
-  private static readonly varintBufferLong = new Uint8Array(11); // Max 11 bytes for 64-bit long (2^70 needs 11 bytes)
-  private static readonly varintBufferInt = new Uint8Array(5); // Max 5 bytes for zigzag-encoded int32
+  private static varintBufferLong = new Uint8Array(11); // Max 11 bytes for 64-bit long (2^70 needs 11 bytes)
+  private static varintBufferInt = new Uint8Array(5); // Max 5 bytes for zigzag-encoded int32
 
   /**
    * Creates a new WritableTap instance.
