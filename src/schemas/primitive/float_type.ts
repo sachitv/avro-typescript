@@ -30,7 +30,7 @@ export class FloatType extends FixedSizeBaseType<number> {
   ): boolean {
     const isValid = typeof value === "number";
     if (!isValid && errorHook) {
-      errorHook(path, value, this);
+      errorHook(path.slice(), value, this);
     }
     return isValid;
   }

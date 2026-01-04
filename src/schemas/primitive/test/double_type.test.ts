@@ -337,7 +337,7 @@ describe("DoubleType", () => {
     describe("readSync", () => {
       it("should read double from sync tap", () => {
         const buffer = new ArrayBuffer(8);
-        const writeTap = new Tap(buffer);
+        const writeTap = new SyncWritableTap(buffer);
         writeTap.writeDouble(123.5);
         const readTap = new SyncReadableTap(buffer);
         assertEquals(type.readSync(readTap), 123.5);

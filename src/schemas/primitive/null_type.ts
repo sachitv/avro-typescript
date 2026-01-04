@@ -29,7 +29,7 @@ export class NullType extends FixedSizeBaseType<null> {
   ): boolean {
     const isValid = value === null;
     if (!isValid && errorHook) {
-      errorHook(path, value, this);
+      errorHook(path.slice(), value, this);
     }
     return isValid;
   }

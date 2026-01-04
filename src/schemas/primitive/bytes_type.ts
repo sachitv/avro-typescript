@@ -29,7 +29,7 @@ export class BytesType extends PrimitiveType<Uint8Array> {
   ): boolean {
     const isValid = value instanceof Uint8Array;
     if (!isValid && errorHook) {
-      errorHook(path, value, this);
+      errorHook(path.slice(), value, this);
     }
     return isValid;
   }

@@ -700,3 +700,80 @@ describe("readArrayIntoSync", () => {
     assertEquals(results, [30n, 40n]);
   });
 });
+
+describe("ArrayType large array writeLong fallback", () => {
+  const intItems = new IntType();
+  const intArray = new ArrayType({ items: intItems, validate: false });
+
+  it("uses writeLong for array length > 0x7FFFFFFF in writeUnchecked (async)", async () => {
+    // Create a mock array-like object with a huge length but no actual elements
+    const hugeLength = 0x80000000; // 2^31, just over the threshold
+    const mockArray = {
+      length: hugeLength,
+      [Symbol.iterator]: function* () {
+        // Yield nothing - we just need to test the writeLong branch
+      },
+    } as unknown as number[];
+
+    // Track which write methods are called
+    const calls: Array<{ method: string; value: number | bigint }> = [];
+    const mockTap = {
+      // deno-lint-ignore require-await
+      writeInt: async (value: number) => {
+        calls.push({ method: "writeInt", value });
+      },
+      // deno-lint-ignore require-await
+      writeLong: async (value: bigint) => {
+        calls.push({ method: "writeLong", value });
+      },
+    };
+
+    await intArray.writeUnchecked(
+      mockTap as unknown as Parameters<typeof intArray.writeUnchecked>[0],
+      mockArray,
+    );
+
+    // Should have called writeLong for the block count (huge length)
+    // and writeInt for the terminal 0
+    assertEquals(calls.length, 2);
+    assertEquals(calls[0].method, "writeLong");
+    assertEquals(calls[0].value, BigInt(hugeLength));
+    assertEquals(calls[1].method, "writeInt");
+    assertEquals(calls[1].value, 0);
+  });
+
+  it("uses writeLong for array length > 0x7FFFFFFF in writeSyncUnchecked", () => {
+    // Create a mock array-like object with a huge length but no actual elements
+    const hugeLength = 0x80000000; // 2^31, just over the threshold
+    const mockArray = {
+      length: hugeLength,
+      [Symbol.iterator]: function* () {
+        // Yield nothing - we just need to test the writeLong branch
+      },
+    } as unknown as number[];
+
+    // Track which write methods are called
+    const calls: Array<{ method: string; value: number | bigint }> = [];
+    const mockTap = {
+      writeInt: (value: number) => {
+        calls.push({ method: "writeInt", value });
+      },
+      writeLong: (value: bigint) => {
+        calls.push({ method: "writeLong", value });
+      },
+    };
+
+    intArray.writeSyncUnchecked(
+      mockTap as unknown as Parameters<typeof intArray.writeSyncUnchecked>[0],
+      mockArray,
+    );
+
+    // Should have called writeLong for the block count (huge length)
+    // and writeInt for the terminal 0
+    assertEquals(calls.length, 2);
+    assertEquals(calls[0].method, "writeLong");
+    assertEquals(calls[0].value, BigInt(hugeLength));
+    assertEquals(calls[1].method, "writeInt");
+    assertEquals(calls[1].value, 0);
+  });
+});

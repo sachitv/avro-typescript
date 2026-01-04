@@ -24,14 +24,16 @@ console.log("Running serialize single record benchmark...");
 const result = await benchCommand.output();
 const decoder = new TextDecoder();
 
-if (!result.success) {
+const output = decoder.decode(result.stdout);
+
+// Deno bench --json may report "Bench failed" even when benchmarks run successfully
+// Check if we got valid JSON output before considering it a failure
+if (!result.success && !output.includes('"benches"')) {
   const stderr = decoder.decode(result.stderr);
   console.error("Benchmark failed: Check serialize_single_bench.ts");
   console.error(stderr);
   Deno.exit(1);
 }
-
-const output = decoder.decode(result.stdout);
 const jsonStart = output.indexOf("{");
 const jsonText = output.slice(jsonStart);
 
@@ -74,6 +76,16 @@ const AVRO_TS_CONFIGS = [
     key: "writeSync-reuse-noval",
     label: "writeSync reuse (no-val)",
     pattern: "avro-ts, writeSync, reuse buffer, validate=false)",
+  },
+  {
+    key: "write-async-val",
+    label: "write async (val)",
+    pattern: "avro-ts, write async, validate=true)",
+  },
+  {
+    key: "write-async-noval",
+    label: "write async (no-val)",
+    pattern: "avro-ts, write async, validate=false)",
   },
 ];
 
@@ -139,7 +151,7 @@ try {
 
   // Sort groups by category then name
   const sortedGroups = Array.from(groups.entries()).sort((a, b) => {
-    const order = ["primitive:", "complex:", "record:"];
+    const order = ["primitive:", "complex:", "record:", "array-of-records:", "array-of-arrays:"];
     const aOrder = order.findIndex((p) => a[0].startsWith(p));
     const bOrder = order.findIndex((p) => b[0].startsWith(p));
     if (aOrder !== bOrder) return aOrder - bOrder;
@@ -232,6 +244,90 @@ try {
     );
   }
 
+  // =============================================================================
+  // Array Depth Comparison Section
+  // =============================================================================
+  const arrayDepthCategories = ["array-of-records:", "array-of-arrays:"];
+  const depthGroups = ["depth 1", "depth 2", "depth 3", "depth 4"];
+
+  for (const category of arrayDepthCategories) {
+    const categoryGroups = sortedGroups.filter(([name]) => name.startsWith(category));
+
+    if (categoryGroups.length > 0) {
+      const categoryTitle = category.replace(":", "").replace(/-/g, " ").trim();
+      console.log(`\n## ${categoryTitle.charAt(0).toUpperCase() + categoryTitle.slice(1)} - Depth Comparison\n`);
+
+      const depthHeaders = ["Config", ...depthGroups];
+      console.log(`| ${depthHeaders.join(" | ")} |`);
+      console.log(`| ${depthHeaders.map(() => "---").join(" | ")} |`);
+
+      // Build a map from depth index to configMap for easy lookup
+      const depthToConfigMap = new Map<number, Map<string, BenchResult>>();
+      for (const [groupName, configMap] of categoryGroups) {
+        const depth = groupName.replace(category, "").trim();
+        const depthIndex = depthGroups.indexOf(depth);
+        if (depthIndex !== -1) {
+          depthToConfigMap.set(depthIndex, configMap);
+        }
+      }
+
+      // Build rows for each config (avsc, avro-js, and all avro-ts configs)
+      const allConfigs = [
+        { key: "avsc", label: "avsc" },
+        { key: "avro-js", label: "avro-js" },
+        ...AVRO_TS_CONFIGS.map((c) => ({ key: c.key, label: c.label })),
+      ];
+
+      for (const config of allConfigs) {
+        const row = [config.label];
+        for (let i = 0; i < depthGroups.length; i++) {
+          const configMap = depthToConfigMap.get(i);
+          const time = configMap ? getAvgNs(configMap.get(config.key)) : null;
+          row.push(time !== null ? formatTime(time) : "-");
+        }
+        console.log(`| ${row.join(" | ")} |`);
+      }
+
+      // Add best avro-ts row
+      const bestRow = ["**Best avro-ts**"];
+      const bestTimes: (number | null)[] = [];
+      for (let i = 0; i < depthGroups.length; i++) {
+        const configMap = depthToConfigMap.get(i);
+        let bestTime: number | null = null;
+        if (configMap) {
+          for (const config of AVRO_TS_CONFIGS) {
+            const time = getAvgNs(configMap.get(config.key));
+            if (time !== null && (bestTime === null || time < bestTime)) {
+              bestTime = time;
+            }
+          }
+        }
+        bestTimes.push(bestTime);
+        bestRow.push(bestTime !== null ? `${formatTime(bestTime)}` : "-");
+      }
+      console.log(`| ${bestRow.join(" | ")} |`);
+
+      // Add speedup row vs avsc
+      const speedupRow = ["**vs avsc**"];
+      for (let i = 0; i < depthGroups.length; i++) {
+        const configMap = depthToConfigMap.get(i);
+        const avscTime = configMap ? getAvgNs(configMap.get("avsc")) : null;
+        const bestTime = bestTimes[i];
+        if (avscTime && bestTime) {
+          const ratio = avscTime / bestTime;
+          if (ratio >= 1) {
+            speedupRow.push(`**${ratio.toFixed(2)}x faster**`);
+          } else {
+            speedupRow.push(`${(1 / ratio).toFixed(2)}x slower`);
+          }
+        } else {
+          speedupRow.push("-");
+        }
+      }
+      console.log(`| ${speedupRow.join(" | ")} |`);
+    }
+  }
+
   console.log("\n### Configuration Legend\n");
   console.log("| Abbreviation | Full Configuration |");
   console.log("| --- | --- |");
@@ -245,6 +341,8 @@ try {
   console.log("| writeSync (no-val) | Pre-allocated buffer with `writeSync()`, `validate=false` |");
   console.log("| writeSync reuse (val) | Shared pre-allocated buffer with `writeSync()`, `validate=true` |");
   console.log("| writeSync reuse (no-val) | Shared pre-allocated buffer with `writeSync()`, `validate=false` |");
+  console.log("| write async (val) | Pre-allocated buffer with async `write()`, `validate=true` |");
+  console.log("| write async (no-val) | Pre-allocated buffer with async `write()`, `validate=false` |");
 
   console.log("\n✅ Benchmark completed successfully!");
 } catch (error) {

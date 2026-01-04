@@ -30,7 +30,7 @@ export class StringType extends PrimitiveType<string> {
   ): boolean {
     const isValid = typeof value === "string";
     if (!isValid && errorHook) {
-      errorHook(path, value, this);
+      errorHook(path.slice(), value, this);
     }
     return isValid;
   }
