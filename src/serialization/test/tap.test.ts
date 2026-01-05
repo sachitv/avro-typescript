@@ -938,12 +938,32 @@ describe("ReadableTap fallbacks", () => {
 });
 
 describe("Long decoding edge cases", () => {
-  it("readLong handles values requiring extra continuation bytes", async () => {
-    const large = (1n << 70n) + 123n;
+  it("writeLong rejects values exceeding int64 range", async () => {
+    // Values > int64 are out of spec for Avro long and must be rejected
+    // Avro spec defines long as int64 (-2^63 to 2^63-1)
+    const large = (1n << 70n) + 123n; // Out of spec value
     const tap = newTap(16);
-    await tap.writeLong(large);
+    await assertRejects(
+      async () => await tap.writeLong(large),
+      RangeError,
+      "out of range for Avro long",
+    );
+  });
+
+  it("readLong correctly handles max int64", async () => {
+    const maxInt64 = (1n << 63n) - 1n;
+    const tap = newTap(16);
+    await tap.writeLong(maxInt64);
     tap._testOnlyResetPos();
-    expect(await tap.readLong()).toBe(large);
+    expect(await tap.readLong()).toBe(maxInt64);
+  });
+
+  it("readLong correctly handles min int64", async () => {
+    const minInt64 = -(1n << 63n);
+    const tap = newTap(16);
+    await tap.writeLong(minInt64);
+    tap._testOnlyResetPos();
+    expect(await tap.readLong()).toBe(minInt64);
   });
 
   it("readLong correctly decodes near 2^56", async () => {

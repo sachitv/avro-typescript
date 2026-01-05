@@ -385,6 +385,60 @@ describe("SyncReadableTap vs ReadableTap parity", () => {
     }
   });
 
+  it("readLong handles varint with additional continuation bytes identically", async () => {
+    // Test edge case: values encoded with >64 bits (exercises second while loop)
+    // This manually constructs a varint that has continuation bytes beyond shift >= 70
+    // to ensure both async and sync versions handle the overflow logic identically.
+    //
+    // Note: Valid int64 values need at most 11 bytes (64 bits / 7 bits per byte ≈ 9.14,
+    // plus up to 2 more bytes for values requiring 70 bits in varint encoding).
+    // We use 20 bytes to thoroughly test the second while loop that discards excess bytes.
+    const oversizedVarint = toUint8Array([
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF, // 5 bytes with continuation (35 bits consumed)
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF, // 5 more bytes with continuation (70 bits total, triggers second loop)
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF, // 5 more bytes (75 bits total, well beyond 64-bit + varint overhead)
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0x01, // 5 more bytes (20 total, ensures second loop processes many bytes)
+    ]);
+
+    const asyncBuffer = new ArrayBuffer(32);
+    const syncBuffer = new ArrayBuffer(32);
+    new Uint8Array(asyncBuffer).set(oversizedVarint);
+    new Uint8Array(syncBuffer).set(oversizedVarint);
+
+    const asyncReader = new ReadableTap(asyncBuffer, 0);
+    const syncReader = new SyncReadableTap(
+      new SyncInMemoryReadableBuffer(syncBuffer),
+      0,
+    );
+
+    const asyncVal = await asyncReader.readLong();
+    const syncVal = syncReader.readLong();
+
+    // Both should decode to the same truncated 64-bit value
+    // The expected value after zig-zag decode and 64-bit truncation of this specific byte pattern
+    const expectedValue = -9223372036854775808n; // INT64_MIN
+    expect(syncVal).toBe(asyncVal);
+    expect(syncVal).toBe(expectedValue);
+    expect(asyncReader.getPos()).toBe(syncReader.getPos());
+    expect(asyncReader.getPos()).toBe(20); // Should consume all 20 bytes
+  });
+
   it("readInt, readBoolean, readFloat, readDouble match", async () => {
     const buf = new ArrayBuffer(64);
     const writer = new WritableTap(buf);

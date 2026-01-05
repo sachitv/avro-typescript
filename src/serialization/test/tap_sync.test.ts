@@ -151,7 +151,8 @@ describe("SyncTap primitive round-trips", () => {
       -1211n,
       -1312411211n,
       900719925474090n,
-      2n ** 70n,
+      (1n << 63n) - 1n, // max int64
+      -(1n << 63n), // min int64
     ],
     reader: (tap) => tap.readLong(),
     skipper: (tap) => tap.skipLong(),
@@ -300,6 +301,41 @@ describe("SyncTap numeric guard rails", () => {
     expect(reader.readInt()).toBe(42);
     reader.skipInt();
     expect(reader.getPos()).toBe(afterWrites);
+  });
+
+  it("writeLong rejects values exceeding int64 range", () => {
+    // Values > int64 are out of spec for Avro long and must be rejected
+    const large = (1n << 70n) + 123n; // Out of spec value
+    const buf = new ArrayBuffer(16);
+    const tap = new SyncWritableTap(new SyncInMemoryWritableBuffer(buf));
+    assertThrows(
+      () => tap.writeLong(large),
+      RangeError,
+      "out of range for Avro long",
+    );
+  });
+
+  it("readLong processes additional continuation bytes", () => {
+    // Test that readLong handles varints with >10 bytes (>70 bits)
+    // These bytes represent a value with many continuation bytes that will be truncated to 64 bits
+    const bytes = toUint8Array([
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x00,
+    ]);
+    const buf = new ArrayBuffer(bytes.length);
+    new Uint8Array(buf).set(bytes);
+    const reader = new SyncReadableTap(new SyncInMemoryReadableBuffer(buf));
+    expect(reader.readLong()).toBe(0n);
   });
 });
 
