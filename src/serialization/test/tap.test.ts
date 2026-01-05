@@ -551,6 +551,29 @@ describe("Numeric guard rails", () => {
     await assertRejects(async () => await tap.readInt(), RangeError);
   });
 
+  it("readInt detects overflow before performing invalid bitwise operations", async () => {
+    // This test verifies that the overflow check occurs BEFORE the bitwise
+    // operation, preventing invalid shifts (e.g., << 35) that would produce
+    // incorrect results due to JavaScript's 32-bit bitwise limitation.
+    const tap = newTap(16);
+
+    // Write a value that requires 6 bytes (> 5 byte limit for int32)
+    // 2^34 = 17179869184 requires 6 bytes and exceeds INT32_MAX
+    const bigValue = 1n << 34n; // 2^34 = 17179869184
+    await tap.writeLong(bigValue);
+
+    tap._testOnlyResetPos();
+
+    // Should throw RangeError indicating more than 5 bytes required, and this should
+    // happen WITHOUT first executing an invalid bitwise shift operation
+    // (which would have occurred if the check was after the accumulation).
+    await assertRejects(
+      async () => await tap.readInt(),
+      RangeError,
+      "Varint requires more than 5 bytes (int32 range exceeded)",
+    );
+  });
+
   it("readBytes throws when length exceeds safe integer range", async () => {
     const tap = newTap(16);
     const big = BigInt(Number.MAX_SAFE_INTEGER) + 1n;

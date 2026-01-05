@@ -354,15 +354,17 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
     // Read varint-encoded value using 32-bit arithmetic
     do {
       byte = await this.getByteAt(pos++);
-      result |= (byte & 0x7f) << shift;
-      shift += 7;
       bytesRead++;
       // int32 needs at most 5 bytes (32 bits / 7 bits per byte = 4.57)
+      // Check BEFORE accumulating to prevent invalid bitwise operations (shift >= 35)
       if (bytesRead > 5) {
-        // Value too large for int32, use readLong for proper error handling
-        this.pos = pos - bytesRead;
-        return bigIntToSafeNumber(await this.readLong(), "readInt value");
+        // Value requires more than 5 bytes, so it exceeds int32 range
+        throw new RangeError(
+          "Varint requires more than 5 bytes (int32 range exceeded)",
+        );
       }
+      result |= (byte & 0x7f) << shift;
+      shift += 7;
     } while ((byte & 0x80) !== 0);
 
     this.pos = pos;

@@ -602,4 +602,34 @@ describe("SyncReadableTap vs ReadableTap parity", () => {
     );
     assertThrows(() => syncReader.readLong(), ReadBufferError);
   });
+
+  it("readInt throws RangeError identically when overflow check triggers", async () => {
+    // Verifies both sync and async versions detect overflow before performing
+    // invalid bitwise operations and throw the same error type.
+    const buf = new ArrayBuffer(16);
+    const writer = new WritableTap(buf);
+
+    // Write a value that requires 6 bytes (> 5 byte limit for int32)
+    // 2^34 = 17179869184 requires 6 bytes and exceeds INT32_MAX
+    const bigValue = 1n << 34n; // 2^34 = 17179869184
+    await writer.writeLong(bigValue);
+
+    const asyncReader = new ReadableTap(buf, 0);
+    const syncReader = new SyncReadableTap(
+      new SyncInMemoryReadableBuffer(buf),
+      0,
+    );
+
+    // Both should throw RangeError indicating more than 5 bytes required
+    const expectedError = "Varint requires more than 5 bytes (int32 range exceeded)";
+    await assertRejects(
+      async () => await asyncReader.readInt(),
+      RangeError,
+      expectedError,
+    );
+    assertThrows(() => syncReader.readInt(), RangeError, expectedError);
+
+    // Both should have advanced to the same position (after reading the long)
+    expect(asyncReader.getPos()).toBe(syncReader.getPos());
+  });
 });

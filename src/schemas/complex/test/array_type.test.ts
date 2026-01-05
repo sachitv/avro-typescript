@@ -653,7 +653,7 @@ describe("readArrayInto", () => {
         );
       },
       RangeError,
-      "Array block length is outside the safe integer range.",
+      "Array block length value is outside the safe integer range.",
     );
   });
 });

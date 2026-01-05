@@ -273,6 +273,32 @@ describe("SyncTap numeric guard rails", () => {
     expect(() => reader.readInt()).toThrow(RangeError);
   });
 
+  it("readInt detects overflow before performing invalid bitwise operations", () => {
+    // This test verifies that the overflow check occurs BEFORE the bitwise
+    // operation, preventing invalid shifts (e.g., << 35) that would produce
+    // incorrect results due to JavaScript's 32-bit bitwise limitation.
+    const buffer = new ArrayBuffer(16);
+    const writer = new SyncWritableTap(
+      new SyncInMemoryWritableBuffer(buffer),
+    );
+
+    // Write a value that requires 6 bytes (> 5 byte limit for int32)
+    // 2^34 = 17179869184 requires 6 bytes and exceeds INT32_MAX
+    const bigValue = 1n << 34n; // 2^34 = 17179869184
+    writer.writeLong(bigValue);
+
+    const reader = new SyncReadableTap(
+      new SyncInMemoryReadableBuffer(buffer),
+    );
+
+    // Should throw RangeError indicating more than 5 bytes required, and this should
+    // happen WITHOUT first executing an invalid bitwise shift operation
+    // (which would have occurred if the check was after the accumulation).
+    expect(() => reader.readInt()).toThrow(
+      "Varint requires more than 5 bytes (int32 range exceeded)",
+    );
+  });
+
   it("readBytes throws when length exceeds safe integer range", () => {
     const buffer = new ArrayBuffer(16);
     const writer = new SyncWritableTap(
