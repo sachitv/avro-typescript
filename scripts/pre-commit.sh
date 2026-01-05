@@ -32,8 +32,8 @@ if [ -n "$CHANGED_STAGED_FILES" ]; then
     echo "$CHANGED_STAGED_FILES" | xargs git add
 fi
 
-echo "Running deno lint..."
-deno lint
+echo "Running deno lint on staged files..."
+echo "$STAGED_TS_FILES" | xargs deno lint
 
 if [ $? -ne 0 ]; then
     echo "deno lint failed. Aborting commit."

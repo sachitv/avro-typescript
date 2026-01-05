@@ -18,6 +18,7 @@
     "jsonc": "jsr:@std/jsonc@^1.0.1"
   },
   "tasks": {
+    "setup-hooks": "chmod +x scripts/pre-commit.sh && ln -sf ../../scripts/pre-commit.sh .git/hooks/pre-commit",
     "test": "deno test --allow-read",
     "test:exclude-benchmarks": "deno test --allow-read --ignore=./packages/benchmarks/",
     "test:ci": "deno task test:exclude-benchmarks --junit-path=test-results.xml --coverage",
