@@ -7,30 +7,43 @@
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT" || exit 1
 
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+FMT_TMP=$(mktemp)
+LINT_TMP=$(mktemp)
+trap 'rm -f "$FMT_TMP" "$LINT_TMP"' EXIT
 
-FMT_FILES=$(printf '%s\n' "$STAGED_FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|mts|json|jsonc|md)$')
-LINT_FILES=$(printf '%s\n' "$STAGED_FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|mts)$')
+git diff --cached --name-only --diff-filter=ACM | while IFS= read -r file; do
+    case "$file" in
+        *.ts|*.tsx|*.js|*.jsx|*.mjs|*.mts|*.json|*.jsonc|*.md)
+            printf '%s\n' "$file" >> "$FMT_TMP"
+            ;;
+    esac
 
-if [ -z "$FMT_FILES" ] && [ -z "$LINT_FILES" ]; then
+    case "$file" in
+        *.ts|*.tsx|*.js|*.jsx|*.mjs|*.mts)
+            printf '%s\n' "$file" >> "$LINT_TMP"
+            ;;
+    esac
+done
+
+if [ ! -s "$FMT_TMP" ] && [ ! -s "$LINT_TMP" ]; then
     echo "No files requiring fmt or lint staged for commit."
     exit 0
 fi
 
-if [ -n "$FMT_FILES" ]; then
+if [ -s "$FMT_TMP" ]; then
     echo "Running deno fmt on staged files..."
-    printf '%s\n' "$FMT_FILES" | grep -v '^$' | tr '\n' '\0' | xargs -0 -r deno fmt
+    tr '\n' '\0' < "$FMT_TMP" | xargs -0 -r deno fmt
 
-    printf '%s\n' "$FMT_FILES" | grep -v '^$' | while IFS= read -r file; do
+    while IFS= read -r file; do
         if [ -n "$file" ] && [ -n "$(git diff --name-only -- "$file")" ]; then
             git add "$file"
         fi
-    done
+    done < "$FMT_TMP"
 fi
 
-if [ -n "$LINT_FILES" ]; then
+if [ -s "$LINT_TMP" ]; then
     echo "Running deno lint on staged files..."
-    printf '%s\n' "$LINT_FILES" | grep -v '^$' | tr '\n' '\0' | xargs -0 -r deno lint || {
+    tr '\n' '\0' < "$LINT_TMP" | xargs -0 -r deno lint || {
         echo "deno lint failed. Aborting commit."
         exit 1
     }
