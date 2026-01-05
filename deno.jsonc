@@ -31,7 +31,8 @@
     "jsdoc:lint": "find src -name \"*.ts\" | grep -v \"/test/\" | xargs deno doc --lint",
     "bench": "cd packages/benchmarks && deno bench --no-config --allow-write --allow-read",
     "bench:report": "cd packages/benchmarks && deno run -A generate_report.ts",
-    "bench:serialize": "cd packages/benchmarks && deno run -A run_serialize_report.ts"
+    "bench:serialize": "cd packages/benchmarks && deno run -A run_serialize_report.ts",
+    "bench:deserialize": "cd packages/benchmarks && deno run -A run_deserialize_report.ts"
   },
   "exclude": [
     "./packages/benchmarks/"
