@@ -6,10 +6,14 @@ export interface IReadableBuffer {
   /**
    * Reads a portion of the buffer starting at offset with the given size.
    *
+   * Returns a readonly view of the buffer data. Callers must not modify the
+   * returned Uint8Array, as it may be a live view into the underlying buffer.
+   * TypeScript will enforce this at compile time.
+   *
    * @throws ReadBufferError when the requested range is invalid or exceeds the
    * available bounds.
    */
-  read(offset: number, size: number): Promise<Uint8Array>;
+  read(offset: number, size: number): Promise<Readonly<Uint8Array>>;
 
   /**
    * Checks if more data can be read starting at the given offset.

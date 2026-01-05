@@ -50,10 +50,10 @@ export class SyncBlobReadableBuffer implements ISyncReadable {
    *
    * @param offset The byte offset to start reading from (0-based).
    * @param size The number of bytes to read.
-   * @returns A new Uint8Array containing the read bytes.
+   * @returns A readonly Uint8Array containing the read bytes.
    * @throws ReadBufferError if the requested range is out of bounds.
    */
-  public read(offset: number, size: number): Uint8Array {
+  public read(offset: number, size: number): Readonly<Uint8Array> {
     if (offset < 0 || size < 0) {
       throw new ReadBufferError(
         `Offset and size must be non-negative. offset=${offset}, size=${size}`,

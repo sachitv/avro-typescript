@@ -75,18 +75,18 @@ export class InMemoryReadableBuffer extends InMemoryBufferBase
   }
 
   /**
-   * Reads a portion of the buffer.
+   * Reads a portion of the buffer (returns a view, not a copy).
    * @param offset The starting offset.
    * @param size The number of bytes to read.
-   * @returns A Uint8Array containing the read bytes.
+   * @returns A readonly Uint8Array view into the buffer (no copy).
    */
   // deno-lint-ignore require-await
   public async read(
     offset: number,
     size: number,
-  ): Promise<Uint8Array> {
+  ): Promise<Readonly<Uint8Array>> {
     this.checkBounds(offset, size);
-    return this.view.slice(offset, offset + size);
+    return this.view.subarray(offset, offset + size);
   }
 
   /**
