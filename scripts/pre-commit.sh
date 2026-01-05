@@ -19,29 +19,21 @@ fi
 
 if [ -n "$FMT_FILES" ]; then
     echo "Running deno fmt on staged files..."
-    echo "$FMT_FILES" | xargs deno fmt
+    printf '%s\n' "$FMT_FILES" | tr '\n' '\0' | xargs -0 -r deno fmt
 
-    CHANGED_STAGED_FILES=""
-    for file in $FMT_FILES; do
-        if [ -n "$(git diff --name-only -- "$file")" ]; then
-            CHANGED_STAGED_FILES="$CHANGED_STAGED_FILES $file"
+    printf '%s\n' "$FMT_FILES" | while IFS= read -r file; do
+        if [ -n "$file" ] && [ -n "$(git diff --name-only -- "$file")" ]; then
+            git add "$file"
         fi
     done
-
-    if [ -n "$CHANGED_STAGED_FILES" ]; then
-        echo "deno fmt made changes. Adding formatted files to staging..."
-        echo "$CHANGED_STAGED_FILES" | xargs git add
-    fi
 fi
 
 if [ -n "$LINT_FILES" ]; then
     echo "Running deno lint on staged files..."
-    echo "$LINT_FILES" | xargs deno lint
-
-    if [ $? -ne 0 ]; then
+    printf '%s\n' "$LINT_FILES" | tr '\n' '\0' | xargs -0 -r deno lint || {
         echo "deno lint failed. Aborting commit."
         exit 1
-    fi
+    }
 fi
 
 echo "Pre-commit checks passed."
