@@ -9,8 +9,8 @@ cd "$REPO_ROOT" || exit 1
 
 STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
 
-FMT_FILES=$(echo "$STAGED_FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|mts|json|jsonc|md)$')
-LINT_FILES=$(echo "$STAGED_FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|mts)$')
+FMT_FILES=$(printf '%s\n' "$STAGED_FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|mts|json|jsonc|md)$')
+LINT_FILES=$(printf '%s\n' "$STAGED_FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|mts)$')
 
 if [ -z "$FMT_FILES" ] && [ -z "$LINT_FILES" ]; then
     echo "No files requiring fmt or lint staged for commit."
@@ -19,9 +19,9 @@ fi
 
 if [ -n "$FMT_FILES" ]; then
     echo "Running deno fmt on staged files..."
-    printf '%s\n' "$FMT_FILES" | tr '\n' '\0' | xargs -0 -r deno fmt
+    printf '%s\n' "$FMT_FILES" | grep -v '^$' | tr '\n' '\0' | xargs -0 -r deno fmt
 
-    printf '%s\n' "$FMT_FILES" | while IFS= read -r file; do
+    printf '%s\n' "$FMT_FILES" | grep -v '^$' | while IFS= read -r file; do
         if [ -n "$file" ] && [ -n "$(git diff --name-only -- "$file")" ]; then
             git add "$file"
         fi
@@ -30,7 +30,7 @@ fi
 
 if [ -n "$LINT_FILES" ]; then
     echo "Running deno lint on staged files..."
-    printf '%s\n' "$LINT_FILES" | tr '\n' '\0' | xargs -0 -r deno lint || {
+    printf '%s\n' "$LINT_FILES" | grep -v '^$' | tr '\n' '\0' | xargs -0 -r deno lint || {
         echo "deno lint failed. Aborting commit."
         exit 1
     }
