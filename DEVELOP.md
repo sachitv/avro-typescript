@@ -37,6 +37,6 @@ chmod +x scripts/pre-commit.sh
 ln -sf ../../scripts/pre-commit.sh .git/hooks/pre-commit
 ```
 
-The script still shares the fmt+lint pipeline defined in `scripts/`, but this
-approach avoids any extra tooling: the symlink directly points Git at the shell
-script so it executes automatically on every commit.
+The hook formats staged TS/JS/JSON/MD files and lints staged TS/JS files before
+allowing a commit. This avoids extra tooling: the symlink directly points Git at
+the shell script so it executes automatically on every commit.
