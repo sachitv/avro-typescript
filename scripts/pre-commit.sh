@@ -11,7 +11,9 @@ FMT_TMP=$(mktemp)
 LINT_TMP=$(mktemp)
 trap 'rm -f "$FMT_TMP" "$LINT_TMP"' EXIT
 
-git diff --cached --name-only --diff-filter=ACM | while IFS= read -r file; do
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+while IFS= read -r file; do
     case "$file" in
         *.ts|*.tsx|*.js|*.jsx|*.mjs|*.mts)
             printf '%s\n' "$file" >> "$FMT_TMP"
@@ -21,7 +23,9 @@ git diff --cached --name-only --diff-filter=ACM | while IFS= read -r file; do
             printf '%s\n' "$file" >> "$FMT_TMP"
             ;;
     esac
-done
+done <<EOF
+$STAGED_FILES
+EOF
 
 if [ ! -s "$FMT_TMP" ] && [ ! -s "$LINT_TMP" ]; then
     echo "No files requiring fmt or lint staged for commit."
