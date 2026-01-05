@@ -13,14 +13,12 @@ trap 'rm -f "$FMT_TMP" "$LINT_TMP"' EXIT
 
 git diff --cached --name-only --diff-filter=ACM | while IFS= read -r file; do
     case "$file" in
-        *.ts|*.tsx|*.js|*.jsx|*.mjs|*.mts|*.json|*.jsonc|*.md)
-            printf '%s\n' "$file" >> "$FMT_TMP"
-            ;;
-    esac
-
-    case "$file" in
         *.ts|*.tsx|*.js|*.jsx|*.mjs|*.mts)
+            printf '%s\n' "$file" >> "$FMT_TMP"
             printf '%s\n' "$file" >> "$LINT_TMP"
+            ;;
+        *.json|*.jsonc|*.md)
+            printf '%s\n' "$file" >> "$FMT_TMP"
             ;;
     esac
 done
@@ -33,12 +31,7 @@ fi
 if [ -s "$FMT_TMP" ]; then
     echo "Running deno fmt on staged files..."
     tr '\n' '\0' < "$FMT_TMP" | xargs -0 -r deno fmt
-
-    while IFS= read -r file; do
-        if [ -n "$file" ] && [ -n "$(git diff --name-only -- "$file")" ]; then
-            git add "$file"
-        fi
-    done < "$FMT_TMP"
+    tr '\n' '\0' < "$FMT_TMP" | xargs -0 -r git add --
 fi
 
 if [ -s "$LINT_TMP" ]; then
