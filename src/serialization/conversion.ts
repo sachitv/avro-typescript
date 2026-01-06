@@ -11,7 +11,7 @@ const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
 export function bigIntToSafeNumber(value: bigint, context: string): number {
   if (value > MAX_SAFE_INTEGER_BIGINT || value < MIN_SAFE_INTEGER_BIGINT) {
     throw new RangeError(
-      `${context} value is outside the safe integer range.`,
+      `${context} value ${value} is outside the safe integer range.`,
     );
   }
   return Number(value);

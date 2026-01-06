@@ -802,7 +802,7 @@ describe("readMapInto", () => {
         );
       },
       RangeError,
-      "Map block length value is outside the safe integer range.",
+      "Map block length value 9007199254740992 is outside the safe integer range.",
     );
   });
 
