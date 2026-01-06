@@ -621,7 +621,8 @@ describe("SyncReadableTap vs ReadableTap parity", () => {
     );
 
     // Both should throw RangeError indicating more than 5 bytes required
-    const expectedError = "Varint requires more than 5 bytes (int32 range exceeded)";
+    const expectedError =
+      "Varint requires more than 5 bytes (int32 range exceeded)";
     await assertRejects(
       async () => await asyncReader.readInt(),
       RangeError,
