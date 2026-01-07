@@ -151,7 +151,8 @@ describe("SyncTap primitive round-trips", () => {
       -1211n,
       -1312411211n,
       900719925474090n,
-      2n ** 70n,
+      (1n << 63n) - 1n, // max int64
+      -(1n << 63n), // min int64
     ],
     reader: (tap) => tap.readLong(),
     skipper: (tap) => tap.skipLong(),
@@ -272,6 +273,84 @@ describe("SyncTap numeric guard rails", () => {
     expect(() => reader.readInt()).toThrow(RangeError);
   });
 
+  it("readInt detects overflow before performing invalid bitwise operations", () => {
+    const buffer = new ArrayBuffer(16);
+    const writer = new SyncWritableTap(
+      new SyncInMemoryWritableBuffer(buffer),
+    );
+
+    const bigValue = 1n << 34n;
+    writer.writeLong(bigValue);
+
+    const reader = new SyncReadableTap(
+      new SyncInMemoryReadableBuffer(buffer),
+    );
+
+    expect(() => reader.readInt()).toThrow(
+      "Varint requires more than 5 bytes (int32 range exceeded)",
+    );
+  });
+
+  it("readInt rejects 5-byte varints with high bits set", () => {
+    const bytes = toUint8Array([
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0xF0,
+    ]);
+    const buf = new ArrayBuffer(bytes.length);
+    new Uint8Array(buf).set(bytes);
+    const reader = new SyncReadableTap(new SyncInMemoryReadableBuffer(buf));
+    expect(() => reader.readInt()).toThrow(
+      "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
+    );
+  });
+
+  it("readInt accepts valid 5-byte varint for INT32_MAX", () => {
+    // INT32_MAX = 2147483647
+    // Zig-zag encoded = 4294967294 = 0xFFFFFFFE
+    // Varint bytes: 0xFE 0xFF 0xFF 0xFF 0x0F
+    const bytes = toUint8Array([0xFE, 0xFF, 0xFF, 0xFF, 0x0F]);
+    const buf = new ArrayBuffer(bytes.length);
+    new Uint8Array(buf).set(bytes);
+    const reader = new SyncReadableTap(new SyncInMemoryReadableBuffer(buf));
+    expect(reader.readInt()).toBe(2147483647);
+  });
+
+  it("readInt accepts valid 5-byte varint for INT32_MIN", () => {
+    // INT32_MIN = -2147483648
+    // Zig-zag encoded = 4294967295 = 0xFFFFFFFF
+    // Varint bytes: 0xFF 0xFF 0xFF 0xFF 0x0F
+    const bytes = toUint8Array([0xFF, 0xFF, 0xFF, 0xFF, 0x0F]);
+    const buf = new ArrayBuffer(bytes.length);
+    new Uint8Array(buf).set(bytes);
+    const reader = new SyncReadableTap(new SyncInMemoryReadableBuffer(buf));
+    expect(reader.readInt()).toBe(-2147483648);
+  });
+
+  it("readInt accepts valid 5-byte varint near INT32_MAX", () => {
+    // INT32_MAX - 1 = 2147483646
+    // Zig-zag encoded = 4294967292 = 0xFFFFFFFC
+    // Varint bytes: 0xFC 0xFF 0xFF 0xFF 0x0F
+    const bytes = toUint8Array([0xFC, 0xFF, 0xFF, 0xFF, 0x0F]);
+    const buf = new ArrayBuffer(bytes.length);
+    new Uint8Array(buf).set(bytes);
+    const reader = new SyncReadableTap(new SyncInMemoryReadableBuffer(buf));
+    expect(reader.readInt()).toBe(2147483646);
+  });
+
+  it("readInt accepts valid 5-byte varint near INT32_MIN", () => {
+    // INT32_MIN + 1 = -2147483647
+    // Zig-zag encoded = 4294967293 = 0xFFFFFFFD
+    // Varint bytes: 0xFD 0xFF 0xFF 0xFF 0x0F
+    const bytes = toUint8Array([0xFD, 0xFF, 0xFF, 0xFF, 0x0F]);
+    const buf = new ArrayBuffer(bytes.length);
+    new Uint8Array(buf).set(bytes);
+    const reader = new SyncReadableTap(new SyncInMemoryReadableBuffer(buf));
+    expect(reader.readInt()).toBe(-2147483647);
+  });
+
   it("readBytes throws when length exceeds safe integer range", () => {
     const buffer = new ArrayBuffer(16);
     const writer = new SyncWritableTap(
@@ -300,6 +379,41 @@ describe("SyncTap numeric guard rails", () => {
     expect(reader.readInt()).toBe(42);
     reader.skipInt();
     expect(reader.getPos()).toBe(afterWrites);
+  });
+
+  it("writeLong rejects values exceeding int64 range", () => {
+    // Values > int64 are out of spec for Avro long and must be rejected
+    const large = (1n << 70n) + 123n; // Out of spec value
+    const buf = new ArrayBuffer(16);
+    const tap = new SyncWritableTap(new SyncInMemoryWritableBuffer(buf));
+    assertThrows(
+      () => tap.writeLong(large),
+      RangeError,
+      "out of range for Avro long",
+    );
+  });
+
+  it("readLong rejects varints exceeding 64 bits", () => {
+    const bytes = toUint8Array([
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x00,
+    ]);
+    const buf = new ArrayBuffer(bytes.length);
+    new Uint8Array(buf).set(bytes);
+    const reader = new SyncReadableTap(new SyncInMemoryReadableBuffer(buf));
+    expect(() => reader.readLong()).toThrow(
+      "Varint requires more than 10 bytes (int64 range exceeded)",
+    );
   });
 });
 

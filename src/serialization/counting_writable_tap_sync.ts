@@ -53,12 +53,18 @@ export class SyncCountingWritableTap extends TapBase
 
   /** Counts a long value using zigzag + varint encoding. */
   writeLong(value: bigint): void {
-    // Calculate varint size for zigzag-encoded value
-    let n = value < 0n ? ((-value) << 1n) - 1n : value << 1n;
+    let n: bigint;
+    if (value < 0n) {
+      const absVal = BigInt.asUintN(64, -value);
+      const shifted = BigInt.asUintN(64, absVal << 1n);
+      n = BigInt.asUintN(64, shifted - 1n);
+    } else {
+      n = BigInt.asUintN(64, value << 1n);
+    }
     let size = 1;
     while (n >= 0x80n) {
       size++;
-      n >>= 7n;
+      n = BigInt.asUintN(64, n >> 7n);
     }
     this.pos += size;
   }

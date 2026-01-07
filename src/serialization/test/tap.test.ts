@@ -551,6 +551,77 @@ describe("Numeric guard rails", () => {
     await assertRejects(async () => await tap.readInt(), RangeError);
   });
 
+  it("readInt detects overflow before performing invalid bitwise operations", async () => {
+    const tap = newTap(16);
+
+    const bigValue = 1n << 34n;
+    await tap.writeLong(bigValue);
+
+    tap._testOnlyResetPos();
+
+    await assertRejects(
+      async () => await tap.readInt(),
+      RangeError,
+      "Varint requires more than 5 bytes (int32 range exceeded)",
+    );
+  });
+
+  it("readInt rejects 5-byte varints with high bits set", async () => {
+    const bytes = [
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0xF0,
+    ];
+    const tap = tapFromBytes(bytes);
+    await assertRejects(
+      async () => await tap.readInt(),
+      RangeError,
+      "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
+    );
+  });
+
+  it("readInt accepts valid 5-byte varint for INT32_MAX", async () => {
+    // INT32_MAX = 2147483647
+    // Zig-zag encoded = 4294967294 = 0xFFFFFFFE
+    // Varint bytes: 0xFE 0xFF 0xFF 0xFF 0x0F
+    const bytes = [0xFE, 0xFF, 0xFF, 0xFF, 0x0F];
+    const tap = tapFromBytes(bytes);
+    const result = await tap.readInt();
+    expect(result).toBe(2147483647);
+  });
+
+  it("readInt accepts valid 5-byte varint for INT32_MIN", async () => {
+    // INT32_MIN = -2147483648
+    // Zig-zag encoded = 4294967295 = 0xFFFFFFFF
+    // Varint bytes: 0xFF 0xFF 0xFF 0xFF 0x0F
+    const bytes = [0xFF, 0xFF, 0xFF, 0xFF, 0x0F];
+    const tap = tapFromBytes(bytes);
+    const result = await tap.readInt();
+    expect(result).toBe(-2147483648);
+  });
+
+  it("readInt accepts valid 5-byte varint near INT32_MAX", async () => {
+    // INT32_MAX - 1 = 2147483646
+    // Zig-zag encoded = 4294967292 = 0xFFFFFFFC
+    // Varint bytes: 0xFC 0xFF 0xFF 0xFF 0x0F
+    const bytes = [0xFC, 0xFF, 0xFF, 0xFF, 0x0F];
+    const tap = tapFromBytes(bytes);
+    const result = await tap.readInt();
+    expect(result).toBe(2147483646);
+  });
+
+  it("readInt accepts valid 5-byte varint near INT32_MIN", async () => {
+    // INT32_MIN + 1 = -2147483647
+    // Zig-zag encoded = 4294967293 = 0xFFFFFFFD
+    // Varint bytes: 0xFD 0xFF 0xFF 0xFF 0x0F
+    const bytes = [0xFD, 0xFF, 0xFF, 0xFF, 0x0F];
+    const tap = tapFromBytes(bytes);
+    const result = await tap.readInt();
+    expect(result).toBe(-2147483647);
+  });
+
   it("readBytes throws when length exceeds safe integer range", async () => {
     const tap = newTap(16);
     const big = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
@@ -938,12 +1009,32 @@ describe("ReadableTap fallbacks", () => {
 });
 
 describe("Long decoding edge cases", () => {
-  it("readLong handles values requiring extra continuation bytes", async () => {
-    const large = (1n << 70n) + 123n;
+  it("writeLong rejects values exceeding int64 range", async () => {
+    // Values > int64 are out of spec for Avro long and must be rejected
+    // Avro spec defines long as int64 (-2^63 to 2^63-1)
+    const large = (1n << 70n) + 123n; // Out of spec value
     const tap = newTap(16);
-    await tap.writeLong(large);
+    await assertRejects(
+      async () => await tap.writeLong(large),
+      RangeError,
+      "out of range for Avro long",
+    );
+  });
+
+  it("readLong correctly handles max int64", async () => {
+    const maxInt64 = (1n << 63n) - 1n;
+    const tap = newTap(16);
+    await tap.writeLong(maxInt64);
     tap._testOnlyResetPos();
-    expect(await tap.readLong()).toBe(large);
+    expect(await tap.readLong()).toBe(maxInt64);
+  });
+
+  it("readLong correctly handles min int64", async () => {
+    const minInt64 = -(1n << 63n);
+    const tap = newTap(16);
+    await tap.writeLong(minInt64);
+    tap._testOnlyResetPos();
+    expect(await tap.readLong()).toBe(minInt64);
   });
 
   it("readLong correctly decodes near 2^56", async () => {
@@ -954,7 +1045,7 @@ describe("Long decoding edge cases", () => {
     expect(await tap.readLong()).toBe(near);
   });
 
-  it("readLong processes additional continuation bytes", async () => {
+  it("readLong rejects varints exceeding 64 bits", async () => {
     const bytes = [
       0x80,
       0x80,
@@ -970,7 +1061,9 @@ describe("Long decoding edge cases", () => {
       0x00,
     ];
     const tap = tapFromBytes(bytes);
-    expect(await tap.readLong()).toBe(0n);
+    await expect(tap.readLong()).rejects.toThrow(
+      "Varint requires more than 10 bytes (int64 range exceeded)",
+    );
   });
 });
 

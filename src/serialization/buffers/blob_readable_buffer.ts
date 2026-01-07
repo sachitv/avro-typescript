@@ -51,13 +51,13 @@ export class BlobReadableBuffer implements IReadableBuffer {
    *
    * @param offset The byte offset to start reading from (0-based).
    * @param size The number of bytes to read.
-   * @returns A Promise that resolves to a new Uint8Array containing the read bytes.
+   * @returns A Promise that resolves to a readonly Uint8Array containing the read bytes.
    * @throws ReadBufferError if the requested range is out of bounds.
    */
   public async read(
     offset: number,
     size: number,
-  ): Promise<Uint8Array> {
+  ): Promise<Readonly<Uint8Array>> {
     if (offset < 0 || size < 0) {
       throw new ReadBufferError(
         `Offset and size must be non-negative. Got offset=${offset}, size=${size}`,

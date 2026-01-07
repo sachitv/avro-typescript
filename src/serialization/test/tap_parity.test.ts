@@ -385,6 +385,49 @@ describe("SyncReadableTap vs ReadableTap parity", () => {
     }
   });
 
+  it("readLong rejects varints with additional continuation bytes identically", async () => {
+    const oversizedVarint = toUint8Array([
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0xFF,
+      0x01,
+    ]);
+
+    const asyncBuffer = new ArrayBuffer(32);
+    const syncBuffer = new ArrayBuffer(32);
+    new Uint8Array(asyncBuffer).set(oversizedVarint);
+    new Uint8Array(syncBuffer).set(oversizedVarint);
+
+    const asyncReader = new ReadableTap(asyncBuffer, 0);
+    const syncReader = new SyncReadableTap(
+      new SyncInMemoryReadableBuffer(syncBuffer),
+      0,
+    );
+
+    await expect(asyncReader.readLong()).rejects.toThrow(
+      "Varint requires more than 10 bytes (int64 range exceeded)",
+    );
+    expect(() => syncReader.readLong()).toThrow(
+      "Varint requires more than 10 bytes (int64 range exceeded)",
+    );
+  });
+
   it("readInt, readBoolean, readFloat, readDouble match", async () => {
     const buf = new ArrayBuffer(64);
     const writer = new WritableTap(buf);
@@ -547,5 +590,36 @@ describe("SyncReadableTap vs ReadableTap parity", () => {
       ReadBufferError,
     );
     assertThrows(() => syncReader.readLong(), ReadBufferError);
+  });
+
+  it("readInt throws RangeError identically when overflow check triggers", async () => {
+    // Verifies both sync and async versions detect overflow before performing
+    // invalid bitwise operations and throw the same error type.
+    const buf = new ArrayBuffer(16);
+    const writer = new WritableTap(buf);
+
+    // Write a value that requires 6 bytes (> 5 byte limit for int32)
+    // 2^34 = 17179869184 requires 6 bytes and exceeds INT32_MAX
+    const bigValue = 1n << 34n; // 2^34 = 17179869184
+    await writer.writeLong(bigValue);
+
+    const asyncReader = new ReadableTap(buf, 0);
+    const syncReader = new SyncReadableTap(
+      new SyncInMemoryReadableBuffer(buf),
+      0,
+    );
+
+    // Both should throw RangeError indicating more than 5 bytes required
+    const expectedError =
+      "Varint requires more than 5 bytes (int32 range exceeded)";
+    await assertRejects(
+      async () => await asyncReader.readInt(),
+      RangeError,
+      expectedError,
+    );
+    assertThrows(() => syncReader.readInt(), RangeError, expectedError);
+
+    // Both should have advanced to the same position (after reading the long)
+    expect(asyncReader.getPos()).toBe(syncReader.getPos());
   });
 });
