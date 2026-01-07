@@ -274,29 +274,81 @@ describe("SyncTap numeric guard rails", () => {
   });
 
   it("readInt detects overflow before performing invalid bitwise operations", () => {
-    // This test verifies that the overflow check occurs BEFORE the bitwise
-    // operation, preventing invalid shifts (e.g., << 35) that would produce
-    // incorrect results due to JavaScript's 32-bit bitwise limitation.
     const buffer = new ArrayBuffer(16);
     const writer = new SyncWritableTap(
       new SyncInMemoryWritableBuffer(buffer),
     );
 
-    // Write a value that requires 6 bytes (> 5 byte limit for int32)
-    // 2^34 = 17179869184 requires 6 bytes and exceeds INT32_MAX
-    const bigValue = 1n << 34n; // 2^34 = 17179869184
+    const bigValue = 1n << 34n;
     writer.writeLong(bigValue);
 
     const reader = new SyncReadableTap(
       new SyncInMemoryReadableBuffer(buffer),
     );
 
-    // Should throw RangeError indicating more than 5 bytes required, and this should
-    // happen WITHOUT first executing an invalid bitwise shift operation
-    // (which would have occurred if the check was after the accumulation).
     expect(() => reader.readInt()).toThrow(
       "Varint requires more than 5 bytes (int32 range exceeded)",
     );
+  });
+
+  it("readInt rejects 5-byte varints with high bits set", () => {
+    const bytes = toUint8Array([
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0xF0,
+    ]);
+    const buf = new ArrayBuffer(bytes.length);
+    new Uint8Array(buf).set(bytes);
+    const reader = new SyncReadableTap(new SyncInMemoryReadableBuffer(buf));
+    expect(() => reader.readInt()).toThrow(
+      "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
+    );
+  });
+
+  it("readInt accepts valid 5-byte varint for INT32_MAX", () => {
+    // INT32_MAX = 2147483647
+    // Zig-zag encoded = 4294967294 = 0xFFFFFFFE
+    // Varint bytes: 0xFE 0xFF 0xFF 0xFF 0x0F
+    const bytes = toUint8Array([0xFE, 0xFF, 0xFF, 0xFF, 0x0F]);
+    const buf = new ArrayBuffer(bytes.length);
+    new Uint8Array(buf).set(bytes);
+    const reader = new SyncReadableTap(new SyncInMemoryReadableBuffer(buf));
+    expect(reader.readInt()).toBe(2147483647);
+  });
+
+  it("readInt accepts valid 5-byte varint for INT32_MIN", () => {
+    // INT32_MIN = -2147483648
+    // Zig-zag encoded = 4294967295 = 0xFFFFFFFF
+    // Varint bytes: 0xFF 0xFF 0xFF 0xFF 0x0F
+    const bytes = toUint8Array([0xFF, 0xFF, 0xFF, 0xFF, 0x0F]);
+    const buf = new ArrayBuffer(bytes.length);
+    new Uint8Array(buf).set(bytes);
+    const reader = new SyncReadableTap(new SyncInMemoryReadableBuffer(buf));
+    expect(reader.readInt()).toBe(-2147483648);
+  });
+
+  it("readInt accepts valid 5-byte varint near INT32_MAX", () => {
+    // INT32_MAX - 1 = 2147483646
+    // Zig-zag encoded = 4294967292 = 0xFFFFFFFC
+    // Varint bytes: 0xFC 0xFF 0xFF 0xFF 0x0F
+    const bytes = toUint8Array([0xFC, 0xFF, 0xFF, 0xFF, 0x0F]);
+    const buf = new ArrayBuffer(bytes.length);
+    new Uint8Array(buf).set(bytes);
+    const reader = new SyncReadableTap(new SyncInMemoryReadableBuffer(buf));
+    expect(reader.readInt()).toBe(2147483646);
+  });
+
+  it("readInt accepts valid 5-byte varint near INT32_MIN", () => {
+    // INT32_MIN + 1 = -2147483647
+    // Zig-zag encoded = 4294967293 = 0xFFFFFFFD
+    // Varint bytes: 0xFD 0xFF 0xFF 0xFF 0x0F
+    const bytes = toUint8Array([0xFD, 0xFF, 0xFF, 0xFF, 0x0F]);
+    const buf = new ArrayBuffer(bytes.length);
+    new Uint8Array(buf).set(bytes);
+    const reader = new SyncReadableTap(new SyncInMemoryReadableBuffer(buf));
+    expect(reader.readInt()).toBe(-2147483647);
   });
 
   it("readBytes throws when length exceeds safe integer range", () => {
@@ -341,9 +393,7 @@ describe("SyncTap numeric guard rails", () => {
     );
   });
 
-  it("readLong processes additional continuation bytes", () => {
-    // Test that readLong handles varints with >10 bytes (>70 bits)
-    // These bytes represent a value with many continuation bytes that will be truncated to 64 bits
+  it("readLong rejects varints exceeding 64 bits", () => {
     const bytes = toUint8Array([
       0x80,
       0x80,
@@ -361,7 +411,9 @@ describe("SyncTap numeric guard rails", () => {
     const buf = new ArrayBuffer(bytes.length);
     new Uint8Array(buf).set(bytes);
     const reader = new SyncReadableTap(new SyncInMemoryReadableBuffer(buf));
-    expect(reader.readLong()).toBe(0n);
+    expect(() => reader.readLong()).toThrow(
+      "Varint requires more than 10 bytes (int64 range exceeded)",
+    );
   });
 });
 

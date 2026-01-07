@@ -37,7 +37,7 @@ import { ReadableTap } from "../../src/serialization/tap.ts";
  * - 1000: Quick comparison (fast, ~5-10 sec)
  * - 100: Very quick (for initial testing)
  */
-const BENCH_ITERATIONS = 100;
+const BENCH_ITERATIONS = 1000;
 
 // =============================================================================
 // SCHEMA DEFINITIONS

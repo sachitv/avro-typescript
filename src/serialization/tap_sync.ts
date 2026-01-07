@@ -72,12 +72,12 @@ export interface SyncReadableTapLike {
   skipDouble(): void;
 
   /** Reads a fixed-length byte sequence. */
-  readFixed(len: number): Uint8Array;
+  readFixed(len: number): Readonly<Uint8Array>;
   /** Skips a fixed-length byte sequence. */
   skipFixed(len: number): void;
 
   /** Reads a length-prefixed byte sequence. */
-  readBytes(): Uint8Array;
+  readBytes(): Readonly<Uint8Array>;
   /** Skips a length-prefixed byte sequence. */
   skipBytes(): void;
 
@@ -233,6 +233,12 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
           "Varint requires more than 5 bytes (int32 range exceeded)",
         );
       }
+      // On the 5th byte, bits 4-6 must be zero (only bits 0-3 encode valid int32 data)
+      if (bytesRead === 5 && (byte & 0x70) !== 0) {
+        throw new RangeError(
+          "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
+        );
+      }
       result |= (byte & 0x7f) << shift;
       shift += 7;
     } while ((byte & 0x80) !== 0);
@@ -256,8 +262,6 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
    *
    * In local benchmarks, this approach is approximately 13% faster than operations without
    * explicit 64-bit truncation.
-   *
-   * Note: Values encoded with > 64 bits will be truncated to 64 bits during decoding.
    */
   readLong(): bigint {
     let pos = this.pos;
@@ -267,22 +271,21 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
 
     do {
       byte = this.getByteAt(pos++);
-      // asUintN(64, ...) helps V8 optimize to int64 operations
-      result = BigInt.asUintN(64, result | (BigInt(byte & 0x7f) << shift));
+      if (shift >= 64n) {
+        throw new RangeError(
+          "Varint requires more than 10 bytes (int64 range exceeded)",
+        );
+      }
+      const chunk = BigInt.asUintN(64, BigInt(byte & 0x7f) << shift);
+      result = BigInt.asUintN(64, result | chunk);
       shift += 7n;
-    } while ((byte & 0x80) !== 0 && shift < 70n);
-
-    while ((byte & 0x80) !== 0) {
-      byte = this.getByteAt(pos++);
-      result = BigInt.asUintN(64, result | (BigInt(byte & 0x7f) << shift));
-      shift += 7n;
-    }
+    } while ((byte & 0x80) !== 0);
 
     this.pos = pos;
 
-    // Zig-zag decode with asIntN to ensure int64 result
-    // Note: BigInt.asIntN(64, ...) always returns a value within int64 range by definition
-    return BigInt.asIntN(64, (result >> 1n) ^ -(result & 1n));
+    const shifted = BigInt.asUintN(64, result >> 1n);
+    const sign = BigInt.asUintN(64, -(result & 1n));
+    return BigInt.asIntN(64, shifted ^ sign);
   }
 
   /** Skips a zig-zag encoded 32-bit integer by delegating to skipLong. */
@@ -328,7 +331,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
   }
 
   /** Reads a fixed-length byte sequence. */
-  readFixed(len: number): Uint8Array {
+  readFixed(len: number): Readonly<Uint8Array> {
     const pos = this.pos;
     this.pos += len;
     return this.buffer.read(pos, len);
@@ -340,7 +343,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
   }
 
   /** Reads a length-prefixed byte sequence. */
-  readBytes(): Uint8Array {
+  readBytes(): Readonly<Uint8Array> {
     const length = bigIntToSafeNumber(this.readLong(), "readBytes length");
     return this.readFixed(length);
   }
@@ -579,9 +582,8 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
    * Values outside this range will be rejected with a RangeError.
    */
   writeLong(value: bigint): void {
-    // Validate range: must be within int64 bounds
-    const INT64_MIN = -9223372036854775808n; // -(2^63)
-    const INT64_MAX = 9223372036854775807n; // 2^63 - 1
+    const INT64_MIN = -9223372036854775808n;
+    const INT64_MAX = 9223372036854775807n;
 
     if (value < INT64_MIN || value > INT64_MAX) {
       throw new RangeError(
@@ -589,15 +591,15 @@ export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
       );
     }
 
-    // Zigzag encode: asUintN(64, ...) signals to V8 these are 64-bit operations
     let n: bigint;
     if (value < 0n) {
-      n = BigInt.asUintN(64, ((-value) << 1n) - 1n);
+      const absVal = BigInt.asUintN(64, -value);
+      const shifted = BigInt.asUintN(64, absVal << 1n);
+      n = BigInt.asUintN(64, shifted - 1n);
     } else {
       n = BigInt.asUintN(64, value << 1n);
     }
 
-    // Fast varint encoding using pre-allocated buffer
     let i = 0;
     const buf = SyncWritableTap.varintBufferLong;
     while (n >= 0x80n) {

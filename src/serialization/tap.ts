@@ -72,7 +72,7 @@ export interface ReadableTapLike {
    * @param len Number of bytes to read.
    * @throws ReadBufferError if the read exceeds the buffer.
    */
-  readFixed(len: number): Promise<Uint8Array>;
+  readFixed(len: number): Promise<Readonly<Uint8Array>>;
   /**
    * Skips a fixed-length byte sequence.
    * @param len Number of bytes to skip.
@@ -82,7 +82,7 @@ export interface ReadableTapLike {
    * Reads a length-prefixed byte sequence.
    * @throws ReadBufferError if insufficient data remains.
    */
-  readBytes(): Promise<Uint8Array>;
+  readBytes(): Promise<Readonly<Uint8Array>>;
   /**
    * Skips a length-prefixed byte sequence.
    */
@@ -363,6 +363,12 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
           "Varint requires more than 5 bytes (int32 range exceeded)",
         );
       }
+      // On the 5th byte, bits 4-6 must be zero (only bits 0-3 encode valid int32 data)
+      if (bytesRead === 5 && (byte & 0x70) !== 0) {
+        throw new RangeError(
+          "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
+        );
+      }
       result |= (byte & 0x7f) << shift;
       shift += 7;
     } while ((byte & 0x80) !== 0);
@@ -386,8 +392,6 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
    *
    * In local benchmarks, this approach is approximately 13% faster than operations without
    * explicit 64-bit truncation.
-   *
-   * Note: Values encoded with > 64 bits will be truncated to 64 bits during decoding.
    */
   async readLong(): Promise<bigint> {
     let pos = this.pos;
@@ -397,21 +401,20 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
 
     do {
       byte = await this.getByteAt(pos++);
-      // asUintN(64, ...) helps V8 optimize to int64 operations
-      result = BigInt.asUintN(64, result | (BigInt(byte & 0x7f) << shift));
+      if (shift >= 64n) {
+        throw new RangeError(
+          "Varint requires more than 10 bytes (int64 range exceeded)",
+        );
+      }
+      const chunk = BigInt.asUintN(64, BigInt(byte & 0x7f) << shift);
+      result = BigInt.asUintN(64, result | chunk);
       shift += 7n;
-    } while ((byte & 0x80) !== 0 && shift < 70n);
-
-    while ((byte & 0x80) !== 0) {
-      byte = await this.getByteAt(pos++);
-      result = BigInt.asUintN(64, result | (BigInt(byte & 0x7f) << shift));
-      shift += 7n;
-    }
+    } while ((byte & 0x80) !== 0);
 
     this.pos = pos;
-    // Zig-zag decode with asIntN to ensure int64 result
-    // Note: BigInt.asIntN(64, ...) always returns a value within int64 range by definition
-    return BigInt.asIntN(64, (result >> 1n) ^ -(result & 1n));
+    const shifted = BigInt.asUintN(64, result >> 1n);
+    const sign = BigInt.asUintN(64, -(result & 1n));
+    return BigInt.asIntN(64, shifted ^ sign);
   }
 
   /**
@@ -475,7 +478,7 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
    * @param len Number of bytes to read.
    * @throws ReadBufferError if the read exceeds the buffer.
    */
-  async readFixed(len: number): Promise<Uint8Array> {
+  async readFixed(len: number): Promise<Readonly<Uint8Array>> {
     const pos = this.pos;
     this.pos += len;
     return await this.buffer.read(pos, len);
@@ -493,7 +496,7 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
    * Reads a length-prefixed byte sequence.
    * @throws ReadBufferError if insufficient data remains.
    */
-  async readBytes(): Promise<Uint8Array> {
+  async readBytes(): Promise<Readonly<Uint8Array>> {
     const length = bigIntToSafeNumber(
       await this.readLong(),
       "readBytes length",
@@ -774,9 +777,8 @@ export class WritableTap extends TapBase implements WritableTapLike {
    * @param value BigInt value to write (must be valid int64).
    */
   async writeLong(value: bigint): Promise<void> {
-    // Validate range: must be within int64 bounds
-    const INT64_MIN = -9223372036854775808n; // -(2^63)
-    const INT64_MAX = 9223372036854775807n; // 2^63 - 1
+    const INT64_MIN = -9223372036854775808n;
+    const INT64_MAX = 9223372036854775807n;
 
     if (value < INT64_MIN || value > INT64_MAX) {
       throw new RangeError(
@@ -784,15 +786,15 @@ export class WritableTap extends TapBase implements WritableTapLike {
       );
     }
 
-    // Zigzag encode: asUintN(64, ...) signals to V8 these are 64-bit operations
     let n: bigint;
     if (value < 0n) {
-      n = BigInt.asUintN(64, ((-value) << 1n) - 1n);
+      const absVal = BigInt.asUintN(64, -value);
+      const shifted = BigInt.asUintN(64, absVal << 1n);
+      n = BigInt.asUintN(64, shifted - 1n);
     } else {
       n = BigInt.asUintN(64, value << 1n);
     }
 
-    // Fast varint encoding using pre-allocated buffer
     let i = 0;
     const buf = WritableTap.varintBufferLong;
     while (n >= 0x80n) {

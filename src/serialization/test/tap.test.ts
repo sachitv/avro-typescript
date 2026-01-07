@@ -552,26 +552,74 @@ describe("Numeric guard rails", () => {
   });
 
   it("readInt detects overflow before performing invalid bitwise operations", async () => {
-    // This test verifies that the overflow check occurs BEFORE the bitwise
-    // operation, preventing invalid shifts (e.g., << 35) that would produce
-    // incorrect results due to JavaScript's 32-bit bitwise limitation.
     const tap = newTap(16);
 
-    // Write a value that requires 6 bytes (> 5 byte limit for int32)
-    // 2^34 = 17179869184 requires 6 bytes and exceeds INT32_MAX
-    const bigValue = 1n << 34n; // 2^34 = 17179869184
+    const bigValue = 1n << 34n;
     await tap.writeLong(bigValue);
 
     tap._testOnlyResetPos();
 
-    // Should throw RangeError indicating more than 5 bytes required, and this should
-    // happen WITHOUT first executing an invalid bitwise shift operation
-    // (which would have occurred if the check was after the accumulation).
     await assertRejects(
       async () => await tap.readInt(),
       RangeError,
       "Varint requires more than 5 bytes (int32 range exceeded)",
     );
+  });
+
+  it("readInt rejects 5-byte varints with high bits set", async () => {
+    const bytes = [
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0xF0,
+    ];
+    const tap = tapFromBytes(bytes);
+    await assertRejects(
+      async () => await tap.readInt(),
+      RangeError,
+      "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
+    );
+  });
+
+  it("readInt accepts valid 5-byte varint for INT32_MAX", async () => {
+    // INT32_MAX = 2147483647
+    // Zig-zag encoded = 4294967294 = 0xFFFFFFFE
+    // Varint bytes: 0xFE 0xFF 0xFF 0xFF 0x0F
+    const bytes = [0xFE, 0xFF, 0xFF, 0xFF, 0x0F];
+    const tap = tapFromBytes(bytes);
+    const result = await tap.readInt();
+    expect(result).toBe(2147483647);
+  });
+
+  it("readInt accepts valid 5-byte varint for INT32_MIN", async () => {
+    // INT32_MIN = -2147483648
+    // Zig-zag encoded = 4294967295 = 0xFFFFFFFF
+    // Varint bytes: 0xFF 0xFF 0xFF 0xFF 0x0F
+    const bytes = [0xFF, 0xFF, 0xFF, 0xFF, 0x0F];
+    const tap = tapFromBytes(bytes);
+    const result = await tap.readInt();
+    expect(result).toBe(-2147483648);
+  });
+
+  it("readInt accepts valid 5-byte varint near INT32_MAX", async () => {
+    // INT32_MAX - 1 = 2147483646
+    // Zig-zag encoded = 4294967292 = 0xFFFFFFFC
+    // Varint bytes: 0xFC 0xFF 0xFF 0xFF 0x0F
+    const bytes = [0xFC, 0xFF, 0xFF, 0xFF, 0x0F];
+    const tap = tapFromBytes(bytes);
+    const result = await tap.readInt();
+    expect(result).toBe(2147483646);
+  });
+
+  it("readInt accepts valid 5-byte varint near INT32_MIN", async () => {
+    // INT32_MIN + 1 = -2147483647
+    // Zig-zag encoded = 4294967293 = 0xFFFFFFFD
+    // Varint bytes: 0xFD 0xFF 0xFF 0xFF 0x0F
+    const bytes = [0xFD, 0xFF, 0xFF, 0xFF, 0x0F];
+    const tap = tapFromBytes(bytes);
+    const result = await tap.readInt();
+    expect(result).toBe(-2147483647);
   });
 
   it("readBytes throws when length exceeds safe integer range", async () => {
@@ -997,7 +1045,7 @@ describe("Long decoding edge cases", () => {
     expect(await tap.readLong()).toBe(near);
   });
 
-  it("readLong processes additional continuation bytes", async () => {
+  it("readLong rejects varints exceeding 64 bits", async () => {
     const bytes = [
       0x80,
       0x80,
@@ -1013,7 +1061,9 @@ describe("Long decoding edge cases", () => {
       0x00,
     ];
     const tap = tapFromBytes(bytes);
-    expect(await tap.readLong()).toBe(0n);
+    await expect(tap.readLong()).rejects.toThrow(
+      "Varint requires more than 10 bytes (int64 range exceeded)",
+    );
   });
 });
 
