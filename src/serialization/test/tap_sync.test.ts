@@ -921,3 +921,222 @@ describe("SyncWritableTap large length writeLong fallback", () => {
     expect(calls[0].value).toBe(BigInt(hugeLength));
   });
 });
+
+describe("SyncReadableTap varint overflow protection", () => {
+  describe("readInt range overflow", () => {
+    it("throws when varint requires more than 5 bytes (int32 overflow)", () => {
+      const bytes = new Uint8Array([
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+      ]);
+      const buffer = new SyncInMemoryReadableBuffer(bytes.buffer);
+      const tap = new SyncReadableTap(buffer);
+
+      assertThrows(
+        () => tap.readInt(),
+        RangeError,
+        "Varint requires more than 5 bytes",
+      );
+    });
+
+    it("throws when 5th byte has bits above 0x0F set (int32 overflow)", () => {
+      const bytes = new Uint8Array([
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x70,
+      ]);
+      const buffer = new SyncInMemoryReadableBuffer(bytes.buffer);
+      const tap = new SyncReadableTap(buffer);
+
+      assertThrows(
+        () => tap.readInt(),
+        RangeError,
+        "5th byte of varint has bits above 0x0F set",
+      );
+    });
+  });
+
+  describe("readLong range overflow", () => {
+    it("throws when varint requires more than 10 bytes (int64 overflow)", () => {
+      const bytes = new Uint8Array([
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+      ]);
+      const buffer = new SyncInMemoryReadableBuffer(bytes.buffer);
+      const tap = new SyncReadableTap(buffer);
+
+      assertThrows(
+        () => tap.readLong(),
+        RangeError,
+        "Varint requires more than 10 bytes",
+      );
+    });
+  });
+});
+
+describe("SyncReadableTap negative length protection", () => {
+  it("throws on negative bytes length in readBytes", () => {
+    const tap = createTapWithNegativeLength();
+    assertThrows(
+      () => tap.readBytes(),
+      RangeError,
+      "Invalid negative bytes length",
+    );
+  });
+
+  it("throws on negative bytes length in skipBytes", () => {
+    const tap = createTapWithNegativeLength();
+    assertThrows(
+      () => tap.skipBytes(),
+      RangeError,
+      "Invalid negative bytes length",
+    );
+  });
+
+  it("throws on negative string length in readString", () => {
+    const tap = createTapWithNegativeLength();
+    assertThrows(
+      () => tap.readString(),
+      RangeError,
+      "Invalid negative string length",
+    );
+  });
+
+  it("throws on negative string length in skipString", () => {
+    const tap = createTapWithNegativeLength();
+    assertThrows(
+      () => tap.skipString(),
+      RangeError,
+      "Invalid negative string length",
+    );
+  });
+});
+
+function createTapWithNegativeLength(): SyncReadableTap {
+  const buffer = new ArrayBuffer(10);
+  const writeTap = new SyncWritableTap(new SyncInMemoryWritableBuffer(buffer));
+  writeTap.writeInt(-1);
+
+  const readBuffer = new SyncInMemoryReadableBuffer(buffer);
+  return new SyncReadableTap(readBuffer);
+}
+
+class SmallChunkReadableBuffer implements ISyncReadable {
+  #data: Uint8Array;
+  #maxChunkSize: number;
+
+  constructor(data: Uint8Array, maxChunkSize: number) {
+    this.#data = data;
+    this.#maxChunkSize = maxChunkSize;
+  }
+
+  read(pos: number, length: number): Readonly<Uint8Array> {
+    if (length > this.#maxChunkSize) {
+      throw new ReadBufferError(
+        "Intentionally small buffer for testing slow path",
+        pos,
+        length,
+        this.#data.length,
+      );
+    }
+    if (pos + length > this.#data.length) {
+      throw new ReadBufferError(
+        "Buffer overflow",
+        pos,
+        length,
+        this.#data.length,
+      );
+    }
+    return this.#data.subarray(pos, pos + length);
+  }
+
+  canReadMore(offset: number): boolean {
+    return offset < this.#data.length;
+  }
+
+  length(): number {
+    return this.#data.length;
+  }
+}
+
+describe("SyncReadableTap slow path varint overflow (readIntSlow/readLongSlow)", () => {
+  describe("readIntSlow range overflow", () => {
+    it("throws when varint requires more than 5 bytes via slow path", () => {
+      const bytes = new Uint8Array([
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+      ]);
+      const buffer = new SmallChunkReadableBuffer(bytes, 4);
+      const tap = new SyncReadableTap(buffer);
+
+      assertThrows(
+        () => tap.readInt(),
+        RangeError,
+        "Varint requires more than 5 bytes",
+      );
+    });
+
+    it("throws when 5th byte has bits above 0x0F set via slow path", () => {
+      const bytes = new Uint8Array([
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x70,
+      ]);
+      const buffer = new SmallChunkReadableBuffer(bytes, 4);
+      const tap = new SyncReadableTap(buffer);
+
+      assertThrows(
+        () => tap.readInt(),
+        RangeError,
+        "5th byte of varint has bits above 0x0F set",
+      );
+    });
+  });
+
+  describe("readLongSlow range overflow", () => {
+    it("throws when varint requires more than 10 bytes via slow path", () => {
+      const bytes = new Uint8Array([
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+      ]);
+      const buffer = new SmallChunkReadableBuffer(bytes, 9);
+      const tap = new SyncReadableTap(buffer);
+
+      assertThrows(
+        () => tap.readLong(),
+        RangeError,
+        "Varint requires more than 10 bytes",
+      );
+    });
+  });
+});

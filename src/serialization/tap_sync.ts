@@ -212,29 +212,30 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
    * Reads a variable-length zig-zag encoded 32-bit signed integer.
    * Uses 32-bit math to avoid BigInt overhead for performance.
    *
-   * In local benchmarks, this approach is approximately 53% faster than using BigInt operations.
+   * Optimization: Attempts to read up to 5 bytes at once. Falls back to
+   * byte-by-byte reading for small buffers near EOF.
    */
   readInt(): number {
-    let pos = this.pos;
+    const pos = this.pos;
+    let bytes: Readonly<Uint8Array>;
+    try {
+      bytes = this.buffer.read(pos, 5);
+    } catch {
+      return this.readIntSlow();
+    }
     let result = 0;
     let shift = 0;
+    let i = 0;
     let byte: number;
-    let bytesRead = 0;
 
-    // Read varint-encoded value using 32-bit arithmetic
     do {
-      byte = this.getByteAt(pos++);
-      bytesRead++;
-      // int32 needs at most 5 bytes (32 bits / 7 bits per byte = 4.57)
-      // Check BEFORE accumulating to prevent invalid bitwise operations (shift >= 35)
-      if (bytesRead > 5) {
-        // Value requires more than 5 bytes, so it exceeds int32 range
+      byte = bytes[i++]!;
+      if (i > 5) {
         throw new RangeError(
           "Varint requires more than 5 bytes (int32 range exceeded)",
         );
       }
-      // On the 5th byte, bits 4-6 must be zero (only bits 0-3 encode valid int32 data)
-      if (bytesRead === 5 && (byte & 0x70) !== 0) {
+      if (i === 5 && (byte & 0x70) !== 0) {
         throw new RangeError(
           "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
         );
@@ -243,34 +244,58 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
       shift += 7;
     } while ((byte & 0x80) !== 0);
 
-    this.pos = pos;
+    this.pos = pos + i;
+    return (result >>> 1) ^ -(result & 1);
+  }
 
-    // Zig-zag decode: (n >>> 1) ^ -(n & 1)
-    const decoded = (result >>> 1) ^ -(result & 1);
+  private readIntSlow(): number {
+    let result = 0;
+    let shift = 0;
+    let i = 0;
+    let byte: number;
 
-    // Note: The 32-bit arithmetic above ensures the result is always within int32 range
-    return decoded;
+    do {
+      byte = this.getByteAt(this.pos++);
+      i++;
+      if (i > 5) {
+        throw new RangeError(
+          "Varint requires more than 5 bytes (int32 range exceeded)",
+        );
+      }
+      if (i === 5 && (byte & 0x70) !== 0) {
+        throw new RangeError(
+          "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
+        );
+      }
+      result |= (byte & 0x7f) << shift;
+      shift += 7;
+    } while ((byte & 0x80) !== 0);
+
+    return (result >>> 1) ^ -(result & 1);
   }
 
   /**
    * Reads a variable-length zig-zag encoded 64-bit signed integer as bigint.
    *
-   * Performance optimization: Uses BigInt.asUintN(64, ...) on each accumulation to signal
-   * to V8's Turbofan that these are 64-bit operations, enabling int64 lowering optimizations.
-   * See https://groups.google.com/g/v8-reviews/c/SF2tmxAUpB8 and
-   * https://v8.dev/blog/bigint#optimization-considerations for details.
-   *
-   * In local benchmarks, this approach is approximately 13% faster than operations without
-   * explicit 64-bit truncation.
+   * Optimization: Attempts to read up to 10 bytes at once. Falls back to
+   * byte-by-byte reading for small buffers near EOF.
+   * Uses BigInt.asUintN(64, ...) to enable V8's int64 lowering optimizations.
    */
   readLong(): bigint {
-    let pos = this.pos;
+    const pos = this.pos;
+    let bytes: Readonly<Uint8Array>;
+    try {
+      bytes = this.buffer.read(pos, 10);
+    } catch {
+      return this.readLongSlow();
+    }
     let shift = 0n;
     let result = 0n;
+    let i = 0;
     let byte: number;
 
     do {
-      byte = this.getByteAt(pos++);
+      byte = bytes[i++]!;
       if (shift >= 64n) {
         throw new RangeError(
           "Varint requires more than 10 bytes (int64 range exceeded)",
@@ -281,7 +306,29 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
       shift += 7n;
     } while ((byte & 0x80) !== 0);
 
-    this.pos = pos;
+    this.pos = pos + i;
+
+    const shifted = BigInt.asUintN(64, result >> 1n);
+    const sign = BigInt.asUintN(64, -(result & 1n));
+    return BigInt.asIntN(64, shifted ^ sign);
+  }
+
+  private readLongSlow(): bigint {
+    let shift = 0n;
+    let result = 0n;
+    let byte: number;
+
+    do {
+      byte = this.getByteAt(this.pos++);
+      if (shift >= 64n) {
+        throw new RangeError(
+          "Varint requires more than 10 bytes (int64 range exceeded)",
+        );
+      }
+      const chunk = BigInt.asUintN(64, BigInt(byte & 0x7f) << shift);
+      result = BigInt.asUintN(64, result | chunk);
+      shift += 7n;
+    } while ((byte & 0x80) !== 0);
 
     const shifted = BigInt.asUintN(64, result >> 1n);
     const sign = BigInt.asUintN(64, -(result & 1n));
@@ -293,13 +340,32 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     this.skipLong();
   }
 
-  /** Skips a zig-zag encoded 64-bit integer, advancing past continuation bytes. */
+  /**
+   * Skips a zig-zag encoded 64-bit integer, advancing past continuation bytes.
+   *
+   * Optimization: Attempts to read up to 10 bytes at once. Falls back to
+   * byte-by-byte reading for small buffers near EOF.
+   */
   skipLong(): void {
-    let pos = this.pos;
-    while (this.getByteAt(pos++) & 0x80) {
-      /* no-op */
+    const pos = this.pos;
+    let bytes: Readonly<Uint8Array>;
+    try {
+      bytes = this.buffer.read(pos, 10);
+    } catch {
+      this.skipLongSlow();
+      return;
     }
-    this.pos = pos;
+    let i = 0;
+    while (bytes[i++]! & 0x80) {
+      /* continue until we find a byte without continuation bit */
+    }
+    this.pos = pos + i;
+  }
+
+  private skipLongSlow(): void {
+    while (this.getByteAt(this.pos++) & 0x80) {
+      /* continue until we find a byte without continuation bit */
+    }
   }
 
   /** Reads a 32-bit little-endian floating point number. */
@@ -342,28 +408,46 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     this.pos += len;
   }
 
-  /** Reads a length-prefixed byte sequence. */
+  /**
+   * Reads a length-prefixed byte sequence.
+   * Uses readInt() for lengths (string/bytes lengths are practically always < 2GB).
+   */
   readBytes(): Readonly<Uint8Array> {
-    const length = bigIntToSafeNumber(this.readLong(), "readBytes length");
+    const length = this.readInt();
+    if (length < 0) {
+      throw new RangeError(`Invalid negative bytes length: ${length}`);
+    }
     return this.readFixed(length);
   }
 
   /** Skips a length-prefixed byte sequence. */
   skipBytes(): void {
-    const len = bigIntToSafeNumber(this.readLong(), "skipBytes length");
+    const len = this.readInt();
+    if (len < 0) {
+      throw new RangeError(`Invalid negative bytes length: ${len}`);
+    }
     this.pos += len;
   }
 
-  /** Reads a length-prefixed UTF-8 string. */
+  /**
+   * Reads a length-prefixed UTF-8 string.
+   * Uses readInt() since string lengths are practically always < 2GB.
+   */
   readString(): string {
-    const len = bigIntToSafeNumber(this.readLong(), "readString length");
+    const len = this.readInt();
+    if (len < 0) {
+      throw new RangeError(`Invalid negative string length: ${len}`);
+    }
     const bytes = this.readFixed(len);
     return decode(bytes);
   }
 
   /** Skips a length-prefixed UTF-8 string. */
   skipString(): void {
-    const len = bigIntToSafeNumber(this.readLong(), "skipString length");
+    const len = this.readInt();
+    if (len < 0) {
+      throw new RangeError(`Invalid negative string length: ${len}`);
+    }
     this.pos += len;
   }
 
