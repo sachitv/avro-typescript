@@ -6,11 +6,14 @@ import type {
   SyncReadableTapLike,
   SyncWritableTapLike,
 } from "../../serialization/tap_sync.ts";
+import { DirectSyncReadableTap } from "../../serialization/direct_tap_sync.ts";
 import { bigIntToSafeNumber } from "../../serialization/conversion.ts";
 import { BaseType } from "../base_type.ts";
 import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
 import type { ErrorHook } from "../error.ts";
+import { IntType } from "../primitive/int_type.ts";
+import { StringType } from "../primitive/string_type.ts";
 
 /**
  * Parameters for creating a MapType.
@@ -218,20 +221,74 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
   }
 
   /**
-   * Reads the map from a sync tap without asynchronous operations.
-   */
-  /**
-   * Resolves nested map entries synchronously using the value resolver.
+   * Reads the map from a sync tap.
+   * Optimized: inlined loop, uses readInt() for block counts.
    */
   public override readSync(tap: SyncReadableTapLike): Map<string, T> {
+    if (tap instanceof DirectSyncReadableTap) {
+      return this.#readSyncDirect(tap);
+    }
     const result = new Map<string, T>();
-    readMapIntoSync(
-      tap,
-      (innerTap) => this.#valuesType.readSync(innerTap),
-      (key, value) => {
-        result.set(key, value);
-      },
-    );
+    const valuesType = this.#valuesType;
+    while (true) {
+      let count = tap.readInt();
+      if (count === 0) break;
+      if (count < 0) {
+        count = -count;
+        tap.skipLong();
+      }
+      for (let i = 0; i < count; i++) {
+        const key = tap.readString();
+        result.set(key, valuesType.readSync(tap));
+      }
+    }
+    return result;
+  }
+
+  #readSyncDirect(tap: DirectSyncReadableTap): Map<string, T> {
+    const valuesType = this.#valuesType;
+
+    if (valuesType instanceof IntType) {
+      const result = new Map<string, number>();
+      while (true) {
+        let count = tap.readInt();
+        if (count === 0) break;
+        if (count < 0) {
+          count = -count;
+          tap.skipLong();
+        }
+        tap.readMapIntBlockInto(result, count);
+      }
+      return result as Map<string, T>;
+    }
+
+    if (valuesType instanceof StringType) {
+      const result = new Map<string, string>();
+      while (true) {
+        let count = tap.readInt();
+        if (count === 0) break;
+        if (count < 0) {
+          count = -count;
+          tap.skipLong();
+        }
+        tap.readMapStringBlockInto(result, count);
+      }
+      return result as Map<string, T>;
+    }
+
+    const result = new Map<string, T>();
+    while (true) {
+      let count = tap.readInt();
+      if (count === 0) break;
+      if (count < 0) {
+        count = -count;
+        tap.skipLong();
+      }
+      for (let i = 0; i < count; i++) {
+        const key = tap.readString();
+        result.set(key, valuesType.readSync(tap));
+      }
+    }
     return result;
   }
 
@@ -425,13 +482,19 @@ class MapResolver<T> extends Resolver<Map<string, T>> {
 
   public override readSync(tap: SyncReadableTapLike): Map<string, T> {
     const result = new Map<string, T>();
-    readMapIntoSync(
-      tap,
-      (innerTap) => this.#valueResolver.readSync(innerTap),
-      (key, value) => {
-        result.set(key, value);
-      },
-    );
+    const valueResolver = this.#valueResolver;
+    while (true) {
+      let count = tap.readInt();
+      if (count === 0) break;
+      if (count < 0) {
+        count = -count;
+        tap.skipLong();
+      }
+      for (let i = 0; i < count; i++) {
+        const key = tap.readString();
+        result.set(key, valueResolver.readSync(tap));
+      }
+    }
     return result;
   }
 }

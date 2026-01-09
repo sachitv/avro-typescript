@@ -1155,6 +1155,20 @@ describe("RecordType", () => {
     });
   });
 
+  describe("strategy accessors", () => {
+    it("returns reader strategy via getReaderStrategy", () => {
+      const type = createRecord({
+        name: "example.ReaderStrategyTest",
+        fields: [{ name: "id", type: new IntType() }],
+      });
+
+      const strategy = type.getReaderStrategy();
+      assert(strategy !== undefined);
+      assert(typeof strategy.compileFieldReader === "function");
+      assert(typeof strategy.compileSyncFieldReader === "function");
+    });
+  });
+
   describe("Field methods", () => {
     it("gets fields by name", () => {
       const type = createRecord({
