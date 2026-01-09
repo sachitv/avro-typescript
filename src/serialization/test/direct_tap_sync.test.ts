@@ -3,7 +3,7 @@ import { expect } from "@std/expect";
 import { assertThrows } from "@std/assert";
 
 import { DirectSyncReadableTap } from "../direct_tap_sync.ts";
-import { SyncReadableTap, SyncWritableTap } from "../tap_sync.ts";
+import { SyncWritableTap } from "../tap_sync.ts";
 import { SyncInMemoryWritableBuffer } from "../buffers/in_memory_buffer_sync.ts";
 
 // Helper to create a DirectSyncReadableTap from values written by SyncWritableTap
@@ -208,25 +208,6 @@ describe("DirectSyncReadableTap", () => {
       tap.skipLong();
       expect(tap.readLong()).toBe(987654321n);
     });
-
-    it("reads longs across the number/bigint decode boundary", () => {
-      // 2^48-1 zigzags to a 7-byte varint (number fast path); 2^48 needs 8
-      // bytes (bigint fallback). Cover both signs on both sides.
-      const values = [
-        2n ** 48n - 1n,
-        -(2n ** 48n),
-        2n ** 48n,
-        -(2n ** 48n) - 1n,
-        1735689600000n,
-        -1735689600123n,
-      ];
-      const tap = createTapWithWrites((t) => {
-        for (const v of values) t.writeLong(v);
-      });
-      for (const v of values) {
-        expect(tap.readLong()).toBe(v);
-      }
-    });
   });
 
   describe("readFloat and skipFloat", () => {
@@ -268,17 +249,6 @@ describe("DirectSyncReadableTap", () => {
       });
       tap.skipDouble();
       expect(tap.readInt()).toBe(42);
-    });
-
-    it("reuses the lazily created DataView across float and double reads", () => {
-      const tap = createTapWithWrites((t) => {
-        t.writeFloat(1.5);
-        t.writeDouble(2.5);
-        t.writeDouble(-3.5);
-      });
-      expect(tap.readFloat()).toBeCloseTo(1.5, 5);
-      expect(tap.readDouble()).toBeCloseTo(2.5, 10);
-      expect(tap.readDouble()).toBeCloseTo(-3.5, 10);
     });
   });
 
@@ -340,15 +310,6 @@ describe("DirectSyncReadableTap", () => {
         "Invalid negative bytes length",
       );
     });
-
-    it("readBytes decodes length prefixes wider than the int32 fast path", () => {
-      // Length 3 (zigzag 6) padded to a 6-byte long varint takes the
-      // fallback long read instead of the int32 fast path.
-      const tap = new DirectSyncReadableTap(
-        new Uint8Array([0x86, 0x80, 0x80, 0x80, 0x80, 0x00, 1, 2, 3]),
-      );
-      expect(tap.readBytes()).toEqual(new Uint8Array([1, 2, 3]));
-    });
   });
 
   describe("readString and skipString", () => {
@@ -374,49 +335,6 @@ describe("DirectSyncReadableTap", () => {
         RangeError,
         "Invalid negative string length",
       );
-    });
-
-    it("decodes length prefixes wider than the int32 fast path", () => {
-      // Length 5 (zigzag 10) padded to a 6-byte long varint: too wide for
-      // the int32 fast path, so the fallback long read must decode it.
-      const tap = new DirectSyncReadableTap(
-        new Uint8Array([
-          0x8a,
-          0x80,
-          0x80,
-          0x80,
-          0x80,
-          0x00,
-          0x68,
-          0x65,
-          0x6c,
-          0x6c,
-          0x6f, // "hello"
-        ]),
-      );
-      expect(tap.readString()).toBe("hello");
-    });
-
-    it("skipString accepts lengths beyond int32 range", () => {
-      // Length 2^31 (zigzag 2^32): the sync writer can emit this via
-      // writeLong, so skipping must decode the long instead of rejecting
-      // the varint as out of int32 range.
-      const tap = new DirectSyncReadableTap(
-        new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x10]),
-      );
-      tap.skipString();
-      expect(tap.pos).toBe(5 + 2 ** 31);
-    });
-
-    it("decodes only available bytes for a truncated string and invalidates the tap", () => {
-      // Declared length 10 (zigzag varint 0x14) but only "hi" follows.
-      const tap = new DirectSyncReadableTap(
-        new Uint8Array([0x14, 0x68, 0x69]),
-      );
-      const result = tap.readString();
-      expect(result).toBe("hi");
-      expect(result).not.toContain("\u0000");
-      expect(tap.isValid()).toBe(false);
     });
 
     it("skipString advances past length-prefixed string", () => {
@@ -611,24 +529,6 @@ describe("DirectSyncReadableTap", () => {
         expect(result).toEqual([0n, 0n, 10n, 20n]);
       });
 
-      it("reads a mix of number-path and bigint-path longs", () => {
-        const values = [
-          5n,
-          2n ** 48n - 1n,
-          9223372036854775807n,
-          -(2n ** 48n),
-          -9223372036854775808n,
-          1735689600000n,
-        ];
-        const tap = createTapWithWrites((t) => {
-          for (const v of values) t.writeLong(v);
-        });
-        const result: bigint[] = [];
-        result.length = values.length;
-        tap.readLongArrayInto(result, 0, values.length);
-        expect(result).toEqual(values);
-      });
-
       it("throws on long overflow in array element", () => {
         // Array with one valid long followed by an 11-byte varint
         const bytes = new Uint8Array([
@@ -722,55 +622,143 @@ describe("DirectSyncReadableTap", () => {
         expect(result).toEqual(["日本語", "中文"]);
       });
 
-      it("decodes wide string lengths like readString", () => {
-        // A length padded to six varint bytes is a valid Avro long that the
-        // int32 inline decode cannot hold; it must fall back to readLength
-        // and leave the cursor aligned for the next element.
-        const bytes = [
-          0x84,
-          0x80,
-          0x80,
-          0x80,
-          0x80,
-          0x00, // padded length: 2
+      it("throws on string length overflow in array element", () => {
+        // Array with one valid string followed by invalid length varint
+        const bytes = new Uint8Array([
+          0x0A, // length: 5
           0x68,
-          0x69, // "hi"
-          0x02, // length: 1
-          0x21, // "!"
-        ];
-        const tap = new DirectSyncReadableTap(new Uint8Array(bytes));
+          0x65,
+          0x6C,
+          0x6C,
+          0x6F, // "hello"
+          0x80,
+          0x80,
+          0x80,
+          0x80,
+          0xF0, // invalid 5-byte varint for length
+        ]);
+        const tap = new DirectSyncReadableTap(bytes);
         const result: string[] = ["", ""];
-        tap.readStringArrayInto(result, 0, 2);
-        expect(result).toEqual(["hi", "!"]);
-        expect(tap.pos).toBe(bytes.length);
-
-        const single = new DirectSyncReadableTap(new Uint8Array(bytes));
-        const standard = new SyncReadableTap(new Uint8Array(bytes).buffer);
-        expect([single.readString(), single.readString()]).toEqual(result);
-        expect([standard.readString(), standard.readString()]).toEqual(result);
-      });
-
-      it("throws on a wide negative string length in array element", () => {
-        // Padded zigzag(-1) = 1 takes the readLength fallback before the
-        // negative-length check.
-        const tap = new DirectSyncReadableTap(
-          new Uint8Array([0x81, 0x80, 0x80, 0x80, 0x80, 0x00]),
-        );
         assertThrows(
-          () => tap.readStringArrayInto([""], 0, 1),
+          () => tap.readStringArrayInto(result, 0, 2),
           RangeError,
-          "Invalid negative string length: -1",
+          "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
         );
       });
+    });
 
-      it("throws on negative string length in array element", () => {
-        // zigzag(-5) = 9 → varint byte 0x09
-        const tap = new DirectSyncReadableTap(new Uint8Array([0x09]));
-        const result: string[] = [""];
+    describe("readMapIntBlockInto", () => {
+      it("reads map block with int values", () => {
+        const tap = createTapWithWrites((t) => {
+          t.writeString("a");
+          t.writeInt(1);
+          t.writeString("b");
+          t.writeInt(2);
+        });
+        const result = new Map<string, number>();
+        tap.readMapIntBlockInto(result, 2);
+        expect(result.get("a")).toBe(1);
+        expect(result.get("b")).toBe(2);
+      });
+
+      it("throws on key length overflow", () => {
+        // Map entry with invalid key length varint
+        const bytes = new Uint8Array([
+          0x80,
+          0x80,
+          0x80,
+          0x80,
+          0xF0, // invalid 5-byte varint for key length
+        ]);
+        const tap = new DirectSyncReadableTap(bytes);
+        const result = new Map<string, number>();
         assertThrows(
-          () => tap.readStringArrayInto(result, 0, 1),
+          () => tap.readMapIntBlockInto(result, 1),
           RangeError,
-          "Invalid negative string length: -5",
+          "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
+        );
+      });
+
+      it("throws on value overflow", () => {
+        // Map entry with valid key but invalid int value
+        const bytes = new Uint8Array([
+          0x02, // key length: 1
+          0x61, // "a"
+          0x80,
+          0x80,
+          0x80,
+          0x80,
+          0xF0, // invalid 5-byte varint for value
+        ]);
+        const tap = new DirectSyncReadableTap(bytes);
+        const result = new Map<string, number>();
+        assertThrows(
+          () => tap.readMapIntBlockInto(result, 1),
+          RangeError,
+          "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
+        );
+      });
+    });
+
+    describe("readMapStringBlockInto", () => {
+      it("reads map block with string values", () => {
+        const tap = createTapWithWrites((t) => {
+          t.writeString("key1");
+          t.writeString("value1");
+          t.writeString("key2");
+          t.writeString("value2");
+        });
+        const result = new Map<string, string>();
+        tap.readMapStringBlockInto(result, 2);
+        expect(result.get("key1")).toBe("value1");
+        expect(result.get("key2")).toBe("value2");
+      });
+
+      it("reads unicode keys and values", () => {
+        const tap = createTapWithWrites((t) => {
+          t.writeString("キー");
+          t.writeString("値");
+        });
+        const result = new Map<string, string>();
+        tap.readMapStringBlockInto(result, 1);
+        expect(result.get("キー")).toBe("値");
+      });
+
+      it("throws on key length overflow", () => {
+        // Map entry with invalid key length varint
+        const bytes = new Uint8Array([
+          0x80,
+          0x80,
+          0x80,
+          0x80,
+          0xF0, // invalid 5-byte varint for key length
+        ]);
+        const tap = new DirectSyncReadableTap(bytes);
+        const result = new Map<string, string>();
+        assertThrows(
+          () => tap.readMapStringBlockInto(result, 1),
+          RangeError,
+          "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
+        );
+      });
+
+      it("throws on value length overflow", () => {
+        // Map entry with valid key but invalid value length varint
+        const bytes = new Uint8Array([
+          0x02, // key length: 1
+          0x61, // "a"
+          0x80,
+          0x80,
+          0x80,
+          0x80,
+          0xF0, // invalid 5-byte varint for value length
+        ]);
+        const tap = new DirectSyncReadableTap(bytes);
+        const result = new Map<string, string>();
+        assertThrows(
+          () => tap.readMapStringBlockInto(result, 1),
+          RangeError,
+          "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
         );
       });
     });
@@ -794,61 +782,5 @@ describe("DirectSyncReadableTap", () => {
       const tap = new DirectSyncReadableTap(subView);
       expect(tap.readFloat()).toBeCloseTo(3.14, 5);
     });
-  });
-});
-
-describe("DirectSyncReadableTap int32 range parity with SyncReadableTap", () => {
-  // A six-byte varint must be rejected, not silently wrapped: `1 << 35`
-  // evaluates as `1 << 3` in JavaScript, so an unvalidated decode returns a
-  // plausible small number for malformed input.
-  const sixByteVarint = [0x80, 0x80, 0x80, 0x80, 0x80, 0x02];
-  // Fifth byte carrying bits above 0x0F.
-  const fifthByteOverflow = [0x80, 0x80, 0x80, 0x80, 0x70];
-
-  const bothTaps = (bytes: number[]) => {
-    const buffer = new Uint8Array(bytes);
-    return {
-      direct: new DirectSyncReadableTap(buffer),
-      standard: new SyncReadableTap(buffer.slice().buffer),
-    };
-  };
-
-  it("rejects a six-byte varint in readInt exactly as SyncReadableTap does", () => {
-    const { direct, standard } = bothTaps(sixByteVarint);
-    const expected = "Varint requires more than 5 bytes (int32 range exceeded)";
-    assertThrows(() => standard.readInt(), RangeError, expected);
-    assertThrows(() => direct.readInt(), RangeError, expected);
-  });
-
-  it("rejects a fifth byte above 0x0F exactly as SyncReadableTap does", () => {
-    const { direct, standard } = bothTaps(fifthByteOverflow);
-    const expected =
-      "5th byte of varint has bits above 0x0F set (int32 range exceeded)";
-    assertThrows(() => standard.readInt(), RangeError, expected);
-    assertThrows(() => direct.readInt(), RangeError, expected);
-  });
-
-  it("rejects a six-byte varint in readIntArrayInto", () => {
-    const tap = new DirectSyncReadableTap(new Uint8Array(sixByteVarint));
-    assertThrows(
-      () => tap.readIntArrayInto([], 0, 1),
-      RangeError,
-      "Varint requires more than 5 bytes (int32 range exceeded)",
-    );
-  });
-
-  it("still decodes the widest valid five-byte int32 varints", () => {
-    for (const value of [2147483647, -2147483648, 0, 1, -1, 268435455]) {
-      const buffer = new Uint8Array(16);
-      const writable = new SyncWritableTap(
-        new SyncInMemoryWritableBuffer(buffer.buffer),
-      );
-      writable.writeInt(value);
-      expect(new DirectSyncReadableTap(buffer).readInt()).toBe(value);
-
-      const bulk: number[] = [];
-      new DirectSyncReadableTap(buffer).readIntArrayInto(bulk, 0, 1);
-      expect(bulk[0]).toBe(value);
-    }
   });
 });

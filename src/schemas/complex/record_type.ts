@@ -57,15 +57,9 @@ import { RecordWriterCache } from "./record_writer_cache.ts";
 import type {
   CompiledReader,
   CompiledSyncReader,
-  CompiledSyncRecordBlockReader,
   RecordReaderStrategy,
 } from "./record_reader_strategy.ts";
-import {
-  compiledRecordReader,
-  compiledSyncRecordBlockReader,
-  compiledSyncRecordReader,
-  defaultReaderStrategy,
-} from "./record_reader_strategy.ts";
+import { defaultReaderStrategy } from "./record_reader_strategy.ts";
 import { RecordReaderCache } from "./record_reader_cache.ts";
 
 /**
@@ -99,8 +93,8 @@ export interface RecordTypeParams extends ResolvedNames {
   /**
    * Optional reader strategy for customizing how record readers are compiled.
    *
-   * - `CompiledReaderStrategy` (default): Inlines primitive tap methods for performance.
-   * - `InterpretedReaderStrategy`: Delegates to type.read() for simplicity.
+   * - \`CompiledReaderStrategy\` (default): Inlines primitive tap methods for performance.
+   * - \`InterpretedReaderStrategy\`: Delegates to type.read() for simplicity.
    */
   readerStrategy?: RecordReaderStrategy;
 }
@@ -109,9 +103,7 @@ export interface RecordTypeParams extends ResolvedNames {
  * Avro \`record\` type supporting ordered fields, aliases, and schema evolution.
  */
 export class RecordType extends NamedType<Record<string, unknown>> {
-  /** Internal marker for structural record-type detection in hot paths. */
   static readonly __AVRO_RECORD_TYPE__ = true;
-
   #fields: RecordField[];
   #fieldNameToIndex: Map<string, number>;
   #fieldsThunk?: () => RecordFieldParams[];
@@ -161,38 +153,8 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     return this.#writerCache.getStrategy();
   }
 
-  /** Gets the reader strategy used by this record type. */
   public getReaderStrategy(): RecordReaderStrategy {
     return this.#readerCache.getStrategy();
-  }
-
-  /** Provides the assembled async reader to composite types. */
-  public [compiledRecordReader](): CompiledReader {
-    this.#ensureFields();
-    // Initial compilation can return a recursive placeholder; the cache then
-    // exposes the assembled reader on the second lookup.
-    this.#getOrCreateCompiledReader();
-    return this.#getOrCreateCompiledReader();
-  }
-
-  /** Provides the assembled sync reader to composite types. */
-  public [compiledSyncRecordReader](): CompiledSyncReader {
-    this.#ensureFields();
-    // Keep the sync path identical to the async recursive-reader protocol.
-    this.#getOrCreateCompiledSyncReader();
-    return this.#getOrCreateCompiledSyncReader();
-  }
-
-  /** Provides the internal fused block-reader capability to composite types. */
-  public [compiledSyncRecordBlockReader](): CompiledSyncRecordBlockReader {
-    this.#ensureFields();
-    return this.#readerCache.getOrCreateSyncRecordBlockReader(
-      {
-        fieldNames: this.#fieldNames,
-        fieldTypes: this.#fieldTypes,
-      },
-      (type) => (type as RecordType).#getOrCreateCompiledSyncReader(),
-    );
   }
 
   /**
@@ -353,6 +315,8 @@ export class RecordType extends NamedType<Record<string, unknown>> {
         fieldNames: this.#fieldNames,
         fieldTypes: this.#fieldTypes,
       },
+      // This callback is only invoked by the strategy for RecordType fields.
+      // Non-record types are handled directly by the strategy's compileFieldReader.
       (type) => (type as RecordType).#getOrCreateCompiledReader(),
     );
   }
@@ -364,6 +328,8 @@ export class RecordType extends NamedType<Record<string, unknown>> {
         fieldNames: this.#fieldNames,
         fieldTypes: this.#fieldTypes,
       },
+      // This callback is only invoked by the strategy for RecordType fields.
+      // Non-record types are handled directly by the strategy's compileSyncFieldReader.
       (type) => (type as RecordType).#getOrCreateCompiledSyncReader(),
     );
   }

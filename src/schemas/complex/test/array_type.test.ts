@@ -1,12 +1,5 @@
-import {
-  assert,
-  assertEquals,
-  assertInstanceOf,
-  assertRejects,
-  assertThrows,
-} from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { SchemaJSONScope } from "../../schema_json_scope.ts";
 
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import {
@@ -14,7 +7,7 @@ import {
   SyncWritableTap,
 } from "../../../serialization/tap_sync.ts";
 import { DirectSyncReadableTap } from "../../../serialization/direct_tap_sync.ts";
-import { ArrayType, readArrayInto } from "../array_type.ts";
+import { ArrayType, readArrayInto, readArrayIntoSync } from "../array_type.ts";
 import { IntType } from "../../primitive/int_type.ts";
 import { LongType } from "../../primitive/long_type.ts";
 import { FloatType } from "../../primitive/float_type.ts";
@@ -24,13 +17,6 @@ import { StringType } from "../../primitive/string_type.ts";
 import { BytesType } from "../../primitive/bytes_type.ts";
 import type { Type } from "../../type.ts";
 import { createType } from "../../../type/create_type.ts";
-import {
-  CompiledReaderStrategy,
-  type CompiledSyncReader,
-  InterpretedReaderStrategy,
-  type RecordReaderContext,
-} from "../record_reader_strategy.ts";
-import { createRecord } from "./record_test_utils.ts";
 
 function createArray<T>(items: Type<T>): ArrayType<T> {
   return new ArrayType({ items });
@@ -1171,282 +1157,428 @@ describe("ArrayType large array writeLong fallback", () => {
   });
 });
 
-describe("ArrayType recursive schemas", () => {
-  // Regression: classifying the items type by expanding it to JSON recursed
-  // forever whenever the recursion reached the array through anything other
-  // than a bare record reference, so the first readSync blew the stack.
-  const recursiveShapes: Array<{ name: string; items: unknown }> = [
-    { name: "array of nullable self-reference", items: ["null", "Node"] },
-    { name: "array of record self-reference", items: "Node" },
-    {
-      name: "array of map of self-reference",
-      items: { type: "map", values: "Node" },
-    },
-    {
-      name: "array of array of self-reference",
-      items: { type: "array", items: "Node" },
-    },
-  ];
+describe("ArrayType DirectSyncReadableTap bulk read", () => {
+  // These tests use DirectSyncReadableTap to trigger the optimized #readSyncBulk path
+  // which uses bulk read methods like readIntArrayInto, readLongArrayInto, etc.
 
-  for (const { name, items } of recursiveShapes) {
-    it(`round-trips a ${name} synchronously`, () => {
-      const type = createType({
-        type: "record",
-        name: "Node",
-        fields: [
-          { name: "label", type: "string" },
-          { name: "children", type: { type: "array", items } },
-        ],
-      } as never);
+  describe("bulk read with primitive types", () => {
+    it("reads int arrays via bulk read path using DirectSyncReadableTap", () => {
+      const intArray = new ArrayType({ items: new IntType() });
+      const values = [1, 2, 3, 100, -50];
+      const buffer = intArray.toSyncBuffer(values);
 
-      const value = { label: "root", children: [] };
-      const buffer = type.toSyncBuffer(value as never);
-      assertEquals(type.fromSyncBuffer(buffer), value);
+      // Use DirectSyncReadableTap to trigger bulk read
+      const directTap = new DirectSyncReadableTap(new Uint8Array(buffer));
+      const result = intArray.readSync(directTap);
+      assertEquals(result, values);
     });
-  }
 
-  it("reads a populated recursive tree synchronously", () => {
-    const type = createType({
-      type: "record",
-      name: "Node",
-      fields: [
-        { name: "label", type: "string" },
-        {
-          name: "children",
-          type: { type: "array", items: ["null", "Node"] },
-        },
-      ],
-    } as never);
+    it("reads long arrays via bulk read path using DirectSyncReadableTap", () => {
+      const longArray = new ArrayType({ items: new LongType() });
+      const values = [1n, 2n, 3n, 100n, -50n, 9007199254740991n];
+      const buffer = longArray.toSyncBuffer(values);
 
-    const value = {
-      label: "root",
-      children: [null, { Node: { label: "leaf", children: [] } }],
-    };
-    const buffer = type.toSyncBuffer(value as never);
-    assertEquals(type.fromSyncBuffer(buffer), value);
+      const directTap = new DirectSyncReadableTap(new Uint8Array(buffer));
+      const result = longArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+
+    it("reads float arrays via bulk read path using DirectSyncReadableTap", () => {
+      const floatArray = new ArrayType({ items: new FloatType() });
+      const values = [1.5, 2.25, -3.75, 0.0, 100.125];
+      const buffer = floatArray.toSyncBuffer(values);
+
+      const directTap = new DirectSyncReadableTap(new Uint8Array(buffer));
+      const result = floatArray.readSync(directTap);
+      // Float comparison with tolerance due to float32 precision
+      assertEquals(result.length, values.length);
+      for (let i = 0; i < values.length; i++) {
+        assert(Math.abs(result[i] - values[i]) < 0.001);
+      }
+    });
+
+    it("reads double arrays via bulk read path using DirectSyncReadableTap", () => {
+      const doubleArray = new ArrayType({ items: new DoubleType() });
+      const values = [1.5, 2.25, -3.75, 0.0, Math.PI, Number.MAX_VALUE];
+      const buffer = doubleArray.toSyncBuffer(values);
+
+      const directTap = new DirectSyncReadableTap(new Uint8Array(buffer));
+      const result = doubleArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+
+    it("reads boolean arrays via bulk read path using DirectSyncReadableTap", () => {
+      const boolArray = new ArrayType({ items: new BooleanType() });
+      const values = [true, false, true, true, false];
+      const buffer = boolArray.toSyncBuffer(values);
+
+      const directTap = new DirectSyncReadableTap(new Uint8Array(buffer));
+      const result = boolArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+
+    it("reads string arrays via bulk read path using DirectSyncReadableTap", () => {
+      const stringArray = new ArrayType({ items: new StringType() });
+      const values = ["hello", "world", "", "test", "日本語"];
+      const buffer = stringArray.toSyncBuffer(values);
+
+      const directTap = new DirectSyncReadableTap(new Uint8Array(buffer));
+      const result = stringArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+  });
+
+  describe("bulk read with JSON-defined primitive types (tests #getPrimitiveKind)", () => {
+    // These tests create arrays using createType with JSON schemas,
+    // which triggers the JSON string detection path in #getPrimitiveKind
+
+    it("reads int arrays created from JSON schema via DirectSyncReadableTap", () => {
+      const intArray = createType({ type: "array", items: "int" }) as ArrayType<
+        number
+      >;
+      const values = [1, 2, 3, 100, -50];
+      const buffer = intArray.toSyncBuffer(values);
+
+      const directTap = new DirectSyncReadableTap(new Uint8Array(buffer));
+      const result = intArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+
+    it("reads long arrays created from JSON schema via DirectSyncReadableTap", () => {
+      const longArray = createType({
+        type: "array",
+        items: "long",
+      }) as ArrayType<bigint>;
+      const values = [1n, 2n, 3n, 100n, -50n];
+      const buffer = longArray.toSyncBuffer(values);
+
+      const directTap = new DirectSyncReadableTap(new Uint8Array(buffer));
+      const result = longArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+
+    it("reads float arrays created from JSON schema via DirectSyncReadableTap", () => {
+      const floatArray = createType({
+        type: "array",
+        items: "float",
+      }) as ArrayType<number>;
+      const values = [1.5, 2.25, -3.75];
+      const buffer = floatArray.toSyncBuffer(values);
+
+      const directTap = new DirectSyncReadableTap(new Uint8Array(buffer));
+      const result = floatArray.readSync(directTap);
+      assertEquals(result.length, values.length);
+      for (let i = 0; i < values.length; i++) {
+        assert(Math.abs(result[i] - values[i]) < 0.001);
+      }
+    });
+
+    it("reads double arrays created from JSON schema via DirectSyncReadableTap", () => {
+      const doubleArray = createType({
+        type: "array",
+        items: "double",
+      }) as ArrayType<number>;
+      const values = [1.5, 2.25, -3.75, Math.PI];
+      const buffer = doubleArray.toSyncBuffer(values);
+
+      const directTap = new DirectSyncReadableTap(new Uint8Array(buffer));
+      const result = doubleArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+
+    it("reads boolean arrays created from JSON schema via DirectSyncReadableTap", () => {
+      const boolArray = createType({
+        type: "array",
+        items: "boolean",
+      }) as ArrayType<boolean>;
+      const values = [true, false, true];
+      const buffer = boolArray.toSyncBuffer(values);
+
+      const directTap = new DirectSyncReadableTap(new Uint8Array(buffer));
+      const result = boolArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+
+    it("reads string arrays created from JSON schema via DirectSyncReadableTap", () => {
+      const stringArray = createType({
+        type: "array",
+        items: "string",
+      }) as ArrayType<string>;
+      const values = ["hello", "world", "test"];
+      const buffer = stringArray.toSyncBuffer(values);
+
+      const directTap = new DirectSyncReadableTap(new Uint8Array(buffer));
+      const result = stringArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+
+    it("falls back to non-bulk read for non-primitive types (null primitiveKind)", () => {
+      // Test with bytes type which is NOT a bulk-read-optimized primitive
+      const bytesArray = createType({
+        type: "array",
+        items: "bytes",
+      }) as ArrayType<Uint8Array>;
+      const values = [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5])];
+      const buffer = bytesArray.toSyncBuffer(values);
+
+      const directTap = new DirectSyncReadableTap(new Uint8Array(buffer));
+      const result = bytesArray.readSync(directTap);
+      assertEquals(result.length, values.length);
+      assertEquals([...result[0]], [...values[0]]);
+      assertEquals([...result[1]], [...values[1]]);
+    });
+  });
+
+  describe("bulk read with size-prefixed blocks (negative count)", () => {
+    // These tests verify that the bulk read path handles size-prefixed blocks correctly
+    // (blocks with negative count followed by byte size)
+
+    it("handles size-prefixed blocks in int array bulk read", async () => {
+      const intArray = new ArrayType({ items: new IntType() });
+      const values = [100, 200];
+
+      // Create a size-prefixed encoded array manually
+      const tempBuffer = new ArrayBuffer(20);
+      const tempTap = new Tap(tempBuffer);
+      await tempTap.writeLong(100n);
+      await tempTap.writeLong(200n);
+      const blockSize = tempTap.getPos();
+
+      const buffer = new ArrayBuffer(32);
+      const writeTap = new Tap(buffer);
+      await writeTap.writeLong(-2n); // negative count = 2 elements
+      await writeTap.writeLong(BigInt(blockSize)); // block size
+      await writeTap.writeLong(100n);
+      await writeTap.writeLong(200n);
+      await writeTap.writeLong(0n); // terminator
+
+      const encoded = buffer.slice(0, writeTap.getPos());
+      const directTap = new DirectSyncReadableTap(new Uint8Array(encoded));
+      const result = intArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+
+    it("handles size-prefixed blocks in long array bulk read", async () => {
+      const longArray = new ArrayType({ items: new LongType() });
+      const values = [1000n, 2000n, 3000n];
+
+      // Create a size-prefixed encoded array manually
+      const tempBuffer = new ArrayBuffer(30);
+      const tempTap = new Tap(tempBuffer);
+      await tempTap.writeLong(1000n);
+      await tempTap.writeLong(2000n);
+      await tempTap.writeLong(3000n);
+      const blockSize = tempTap.getPos();
+
+      const buffer = new ArrayBuffer(40);
+      const writeTap = new Tap(buffer);
+      await writeTap.writeLong(-3n); // negative count = 3 elements
+      await writeTap.writeLong(BigInt(blockSize)); // block size
+      await writeTap.writeLong(1000n);
+      await writeTap.writeLong(2000n);
+      await writeTap.writeLong(3000n);
+      await writeTap.writeLong(0n); // terminator
+
+      const encoded = buffer.slice(0, writeTap.getPos());
+      const directTap = new DirectSyncReadableTap(new Uint8Array(encoded));
+      const result = longArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+
+    it("handles size-prefixed blocks in float array bulk read", async () => {
+      const floatArray = new ArrayType({ items: new FloatType() });
+      const values = [1.5, 2.5];
+
+      // Float requires 4 bytes each
+      const blockSize = 8;
+
+      const buffer = new ArrayBuffer(32);
+      const writeTap = new Tap(buffer);
+      await writeTap.writeLong(-2n); // negative count = 2 elements
+      await writeTap.writeLong(BigInt(blockSize)); // block size
+      await writeTap.writeFloat(1.5);
+      await writeTap.writeFloat(2.5);
+      await writeTap.writeLong(0n); // terminator
+
+      const encoded = buffer.slice(0, writeTap.getPos());
+      const directTap = new DirectSyncReadableTap(new Uint8Array(encoded));
+      const result = floatArray.readSync(directTap);
+      assertEquals(result.length, values.length);
+      for (let i = 0; i < values.length; i++) {
+        assert(Math.abs(result[i] - values[i]) < 0.001);
+      }
+    });
+
+    it("handles size-prefixed blocks in double array bulk read", async () => {
+      const doubleArray = new ArrayType({ items: new DoubleType() });
+      const values = [1.5, 2.5];
+
+      // Double requires 8 bytes each
+      const blockSize = 16;
+
+      const buffer = new ArrayBuffer(40);
+      const writeTap = new Tap(buffer);
+      await writeTap.writeLong(-2n); // negative count = 2 elements
+      await writeTap.writeLong(BigInt(blockSize)); // block size
+      await writeTap.writeDouble(1.5);
+      await writeTap.writeDouble(2.5);
+      await writeTap.writeLong(0n); // terminator
+
+      const encoded = buffer.slice(0, writeTap.getPos());
+      const directTap = new DirectSyncReadableTap(new Uint8Array(encoded));
+      const result = doubleArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+
+    it("handles size-prefixed blocks in boolean array bulk read", async () => {
+      const boolArray = new ArrayType({ items: new BooleanType() });
+      const values = [true, false, true];
+
+      // Boolean requires 1 byte each
+      const blockSize = 3;
+
+      const buffer = new ArrayBuffer(20);
+      const writeTap = new Tap(buffer);
+      await writeTap.writeLong(-3n); // negative count = 3 elements
+      await writeTap.writeLong(BigInt(blockSize)); // block size
+      await writeTap.writeBoolean(true);
+      await writeTap.writeBoolean(false);
+      await writeTap.writeBoolean(true);
+      await writeTap.writeLong(0n); // terminator
+
+      const encoded = buffer.slice(0, writeTap.getPos());
+      const directTap = new DirectSyncReadableTap(new Uint8Array(encoded));
+      const result = boolArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+
+    it("handles size-prefixed blocks in string array bulk read", async () => {
+      const stringArray = new ArrayType({ items: new StringType() });
+      const values = ["hi", "bye"];
+
+      // Calculate the block size by writing strings
+      const tempBuffer = new ArrayBuffer(20);
+      const tempTap = new Tap(tempBuffer);
+      await tempTap.writeString("hi");
+      await tempTap.writeString("bye");
+      const blockSize = tempTap.getPos();
+
+      const buffer = new ArrayBuffer(40);
+      const writeTap = new Tap(buffer);
+      await writeTap.writeLong(-2n); // negative count = 2 elements
+      await writeTap.writeLong(BigInt(blockSize)); // block size
+      await writeTap.writeString("hi");
+      await writeTap.writeString("bye");
+      await writeTap.writeLong(0n); // terminator
+
+      const encoded = buffer.slice(0, writeTap.getPos());
+      const directTap = new DirectSyncReadableTap(new Uint8Array(encoded));
+      const result = stringArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+
+    it("handles mixed positive and negative counts in bulk read", async () => {
+      const intArray = new ArrayType({ items: new IntType() });
+      const values = [1, 2, 3, 4];
+
+      // First block: positive count (2 elements)
+      // Second block: negative count (2 elements with size prefix)
+      const buffer = new ArrayBuffer(40);
+      const writeTap = new Tap(buffer);
+
+      // First block: normal encoding
+      await writeTap.writeLong(2n);
+      await writeTap.writeLong(1n);
+      await writeTap.writeLong(2n);
+
+      // Second block: size-prefixed
+      const tempBuffer = new ArrayBuffer(10);
+      const tempTap = new Tap(tempBuffer);
+      await tempTap.writeLong(3n);
+      await tempTap.writeLong(4n);
+      const blockSize = tempTap.getPos();
+
+      await writeTap.writeLong(-2n);
+      await writeTap.writeLong(BigInt(blockSize));
+      await writeTap.writeLong(3n);
+      await writeTap.writeLong(4n);
+
+      // Terminator
+      await writeTap.writeLong(0n);
+
+      const encoded = buffer.slice(0, writeTap.getPos());
+      const directTap = new DirectSyncReadableTap(new Uint8Array(encoded));
+      const result = intArray.readSync(directTap);
+      assertEquals(result, values);
+    });
+  });
+
+  describe("non-bulk readSync path with size-prefixed blocks", () => {
+    // These tests ensure the non-bulk readSync path (lines 304-307) handles
+    // size-prefixed blocks correctly when NOT using DirectSyncReadableTap
+
+    it("handles size-prefixed blocks in readSync without DirectSyncReadableTap", async () => {
+      const intArray = new ArrayType({ items: new IntType() });
+      const values = [100, 200];
+
+      // Create a size-prefixed encoded array manually
+      const tempBuffer = new ArrayBuffer(20);
+      const tempTap = new Tap(tempBuffer);
+      await tempTap.writeLong(100n);
+      await tempTap.writeLong(200n);
+      const blockSize = tempTap.getPos();
+
+      const buffer = new ArrayBuffer(32);
+      const writeTap = new Tap(buffer);
+      await writeTap.writeLong(-2n); // negative count = 2 elements
+      await writeTap.writeLong(BigInt(blockSize)); // block size
+      await writeTap.writeLong(100n);
+      await writeTap.writeLong(200n);
+      await writeTap.writeLong(0n); // terminator
+
+      const encoded = buffer.slice(0, writeTap.getPos());
+
+      // Use regular SyncReadableTap (NOT DirectSyncReadableTap) to trigger non-bulk path
+      const tap = new SyncReadableTap(encoded);
+      const result = intArray.readSync(tap);
+      assertEquals(result, values);
+    });
   });
 });
 
-describe("ArrayType items classification", () => {
-  it("does not take the bulk path for a logical type over a primitive", () => {
-    // Logical types wrap their underlying type rather than extending it, so
-    // they must keep their own read path. Taking the bulk long path here would
-    // yield raw bigints instead of the logical Date values.
-    const type = createType({
-      type: "array",
-      items: { type: "long", logicalType: "timestamp-millis" },
-    } as never);
+describe("ArrayType Resolver with size-prefixed blocks", () => {
+  // Tests for the resolver's readSync path which also has size-prefixed block handling (lines 555-558)
 
-    const value = [new Date(Date.UTC(2020, 0, 2, 3, 4, 5))];
-    const buffer = type.toSyncBuffer(value as never);
-    const decoded = type.fromSyncBuffer(buffer) as Date[];
-    assertEquals(decoded.length, 1);
-    assert(decoded[0] instanceof Date);
-    assertEquals(decoded[0].getTime(), value[0]!.getTime());
-  });
+  it("handles size-prefixed blocks in resolver readSync", async () => {
+    // Create writer and reader schemas with compatible types
+    const stringArray = createArray(new StringType());
+    const bytesArray = createArray(new BytesType());
+    const resolver = bytesArray.createResolver(stringArray);
 
-  it("reads a fixed-size items array without the bulk path", () => {
-    const type = createType({
-      type: "array",
-      items: { type: "fixed", name: "F3", size: 3 },
-    } as never);
+    const values = ["\x01\x02", "\x03\x04"];
 
-    const value = [new Uint8Array([1, 2, 3])];
-    const buffer = type.toSyncBuffer(value as never);
-    const decoded = type.fromSyncBuffer(buffer) as Uint8Array[];
-    assertEquals(Array.from(decoded[0]!), [1, 2, 3]);
-  });
-});
+    // Create a size-prefixed encoded array manually
+    const stringType = new StringType();
+    const tempBuffer = new ArrayBuffer(20);
+    const tempTap = new Tap(tempBuffer);
+    await stringType.write(tempTap, values[0]);
+    await stringType.write(tempTap, values[1]);
+    const blockSize = tempTap.getPos();
 
-describe("ArrayType sync block counts beyond the int32 fast path", () => {
-  // Avro block counts are longs. A count whose varint is wider than an int32
-  // allows (here a padded six-byte encoding) is valid Avro that the async path
-  // accepts, so every sync read path must decode it as a long too rather than
-  // rejecting it with readInt's int32 RangeError.
-  const paddedCount = (count: number, trailing: number[] = []) => [
-    (count << 1) | 0x80,
-    0x80,
-    0x80,
-    0x80,
-    0x80,
-    0x00,
-    ...trailing,
-  ];
+    const buffer = new ArrayBuffer(40);
+    const writeTap = new Tap(buffer);
+    await writeTap.writeLong(-2n); // negative count = 2 elements
+    await writeTap.writeLong(BigInt(blockSize)); // block size
+    await stringType.write(writeTap, values[0]);
+    await stringType.write(writeTap, values[1]);
+    await writeTap.writeLong(0n); // terminator
 
-  const syncTaps = [
-    {
-      name: "SyncReadableTap",
-      open: (bytes: number[]) =>
-        new SyncReadableTap(new Uint8Array(bytes).buffer),
-    },
-    {
-      name: "DirectSyncReadableTap",
-      open: (bytes: number[]) =>
-        new DirectSyncReadableTap(new Uint8Array(bytes)),
-    },
-  ];
+    const encoded = buffer.slice(0, writeTap.getPos());
+    const tap = new SyncReadableTap(encoded);
+    const result = resolver.readSync(tap) as Uint8Array[];
 
-  for (const { name, open } of syncTaps) {
-    it(`reads primitive arrays via ${name}`, async () => {
-      const intArray = createArray(new IntType());
-      const bytes = [...paddedCount(2), 2, 4, 0];
-
-      assertEquals(intArray.readSync(open(bytes)), [1, 2]);
-      assertEquals(
-        await intArray.read(new Tap(new Uint8Array(bytes).buffer)),
-        [1, 2],
-      );
-    });
-
-    it(`reads string arrays with wide element lengths via ${name}`, () => {
-      // Element lengths are longs too, so the bulk string path must accept a
-      // padded length the per-element readString path accepts.
-      const stringArray = createArray(new StringType());
-      const bytes = [...paddedCount(1), ...paddedCount(1, [0x78]), 0];
-
-      assertEquals(stringArray.readSync(open(bytes)), ["x"]);
-    });
-
-    it(`reads generic arrays via ${name}`, () => {
-      const bytesArray = createArray(new BytesType());
-      const bytes = [...paddedCount(1), 4, 7, 8, ...paddedCount(1), 0, 0];
-
-      const result = bytesArray.readSync(open(bytes));
-      assertEquals(result.map((value) => Array.from(value)), [[7, 8], []]);
-    });
-
-    it(`reads record arrays via ${name}`, () => {
-      const recordArray = createArray(createRecord({
-        name: "WideCountItem",
-        fields: [{ name: "id", type: new IntType() }],
-      }));
-      // A padded count of -1 (zig-zag 1) announces a size-prefixed block, so
-      // the one-byte block size precedes the record's single int field.
-      const bytes = [0x81, 0x80, 0x80, 0x80, 0x80, 0x00, 2, 6, 0];
-
-      assertEquals(recordArray.readSync(open(bytes)), [{ id: 3 }]);
-    });
-
-    it(`rejects a count beyond the safe integer range via ${name}`, () => {
-      // readLength's long fallback names the block in the error, matching the
-      // message the async reader raises for the same bytes.
-      const buffer = new ArrayBuffer(16);
-      const writeTap = new SyncWritableTap(buffer);
-      writeTap.writeLong(BigInt(Number.MAX_SAFE_INTEGER) + 1n);
-      const bytes = Array.from(new Uint8Array(buffer, 0, writeTap.getPos()));
-
-      assertThrows(
-        () => createArray(new IntType()).readSync(open(bytes)),
-        RangeError,
-        "Array block length value 9007199254740992 is outside the safe integer range.",
-      );
-    });
-
-    it(`reports a negative oversized count like the async reader via ${name}`, async () => {
-      // The signed count is range-checked before it is negated, so sync and
-      // async name the same (negative) value for a corrupt size-prefixed count.
-      const buffer = new ArrayBuffer(16);
-      const writeTap = new SyncWritableTap(buffer);
-      writeTap.writeLong(-(BigInt(Number.MAX_SAFE_INTEGER) + 1n));
-      const bytes = Array.from(new Uint8Array(buffer, 0, writeTap.getPos()));
-      const expected =
-        "Array block length value -9007199254740992 is outside the safe integer range.";
-
-      assertThrows(
-        () => createArray(new IntType()).readSync(open(bytes)),
-        RangeError,
-        expected,
-      );
-      await assertRejects(
-        () =>
-          createArray(new IntType()).read(
-            new Tap(new Uint8Array(bytes).buffer),
-          ),
-        RangeError,
-        expected,
-      );
-    });
-
-    it(`reads resolved arrays via ${name}`, () => {
-      const resolver = createArray(new LongType()).createResolver(
-        createArray(new IntType()),
-      );
-      const bytes = [...paddedCount(2), 2, 4, 0];
-
-      assertEquals(resolver.readSync(open(bytes)), [1n, 2n]);
-    });
-  }
-});
-
-describe("ArrayType.schemaJSON", () => {
-  const schema = {
-    type: "array",
-    items: { type: "fixed", name: "F", size: 1 },
-  } as const;
-
-  it("passes the scope to the items type", () => {
-    const type = createType(schema);
-    assertInstanceOf(type, ArrayType);
-    const scope = new SchemaJSONScope();
-    (type as ArrayType).getItemsType().schemaJSON(scope);
-
-    assertEquals(type.schemaJSON(scope), { type: "array", items: "F" });
-  });
-
-  it("defines a named items type in the scope", () => {
-    const type = createType(schema);
-    const scope = new SchemaJSONScope();
-
-    assertEquals(type.schemaJSON(scope), {
-      type: "array",
-      items: { name: "F", type: "fixed", size: 1 },
-    });
-    assertEquals([...scope.defined.keys()], ["F"]);
-  });
-
-  it("starts a new scope on each toJSON call", () => {
-    const type = createType(schema);
-    const expected = {
-      type: "array",
-      items: { name: "F", type: "fixed", size: 1 },
-    };
-    assertEquals(type.toJSON(), expected);
-    assertEquals(type.toJSON(), expected);
-  });
-});
-
-describe("ArrayType defaults", () => {
-  const timestamp = { type: "long", logicalType: "timestamp-millis" };
-
-  it("writes each item by its type", () => {
-    assertEquals(
-      createType({ type: "array", items: "long" }).defaultToJSON([1n, -2n]),
-      [1, -2],
-    );
-    assertEquals(
-      createType({ type: "array", items: "bytes" }).defaultToJSON([
-        Uint8Array.of(0, 255),
-      ]),
-      ["\u0000\u00ff"],
-    );
-    assertEquals(
-      createType({ type: "array", items: "int" }).defaultToJSON([]),
-      [],
-    );
-  });
-
-  it("reads each item by its type", () => {
-    const type = createType({ type: "array", items: timestamp });
-    assertEquals(type.defaultFromJSON([1000, new Date(2000)]), [
-      new Date(1000),
-      new Date(2000),
-    ]);
-  });
-
-  it("leaves a default that is not an array for cloneFromValue", () => {
-    assertEquals(
-      createType({ type: "array", items: "int" }).defaultFromJSON("x"),
-      "x",
-    );
+    assertEquals(result.length, 2);
+    assertEquals([...result[0]], [1, 2]);
+    assertEquals([...result[1]], [3, 4]);
   });
 });

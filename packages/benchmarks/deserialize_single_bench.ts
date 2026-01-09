@@ -8,6 +8,7 @@ import {
   SyncInMemoryReadableBuffer,
 } from "../../src/serialization/buffers/in_memory_buffer_sync.ts";
 import { SyncReadableTap } from "../../src/serialization/tap_sync.ts";
+import { DirectSyncReadableTap } from "../../src/serialization/direct_tap_sync.ts";
 import { InMemoryReadableBuffer } from "../../src/serialization/buffers/in_memory_buffer.ts";
 import { ReadableTap } from "../../src/serialization/tap.ts";
 import { DirectSyncReadableTap } from "../../src/serialization/direct_tap_sync.ts";
@@ -29,9 +30,15 @@ import { DirectSyncReadableTap } from "../../src/serialization/direct_tap_sync.t
 // BENCHMARK CONFIGURATION
 // =============================================================================
 
-// Iteration counts are left to Deno.bench's time-based calibration. Fixed low
-// counts (e.g. n: 1000) end before V8 finishes tiering sub-microsecond
-// benches, which produced bimodal results and overstated cross-library gaps.
+/**
+ * Number of iterations per benchmark.
+ * Higher values = more accurate results but slower execution.
+ * - 100000: High accuracy (slow, ~5-10 min)
+ * - 10000: Good accuracy (moderate, ~30-60 sec)
+ * - 1000: Quick comparison (fast, ~5-10 sec)
+ * - 100: Very quick (for initial testing)
+ */
+const BENCH_ITERATIONS = 100;
 
 // =============================================================================
 // SCHEMA DEFINITIONS
@@ -439,6 +446,32 @@ function runDeserializeBenchmark(config: DeserializeBenchmarkConfig) {
     const readable = new SyncInMemoryReadableBuffer(avroTsBuffer);
     const tap = new SyncReadableTap(readable);
     avroTsReadSync.readSync(tap);
+  });
+
+  // --- avro-typescript: DirectSyncReadableTap (optimized) ---
+  const uint8View = new Uint8Array(avroTsBuffer);
+  Deno.bench({
+    name: `${groupName} (avro-ts, DirectTap)`,
+    group: groupName,
+    n: BENCH_ITERATIONS,
+  }, () => {
+    const tap = new DirectSyncReadableTap(uint8View);
+    types.avroTs.readSync(tap);
+  });
+
+  // --- avro-typescript: DirectSyncReadableTap REUSED (no allocation per iteration) ---
+  // This variant reuses the tap object, just resetting pos to 0.
+  // This tests the hypothesis that float/double slowdown is from tap+DataView allocation.
+  const reusedTap = new DirectSyncReadableTap(uint8View);
+  // Pre-warm the DataView by doing one read (forces lazy DataView creation)
+  types.avroTs.readSync(reusedTap);
+  Deno.bench({
+    name: `${groupName} (avro-ts, DirectTap-reused)`,
+    group: groupName,
+    n: BENCH_ITERATIONS,
+  }, () => {
+    reusedTap.pos = 0; // Just reset position, reuse everything else
+    types.avroTs.readSync(reusedTap);
   });
 
   // --- avro-typescript: async read (for comparison) ---

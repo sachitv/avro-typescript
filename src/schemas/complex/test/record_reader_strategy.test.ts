@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "@std/assert";
+import { assertEquals } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { IntType } from "../../primitive/int_type.ts";
@@ -14,14 +14,10 @@ import {
   type CompiledReader,
   CompiledReaderStrategy,
   type CompiledSyncReader,
-  type CompiledSyncRecordBlockReader,
-  compiledSyncRecordBlockReader,
   defaultReaderStrategy,
   InterpretedReaderStrategy,
   type RecordReaderContext,
 } from "../record_reader_strategy.ts";
-import type { RecordType } from "../record_type.ts";
-import type { Type } from "../../type.ts";
 import { createRecord } from "./record_test_utils.ts";
 import { createType } from "../../../type/create_type.ts";
 import { TestTap } from "../../../serialization/test/test_tap.ts";
@@ -569,145 +565,6 @@ describe("RecordReaderStrategy", () => {
           assertEquals(result[`f${i}`], i + i * 100);
         }
       });
-
-      it("assembles wide sync readers for every chunk remainder (11-20 fields)", () => {
-        const strategy = new CompiledReaderStrategy();
-
-        for (let fieldCount = 11; fieldCount <= 20; fieldCount++) {
-          const fieldNames = Array.from(
-            { length: fieldCount },
-            (_, i) => `f${i}`,
-          );
-          const context: RecordReaderContext = {
-            fieldNames,
-            fieldTypes: fieldNames.map(() => new IntType()),
-          };
-          const fieldReaders: CompiledSyncReader[] = fieldNames.map(
-            () => (tap: SyncReadableTapLike) => tap.readInt(),
-          );
-
-          const reader = strategy.assembleSyncRecordReader(
-            context,
-            fieldReaders,
-          );
-
-          const buffer = new ArrayBuffer(128);
-          const writeTap = new SyncWritableTap(buffer);
-          for (let i = 0; i < fieldCount; i++) {
-            writeTap.writeInt(i * 3);
-          }
-          const readTap = new SyncReadableTap(buffer);
-
-          const result = reader(readTap) as Record<string, number>;
-          assertEquals(Object.keys(result), fieldNames);
-          for (let i = 0; i < fieldCount; i++) {
-            assertEquals(result[`f${i}`], i * 3);
-          }
-        }
-      });
-    });
-
-    describe("assembleSyncRecordBlockReader direct API", () => {
-      it("specializes record blocks with zero through ten fields", () => {
-        const strategy = new CompiledReaderStrategy();
-
-        for (let fieldCount = 0; fieldCount <= 10; fieldCount++) {
-          const fieldNames = Array.from(
-            { length: fieldCount },
-            (_, index) => `f${index}`,
-          );
-          const context: RecordReaderContext = {
-            fieldNames,
-            fieldTypes: fieldNames.map(() => new IntType()),
-          };
-          const fieldReaders: CompiledSyncReader[] = fieldNames.map(
-            () => (tap) => tap.readInt(),
-          );
-          const readBlock = strategy.assembleSyncRecordBlockReader(
-            context,
-            fieldReaders,
-          );
-          assert(readBlock);
-
-          const buffer = new ArrayBuffer(128);
-          const writeTap = new SyncWritableTap(buffer);
-          for (let recordIndex = 0; recordIndex < 2; recordIndex++) {
-            for (let fieldIndex = 0; fieldIndex < fieldCount; fieldIndex++) {
-              writeTap.writeInt(recordIndex * 10 + fieldIndex);
-            }
-          }
-
-          const sentinel = { sentinel: true };
-          const result: Record<string, unknown>[] = [sentinel];
-          readBlock(new SyncReadableTap(buffer), result, 1, 2);
-
-          assertEquals(result[0], sentinel);
-          for (let recordIndex = 0; recordIndex < 2; recordIndex++) {
-            const expected: Record<string, number> = {};
-            for (let fieldIndex = 0; fieldIndex < fieldCount; fieldIndex++) {
-              expected[`f${fieldIndex}`] = recordIndex * 10 + fieldIndex;
-            }
-            assertEquals(result[recordIndex + 1], expected);
-          }
-        }
-      });
-
-      it("falls back for wide records and customized scalar assembly", () => {
-        const wideContext: RecordReaderContext = {
-          fieldNames: Array.from({ length: 12 }, (_, i) => `f${i}`),
-          fieldTypes: Array.from({ length: 12 }, () => new IntType()),
-        };
-        const fieldReaders = wideContext.fieldNames.map(
-          () => (tap: SyncReadableTapLike) => tap.readInt(),
-        );
-        const strategy = new CompiledReaderStrategy();
-        assertEquals(
-          strategy.assembleSyncRecordBlockReader(
-            wideContext,
-            fieldReaders,
-          ),
-          undefined,
-        );
-
-        class CustomizedStrategy extends CompiledReaderStrategy {
-          public override assembleSyncRecordReader(
-            context: RecordReaderContext,
-            readers: CompiledSyncReader[],
-          ): CompiledSyncReader {
-            const readRecord = super.assembleSyncRecordReader(
-              context,
-              readers,
-            );
-            return (tap) => ({
-              ...(readRecord(tap) as Record<string, unknown>),
-              customized: true,
-            });
-          }
-        }
-
-        assertEquals(
-          new CustomizedStrategy().assembleSyncRecordBlockReader(
-            {
-              fieldNames: ["value"],
-              fieldTypes: [new IntType()],
-            },
-            [(tap) => tap.readInt()],
-          ),
-          undefined,
-        );
-      });
-
-      it("falls back to safe scalar construction for __proto__", () => {
-        const strategy = new CompiledReaderStrategy();
-        const readBlock = strategy.assembleSyncRecordBlockReader(
-          {
-            fieldNames: ["__proto__"],
-            fieldTypes: [new StringType()],
-          },
-          [(tap) => tap.readString()],
-        );
-        assertEquals(readBlock, undefined);
-      });
     });
   });
 
@@ -883,85 +740,5 @@ describe("RecordReaderStrategy", () => {
       const decoded = nodeType.fromSyncBuffer(buffer);
       assertEquals(decoded, value);
     });
-  });
-});
-
-describe("RecordReaderCache block reader reentrancy", () => {
-  // The block reader is normally requested after the record has finished
-  // compiling. A strategy that asks for it from inside compileSyncFieldReader
-  // reaches the cache while the compiled sync reader is still a recursion
-  // placeholder and the field readers are not yet assigned.
-  class ReentrantStrategy extends CompiledReaderStrategy {
-    public record?: RecordType;
-    public reentrantBlockReader?: CompiledSyncRecordBlockReader;
-
-    public override compileSyncFieldReader(
-      fieldType: Type,
-      getRecordReader: (type: Type) => CompiledSyncReader,
-    ): CompiledSyncReader {
-      if (this.record && !this.reentrantBlockReader) {
-        this.reentrantBlockReader = this.record
-          [compiledSyncRecordBlockReader]();
-      }
-      return super.compileSyncFieldReader(fieldType, getRecordReader);
-    }
-  }
-
-  const buildRecord = (strategy: ReentrantStrategy) => {
-    const record = createRecord({
-      name: "Reentrant",
-      fields: [
-        { name: "a", type: new IntType() },
-        { name: "b", type: new StringType() },
-      ],
-      readerStrategy: strategy,
-    });
-    strategy.record = record;
-    return record;
-  };
-
-  const encodeTwo = (record: RecordType) => {
-    const buffer = new ArrayBuffer(64);
-    const writeTap = new SyncWritableTap(buffer);
-    record.writeSync(writeTap, { a: 1, b: "one" });
-    record.writeSync(writeTap, { a: 2, b: "two" });
-    return buffer.slice(0, writeTap.getPos());
-  };
-
-  it("returns a working block reader when re-entered mid-compilation", () => {
-    const strategy = new ReentrantStrategy();
-    const record = buildRecord(strategy);
-    const encoded = encodeTwo(record);
-
-    // Triggers compilation, which re-enters the block-reader capability.
-    record.readSync(new SyncReadableTap(encoded));
-    const reentrant = strategy.reentrantBlockReader;
-    assert(reentrant);
-
-    // The reader handed out during compilation still decodes correctly once
-    // the placeholder it closes over has been resolved.
-    const result: Record<string, unknown>[] = new Array(2);
-    reentrant(new SyncReadableTap(encoded), result, 0, 2);
-    assertEquals(result, [{ a: 1, b: "one" }, { a: 2, b: "two" }]);
-  });
-
-  it("does not cache the reentrant fallback for later callers", () => {
-    const strategy = new ReentrantStrategy();
-    const record = buildRecord(strategy);
-    const encoded = encodeTwo(record);
-
-    record.readSync(new SyncReadableTap(encoded));
-    const reentrant = strategy.reentrantBlockReader;
-    const settled = record[compiledSyncRecordBlockReader]();
-
-    assert(reentrant);
-    // The post-compilation lookup must resolve to the specialized reader
-    // rather than the fallback that was handed out mid-compilation.
-    assertEquals(settled === reentrant, false);
-    assertEquals(settled === record[compiledSyncRecordBlockReader](), true);
-
-    const result: Record<string, unknown>[] = new Array(2);
-    settled(new SyncReadableTap(encoded), result, 0, 2);
-    assertEquals(result, [{ a: 1, b: "one" }, { a: 2, b: "two" }]);
   });
 });

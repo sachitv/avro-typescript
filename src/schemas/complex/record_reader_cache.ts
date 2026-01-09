@@ -2,7 +2,6 @@ import type { Type } from "../type.ts";
 import type {
   CompiledReader,
   CompiledSyncReader,
-  CompiledSyncRecordBlockReader,
   RecordReaderContext,
   RecordReaderStrategy,
 } from "./record_reader_strategy.ts";
@@ -16,37 +15,22 @@ import { defaultReaderStrategy } from "./record_reader_strategy.ts";
  */
 export class RecordReaderCache {
   #compiledSyncReader?: CompiledSyncReader;
-  #compiledSyncRecordBlockReader?: CompiledSyncRecordBlockReader;
-  #compiledSyncFieldReaders?: CompiledSyncReader[];
   #compiledReader?: CompiledReader;
   #strategy: RecordReaderStrategy;
 
-  /**
-   * Creates a cache backed by the supplied reader strategy.
-   * @param strategy The strategy used to compile record readers.
-   */
   constructor(strategy: RecordReaderStrategy = defaultReaderStrategy) {
     this.#strategy = strategy;
   }
 
-  /** Returns the reader strategy backing this cache. */
   public getStrategy(): RecordReaderStrategy {
     return this.#strategy;
   }
 
-  /** Clears all compiled reader slots. */
   public clear(): void {
     this.#compiledSyncReader = undefined;
-    this.#compiledSyncRecordBlockReader = undefined;
-    this.#compiledSyncFieldReaders = undefined;
     this.#compiledReader = undefined;
   }
 
-  /**
-   * Gets or compiles the async record reader for a field context.
-   * @param context Ordered field metadata for the record.
-   * @param getNestedReader Callback for resolving nested record readers.
-   */
   public getOrCreateReader(
     context: RecordReaderContext,
     getNestedReader: (type: Type) => CompiledReader,
@@ -82,11 +66,6 @@ export class RecordReaderCache {
     return placeholder;
   }
 
-  /**
-   * Gets or compiles the sync record reader for a field context.
-   * @param context Ordered field metadata for the record.
-   * @param getNestedReader Callback for resolving nested record readers.
-   */
   public getOrCreateSyncReader(
     context: RecordReaderContext,
     getNestedReader: (type: Type) => CompiledSyncReader,
@@ -118,49 +97,7 @@ export class RecordReaderCache {
     );
 
     impl[0] = actualReader;
-    this.#compiledSyncFieldReaders = fieldReaders;
     this.#compiledSyncReader = actualReader;
     return placeholder;
-  }
-
-  /**
-   * Gets or creates a reader which fills a complete block of record values.
-   * Custom strategies without a block hook retain their assembled scalar
-   * reader semantics through the fallback loop.
-   */
-  public getOrCreateSyncRecordBlockReader(
-    context: RecordReaderContext,
-    getNestedReader: (type: Type) => CompiledSyncReader,
-  ): CompiledSyncRecordBlockReader {
-    if (this.#compiledSyncRecordBlockReader) {
-      return this.#compiledSyncRecordBlockReader;
-    }
-
-    const scalarReader = this.getOrCreateSyncReader(context, getNestedReader);
-    const fieldReaders = this.#compiledSyncFieldReaders;
-
-    // Fall back to the scalar reader whenever the field readers are not yet
-    // available. That happens if this method is re-entered while
-    // getOrCreateSyncReader is still compiling — the compiled sync reader is a
-    // recursion placeholder at that point and the field readers are not
-    // assigned until assembly completes.
-    const specialized = fieldReaders === undefined
-      ? undefined
-      : this.#strategy.assembleSyncRecordBlockReader?.(context, fieldReaders);
-
-    const blockReader: CompiledSyncRecordBlockReader = specialized ??
-      ((tap, result, startIndex, count) => {
-        const end = startIndex + count;
-        for (let i = startIndex; i < end; i++) {
-          result[i] = scalarReader(tap) as Record<string, unknown>;
-        }
-      });
-
-    // Only cache once the field readers were available; otherwise a reentrant
-    // call would pin the fallback for the fully compiled record too.
-    if (fieldReaders !== undefined) {
-      this.#compiledSyncRecordBlockReader = blockReader;
-    }
-    return blockReader;
   }
 }

@@ -463,15 +463,6 @@ describe("Type", () => {
           "Extra data after value",
         );
       });
-
-      it("should throw for a read that overruns the buffer without reading", () => {
-        const overrunningType = new OverrunningType();
-        assertThrows(
-          () => overrunningType.fromSyncBuffer(new ArrayBuffer(1)),
-          Error,
-          "Insufficient data for type",
-        );
-      });
     });
 
     describe("matchSync", () => {

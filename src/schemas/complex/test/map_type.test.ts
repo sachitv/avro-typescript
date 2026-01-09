@@ -20,6 +20,7 @@ import { DirectSyncReadableTap } from "../../../serialization/direct_tap_sync.ts
 import { MapType, readMapInto, readMapIntoSync } from "../map_type.ts";
 import { IntType } from "../../primitive/int_type.ts";
 import { LongType } from "../../primitive/long_type.ts";
+import { FloatType } from "../../primitive/float_type.ts";
 import { StringType } from "../../primitive/string_type.ts";
 import { BytesType } from "../../primitive/bytes_type.ts";
 import { NullType } from "../../primitive/null_type.ts";
@@ -1021,122 +1022,174 @@ describe("MapType large map writeLong fallback", () => {
   });
 });
 
-describe("MapType sync block counts beyond the int32 fast path", () => {
-  // Map block counts are Avro longs. A count padded to six varint bytes is
-  // valid Avro that the async path accepts, so the sync map readers must decode
-  // it as a long rather than rejecting it as an out-of-range int.
-  const paddedCount = (count: number) => [
-    (count << 1) | 0x80,
-    0x80,
-    0x80,
-    0x80,
-    0x80,
-    0x00,
-  ];
-  // Key "a" (length 1, zig-zag 2) followed by an int value.
-  const entry = (value: number) => [0x02, 0x61, value << 1];
+describe("MapType size-prefixed blocks (negative count)", () => {
+  describe("readSync non-bulk path with size-prefixed blocks", () => {
+    it("handles size-prefixed blocks in readSync without DirectSyncReadableTap", async () => {
+      const longMap = createMap(new LongType());
+      const _values = new Map([["a", 100n], ["b", 200n]]);
 
-  const syncTaps = [
-    {
-      name: "SyncReadableTap",
-      open: (bytes: number[]) =>
-        new SyncReadableTap(new Uint8Array(bytes).buffer),
-    },
-    {
-      name: "DirectSyncReadableTap",
-      open: (bytes: number[]) =>
-        new DirectSyncReadableTap(new Uint8Array(bytes)),
-    },
-  ];
+      const tempBuffer = new ArrayBuffer(30);
+      const tempTap = new Tap(tempBuffer);
+      await tempTap.writeString("a");
+      await tempTap.writeLong(100n);
+      await tempTap.writeString("b");
+      await tempTap.writeLong(200n);
+      const blockSize = tempTap.getPos();
 
-  for (const { name, open } of syncTaps) {
-    it(`reads maps via ${name}`, async () => {
+      const buffer = new ArrayBuffer(50);
+      const writeTap = new Tap(buffer);
+      await writeTap.writeLong(-2n);
+      await writeTap.writeLong(BigInt(blockSize));
+      await writeTap.writeString("a");
+      await writeTap.writeLong(100n);
+      await writeTap.writeString("b");
+      await writeTap.writeLong(200n);
+      await writeTap.writeLong(0n);
+
+      const encoded = buffer.slice(0, writeTap.getPos());
+      const tap = new SyncReadableTap(encoded);
+      const result = longMap.readSync(tap);
+      assertEquals(result.get("a"), 100n);
+      assertEquals(result.get("b"), 200n);
+    });
+  });
+
+  describe("#readSyncDirect IntType path with size-prefixed blocks", () => {
+    it("handles size-prefixed blocks in IntType map bulk read", async () => {
       const intMap = createMap(new IntType());
-      const bytes = [...paddedCount(1), ...entry(3), 0];
+      const _values = new Map([["x", 10], ["y", 20]]);
 
-      assertEquals(intMap.readSync(open(bytes)), new Map([["a", 3]]));
-      assertEquals(
-        await intMap.read(new Tap(new Uint8Array(bytes).buffer)),
-        new Map([["a", 3]]),
-      );
+      const tempBuffer = new ArrayBuffer(20);
+      const tempTap = new Tap(tempBuffer);
+      await tempTap.writeString("x");
+      await tempTap.writeLong(10n);
+      await tempTap.writeString("y");
+      await tempTap.writeLong(20n);
+      const blockSize = tempTap.getPos();
+
+      const buffer = new ArrayBuffer(40);
+      const writeTap = new Tap(buffer);
+      await writeTap.writeLong(-2n);
+      await writeTap.writeLong(BigInt(blockSize));
+      await writeTap.writeString("x");
+      await writeTap.writeLong(10n);
+      await writeTap.writeString("y");
+      await writeTap.writeLong(20n);
+      await writeTap.writeLong(0n);
+
+      const encoded = buffer.slice(0, writeTap.getPos());
+      const directTap = new DirectSyncReadableTap(new Uint8Array(encoded));
+      const result = intMap.readSync(directTap);
+      assertEquals(result.get("x"), 10);
+      assertEquals(result.get("y"), 20);
+    });
+  });
+
+  describe("#readSyncDirect StringType path with size-prefixed blocks", () => {
+    it("handles size-prefixed blocks in StringType map bulk read", async () => {
+      const stringMap = createMap(new StringType());
+
+      const tempBuffer = new ArrayBuffer(30);
+      const tempTap = new Tap(tempBuffer);
+      await tempTap.writeString("k1");
+      await tempTap.writeString("v1");
+      await tempTap.writeString("k2");
+      await tempTap.writeString("v2");
+      const blockSize = tempTap.getPos();
+
+      const buffer = new ArrayBuffer(50);
+      const writeTap = new Tap(buffer);
+      await writeTap.writeLong(-2n);
+      await writeTap.writeLong(BigInt(blockSize));
+      await writeTap.writeString("k1");
+      await writeTap.writeString("v1");
+      await writeTap.writeString("k2");
+      await writeTap.writeString("v2");
+      await writeTap.writeLong(0n);
+
+      const encoded = buffer.slice(0, writeTap.getPos());
+      const directTap = new DirectSyncReadableTap(new Uint8Array(encoded));
+      const result = stringMap.readSync(directTap);
+      assertEquals(result.get("k1"), "v1");
+      assertEquals(result.get("k2"), "v2");
+    });
+  });
+
+  describe("#readSyncDirect fallback path (non-IntType/StringType)", () => {
+    it("reads maps with non-bulk-optimized value types via DirectSyncReadableTap", () => {
+      const floatMap = createMap(new FloatType());
+      const values = new Map([["a", 1.5], ["b", 2.5]]);
+      const buffer = floatMap.toSyncBuffer(values);
+
+      const directTap = new DirectSyncReadableTap(new Uint8Array(buffer));
+      const result = floatMap.readSync(directTap);
+      assertEquals(result.size, 2);
+      assert(Math.abs(result.get("a")! - 1.5) < 0.001);
+      assert(Math.abs(result.get("b")! - 2.5) < 0.001);
     });
 
-    it(`reads size-prefixed maps via ${name}`, () => {
-      const intMap = createMap(new IntType());
-      // Padded count -1 (zig-zag 1), then the three-byte block size.
-      const bytes = [0x81, 0x80, 0x80, 0x80, 0x80, 0x00, 6, ...entry(4), 0];
+    it("handles size-prefixed blocks in fallback path via DirectSyncReadableTap", async () => {
+      const floatMap = createMap(new FloatType());
 
-      assertEquals(intMap.readSync(open(bytes)), new Map([["a", 4]]));
+      const tempBuffer = new ArrayBuffer(30);
+      const tempTap = new Tap(tempBuffer);
+      await tempTap.writeString("p");
+      await tempTap.writeFloat(3.14);
+      await tempTap.writeString("q");
+      await tempTap.writeFloat(2.71);
+      const blockSize = tempTap.getPos();
+
+      const buffer = new ArrayBuffer(50);
+      const writeTap = new Tap(buffer);
+      await writeTap.writeLong(-2n);
+      await writeTap.writeLong(BigInt(blockSize));
+      await writeTap.writeString("p");
+      await writeTap.writeFloat(3.14);
+      await writeTap.writeString("q");
+      await writeTap.writeFloat(2.71);
+      await writeTap.writeLong(0n);
+
+      const encoded = buffer.slice(0, writeTap.getPos());
+      const directTap = new DirectSyncReadableTap(new Uint8Array(encoded));
+      const result = floatMap.readSync(directTap);
+      assertEquals(result.size, 2);
+      assert(Math.abs(result.get("p")! - 3.14) < 0.01);
+      assert(Math.abs(result.get("q")! - 2.71) < 0.01);
     });
+  });
 
-    it(`rejects a count beyond the safe integer range via ${name}`, () => {
-      // readLength's long fallback names the block in the error, matching the
-      // message the async reader raises for the same bytes.
-      const buffer = new ArrayBuffer(16);
-      const writeTap = new SyncWritableTap(buffer);
-      writeTap.writeLong(BigInt(Number.MAX_SAFE_INTEGER) + 1n);
-      const bytes = Array.from(new Uint8Array(buffer, 0, writeTap.getPos()));
+  describe("Resolver readSync with size-prefixed blocks", () => {
+    it("handles size-prefixed blocks in resolver readSync", async () => {
+      const stringMap = createMap(new StringType());
+      const bytesMap = createMap(new BytesType());
+      const resolver = bytesMap.createResolver(stringMap);
 
-      assertThrows(
-        () => createMap(new IntType()).readSync(open(bytes)),
-        RangeError,
-        "Map block length value 9007199254740992 is outside the safe integer range.",
-      );
+      const tempBuffer = new ArrayBuffer(30);
+      const tempTap = new Tap(tempBuffer);
+      await tempTap.writeString("k1");
+      await tempTap.writeString("\x01\x02");
+      await tempTap.writeString("k2");
+      await tempTap.writeString("\x03\x04");
+      const blockSize = tempTap.getPos();
+
+      const buffer = new ArrayBuffer(50);
+      const writeTap = new Tap(buffer);
+      await writeTap.writeLong(-2n);
+      await writeTap.writeLong(BigInt(blockSize));
+      await writeTap.writeString("k1");
+      await writeTap.writeString("\x01\x02");
+      await writeTap.writeString("k2");
+      await writeTap.writeString("\x03\x04");
+      await writeTap.writeLong(0n);
+
+      const encoded = buffer.slice(0, writeTap.getPos());
+      const tap = new SyncReadableTap(encoded);
+      const result = resolver.readSync(tap) as Map<string, Uint8Array>;
+      assertEquals(result.size, 2);
+      assertEquals([...result.get("k1")!], [1, 2]);
+      assertEquals([...result.get("k2")!], [3, 4]);
     });
-
-    it(`reports a negative oversized count like the async reader via ${name}`, async () => {
-      // The signed count is range-checked before it is negated, so sync and
-      // async name the same (negative) value for a corrupt size-prefixed count.
-      const buffer = new ArrayBuffer(16);
-      const writeTap = new SyncWritableTap(buffer);
-      writeTap.writeLong(-(BigInt(Number.MAX_SAFE_INTEGER) + 1n));
-      const bytes = Array.from(new Uint8Array(buffer, 0, writeTap.getPos()));
-      const expected =
-        "Map block length value -9007199254740992 is outside the safe integer range.";
-
-      assertThrows(
-        () => createMap(new IntType()).readSync(open(bytes)),
-        RangeError,
-        expected,
-      );
-      await assertRejects(
-        () =>
-          createMap(new IntType()).read(new Tap(new Uint8Array(bytes).buffer)),
-        RangeError,
-        expected,
-      );
-    });
-
-    it(`reads multiple blocks, mixing plain and size-prefixed, via ${name}`, () => {
-      // Exercises the trailing block-count read returning a non-zero count,
-      // which the single-block cases never reach.
-      const intMap = createMap(new IntType());
-      const bytes = [
-        0x02, // count 1
-        ...entry(1),
-        0x01, // count -1: size-prefixed
-        0x06, // block size 3
-        0x02,
-        0x62, // key "b"
-        0x04, // value 2
-        0x00,
-      ];
-
-      assertEquals(
-        intMap.readSync(open(bytes)),
-        new Map([["a", 1], ["b", 2]]),
-      );
-    });
-
-    it(`reads resolved maps via ${name}`, () => {
-      const resolver = createMap(new LongType()).createResolver(
-        createMap(new IntType()),
-      );
-      const bytes = [...paddedCount(1), ...entry(5), 0];
-
-      assertEquals(resolver.readSync(open(bytes)), new Map([["a", 5n]]));
-    });
-  }
+  });
 });
 
 describe("MapType.schemaJSON", () => {

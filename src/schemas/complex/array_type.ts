@@ -13,23 +13,6 @@ import type {
   SyncWritableTapLike,
 } from "../../serialization/tap_sync.ts";
 import type { DirectSyncReadableTap } from "../../serialization/direct_tap_sync.ts";
-import {
-  type CompiledSyncRecordBlockReader,
-  compiledSyncRecordBlockReader,
-  type CompiledSyncRecordBlockReaderProvider,
-} from "./record_reader_strategy.ts";
-import { readBlockCountSync } from "../../serialization/block_count_sync.ts";
-import { BooleanType } from "../primitive/boolean_type.ts";
-import { DoubleType } from "../primitive/double_type.ts";
-import { FloatType } from "../primitive/float_type.ts";
-import { IntType } from "../primitive/int_type.ts";
-import { LongType } from "../primitive/long_type.ts";
-import { StringType } from "../primitive/string_type.ts";
-
-/**
- * Item types whose arrays a direct sync tap can fill in bulk.
- */
-type BulkArrayKind = "int" | "long" | "float" | "double" | "boolean" | "string";
 
 /**
  * Helper function to read an array from a tap.
@@ -75,9 +58,7 @@ export interface ArrayTypeParams<T> {
  */
 export class ArrayType<T = unknown> extends BaseType<T[]> {
   readonly #itemsType: Type<T>;
-  #bulkKind: BulkArrayKind | null | undefined = undefined;
-  #recordBlockReader: CompiledSyncRecordBlockReader | null | undefined =
-    undefined;
+  #primitiveKind: string | null | undefined = undefined;
 
   /**
    * Creates a new ArrayType.
@@ -89,6 +70,22 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
       throw new Error("ArrayType requires an items type.");
     }
     this.#itemsType = params.items;
+  }
+
+  #getPrimitiveKind(): string | null {
+    if (this.#primitiveKind === undefined) {
+      const json = this.#itemsType.toJSON();
+      if (
+        typeof json === "string" &&
+        (json === "int" || json === "long" || json === "float" ||
+          json === "double" || json === "boolean" || json === "string")
+      ) {
+        this.#primitiveKind = json;
+      } else {
+        this.#primitiveKind = null;
+      }
+    }
+    return this.#primitiveKind;
   }
 
   /**
@@ -296,80 +293,48 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
   }
 
   /**
-   * Deserializes an array from a sync tap.
-   * @param tap The tap to read from.
-   * @returns The deserialized array.
+   * Reads the entire array synchronously from the tap.
+   * Optimized: inlined loop, uses readInt() for block counts, pre-sizes array.
    */
   public override readSync(tap: SyncReadableTapLike): T[] {
-    const bulkKind = this.#getBulkKind();
+    const primitiveKind = this.#getPrimitiveKind();
     if (
-      bulkKind !== null &&
+      primitiveKind !== null &&
       typeof (tap as DirectSyncReadableTap).readIntArrayInto === "function"
     ) {
-      return this.#readSyncBulk(tap as DirectSyncReadableTap, bulkKind);
+      return this.#readSyncBulk(tap as DirectSyncReadableTap, primitiveKind);
     }
 
-    const recordBlockReader = this.#getRecordBlockReader();
-    if (recordBlockReader) {
-      return this.#readSyncRecordBlocks(tap, recordBlockReader);
-    }
-
+    const result: T[] = [];
     const itemsType = this.#itemsType;
-    // Allocate the first (and almost always only) block exactly with
-    // new Array(count): growing an empty array via `.length =` measured about
-    // 45 ns of overhead per small array, which dominated nested-array reads.
-    let count = readBlockCountSync(tap, "Array block length");
-    const result: T[] = new Array(count);
-    let startIdx = 0;
-    while (count !== 0) {
+    while (true) {
+      let count = tap.readInt();
+      if (count === 0) break;
+      if (count < 0) {
+        count = -count;
+        tap.skipLong();
+      }
+      const startIdx = result.length;
+      result.length = startIdx + count;
       for (let i = 0; i < count; i++) {
         result[startIdx + i] = itemsType.readSync(tap);
-      }
-      startIdx += count;
-      count = readBlockCountSync(tap, "Array block length");
-      if (count !== 0) {
-        result.length = startIdx + count;
       }
     }
     return result;
   }
 
-  #getRecordBlockReader(): CompiledSyncRecordBlockReader | null {
-    if (this.#recordBlockReader === undefined) {
-      const provider = this.#itemsType as
-        & Type<T>
-        & Partial<CompiledSyncRecordBlockReaderProvider>;
-      const getBlockReader = provider[compiledSyncRecordBlockReader];
-      this.#recordBlockReader = typeof getBlockReader === "function"
-        ? getBlockReader.call(provider)
-        : null;
-    }
-    return this.#recordBlockReader;
-  }
-
-  #readSyncRecordBlocks(
-    tap: SyncReadableTapLike,
-    readBlock: CompiledSyncRecordBlockReader,
-  ): T[] {
-    let count = readBlockCountSync(tap, "Array block length");
-    const result: Record<string, unknown>[] = new Array(count);
-    let startIndex = 0;
-    while (count !== 0) {
-      readBlock(tap, result, startIndex, count);
-      startIndex += count;
-      count = readBlockCountSync(tap, "Array block length");
-      if (count !== 0) {
-        result.length = startIndex + count;
+  #readSyncBulk(tap: DirectSyncReadableTap, kind: string): T[] {
+    const result: unknown[] = [];
+    while (true) {
+      let count = tap.readInt();
+      if (count === 0) break;
+      if (count < 0) {
+        count = -count;
+        tap.skipLong();
       }
-    }
-    return result as T[];
-  }
+      const startIdx = result.length;
+      result.length = startIdx + count;
 
-  #readSyncBulk(tap: DirectSyncReadableTap, kind: BulkArrayKind): T[] {
-    let count = readBlockCountSync(tap, "Array block length");
-    const result: unknown[] = new Array(count);
-    let startIdx = 0;
-    while (count !== 0) {
       switch (kind) {
         case "int":
           tap.readIntArrayInto(result as number[], startIdx, count);
@@ -389,11 +354,6 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
         case "string":
           tap.readStringArrayInto(result as string[], startIdx, count);
           break;
-      }
-      startIdx += count;
-      count = readBlockCountSync(tap, "Array block length");
-      if (count !== 0) {
-        result.length = startIdx + count;
       }
     }
     return result as T[];
@@ -622,18 +582,19 @@ class ArrayResolver<T> extends Resolver<T[]> {
   }
 
   public override readSync(tap: SyncReadableTapLike): T[] {
+    const result: T[] = [];
     const itemResolver = this.#itemResolver;
-    let count = readBlockCountSync(tap, "Array block length");
-    const result: T[] = new Array(count);
-    let startIdx = 0;
-    while (count !== 0) {
+    while (true) {
+      let count = tap.readInt();
+      if (count === 0) break;
+      if (count < 0) {
+        count = -count;
+        tap.skipLong();
+      }
+      const startIdx = result.length;
+      result.length = startIdx + count;
       for (let i = 0; i < count; i++) {
         result[startIdx + i] = itemResolver.readSync(tap);
-      }
-      startIdx += count;
-      count = readBlockCountSync(tap, "Array block length");
-      if (count !== 0) {
-        result.length = startIdx + count;
       }
     }
     return result;
