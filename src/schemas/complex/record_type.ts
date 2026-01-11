@@ -29,6 +29,16 @@ export {
   type RecordWriterStrategy,
 } from "./record_writer_strategy.ts";
 export { RecordWriterCache } from "./record_writer_cache.ts";
+export {
+  type CompiledReader,
+  CompiledReaderStrategy,
+  type CompiledSyncReader,
+  defaultReaderStrategy,
+  InterpretedReaderStrategy,
+  type RecordReaderContext,
+  type RecordReaderStrategy,
+} from "./record_reader_strategy.ts";
+export { RecordReaderCache } from "./record_reader_cache.ts";
 
 import {
   RecordField,
@@ -43,6 +53,13 @@ import type {
 } from "./record_writer_strategy.ts";
 import { defaultWriterStrategy } from "./record_writer_strategy.ts";
 import { RecordWriterCache } from "./record_writer_cache.ts";
+import type {
+  CompiledReader,
+  CompiledSyncReader,
+  RecordReaderStrategy,
+} from "./record_reader_strategy.ts";
+import { defaultReaderStrategy } from "./record_reader_strategy.ts";
+import { RecordReaderCache } from "./record_reader_cache.ts";
 
 /**
  * Parameters for creating a RecordType.
@@ -72,16 +89,25 @@ export interface RecordTypeParams extends ResolvedNames {
    * alternative compilation approaches.
    */
   writerStrategy?: RecordWriterStrategy;
+  /**
+   * Optional reader strategy for customizing how record readers are compiled.
+   *
+   * - \`CompiledReaderStrategy\` (default): Inlines primitive tap methods for performance.
+   * - \`InterpretedReaderStrategy\`: Delegates to type.read() for simplicity.
+   */
+  readerStrategy?: RecordReaderStrategy;
 }
 
 /**
  * Avro \`record\` type supporting ordered fields, aliases, and schema evolution.
  */
 export class RecordType extends NamedType<Record<string, unknown>> {
+  static readonly __AVRO_RECORD_TYPE__ = true;
   #fields: RecordField[];
   #fieldNameToIndex: Map<string, number>;
   #fieldsThunk?: () => RecordFieldParams[];
   #writerCache: RecordWriterCache;
+  #readerCache: RecordReaderCache;
   #fieldNames: string[];
   #fieldTypes: Type[];
   #fieldHasDefault: boolean[];
@@ -92,7 +118,8 @@ export class RecordType extends NamedType<Record<string, unknown>> {
    * @param params The record type parameters.
    */
   constructor(params: RecordTypeParams) {
-    const { fields, validate, writerStrategy, ...names } = params;
+    const { fields, validate, writerStrategy, readerStrategy, ...names } =
+      params;
     super(names, validate ?? true);
 
     this.#fields = [];
@@ -103,6 +130,9 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     this.#fieldDefaultGetters = [];
     this.#writerCache = new RecordWriterCache(
       writerStrategy ?? defaultWriterStrategy,
+    );
+    this.#readerCache = new RecordReaderCache(
+      readerStrategy ?? defaultReaderStrategy,
     );
 
     if (typeof fields === "function") {
@@ -120,6 +150,10 @@ export class RecordType extends NamedType<Record<string, unknown>> {
    */
   public getWriterStrategy(): RecordWriterStrategy {
     return this.#writerCache.getStrategy();
+  }
+
+  public getReaderStrategy(): RecordReaderStrategy {
+    return this.#readerCache.getStrategy();
   }
 
   /**
@@ -260,11 +294,8 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     tap: ReadableTapLike,
   ): Promise<Record<string, unknown>> {
     this.#ensureFields();
-    const result: Record<string, unknown> = {};
-    for (const field of this.#fields) {
-      result[field.getName()] = await field.getType().read(tap);
-    }
-    return result;
+    const reader = this.#getOrCreateCompiledReader();
+    return (await reader(tap)) as Record<string, unknown>;
   }
 
   /**
@@ -272,11 +303,34 @@ export class RecordType extends NamedType<Record<string, unknown>> {
    */
   public override readSync(tap: SyncReadableTapLike): Record<string, unknown> {
     this.#ensureFields();
-    const result: Record<string, unknown> = {};
-    for (const field of this.#fields) {
-      result[field.getName()] = field.getType().readSync(tap);
-    }
-    return result;
+    const reader = this.#getOrCreateCompiledSyncReader();
+    return reader(tap) as Record<string, unknown>;
+  }
+
+  #getOrCreateCompiledReader(): CompiledReader {
+    this.#ensureFields();
+    return this.#readerCache.getOrCreateReader(
+      {
+        fieldNames: this.#fieldNames,
+        fieldTypes: this.#fieldTypes,
+      },
+      // This callback is only invoked by the strategy for RecordType fields.
+      // Non-record types are handled directly by the strategy's compileFieldReader.
+      (type) => (type as RecordType).#getOrCreateCompiledReader(),
+    );
+  }
+
+  #getOrCreateCompiledSyncReader(): CompiledSyncReader {
+    this.#ensureFields();
+    return this.#readerCache.getOrCreateSyncReader(
+      {
+        fieldNames: this.#fieldNames,
+        fieldTypes: this.#fieldTypes,
+      },
+      // This callback is only invoked by the strategy for RecordType fields.
+      // Non-record types are handled directly by the strategy's compileSyncFieldReader.
+      (type) => (type as RecordType).#getOrCreateCompiledSyncReader(),
+    );
   }
 
   /**
@@ -470,6 +524,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     this.#fieldHasDefault = [];
     this.#fieldDefaultGetters = [];
     this.#writerCache.clear();
+    this.#readerCache.clear();
 
     candidate.forEach((fieldParams) => {
       const field = new RecordField(fieldParams);

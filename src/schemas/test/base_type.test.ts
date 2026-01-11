@@ -434,7 +434,7 @@ describe("Type", () => {
         assertThrows(
           () => type.fromSyncBuffer(extraBuffer),
           Error,
-          "Insufficient data for type",
+          "Extra data after value",
         );
       });
     });

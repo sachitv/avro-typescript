@@ -435,7 +435,7 @@ describe("LongType", () => {
             type.fromSyncBuffer(largeBuffer);
           },
           Error,
-          "Insufficient data for type",
+          "Extra data after value",
         );
       });
     });
