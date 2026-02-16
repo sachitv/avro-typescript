@@ -1,8 +1,7 @@
 import { ReadableTap, type ReadableTapLike } from "../serialization/tap.ts";
-import {
-  SyncReadableTap,
-  type SyncReadableTapLike,
-} from "../serialization/tap_sync.ts";
+import type { SyncReadableTapLike } from "../serialization/tap_sync.ts";
+import { DirectSyncReadableTap } from "../serialization/direct_tap_sync.ts";
+import { ReadBufferError } from "../serialization/buffers/buffer_error.ts";
 import { Type } from "./type.ts";
 import { Resolver } from "./resolver.ts";
 import { safeStringify } from "./json.ts";
@@ -88,12 +87,23 @@ export abstract class BaseType<T = unknown> extends Type<T> {
    * Deserializes an ArrayBuffer into a value synchronously using the schema.
    * @param buffer The ArrayBuffer to deserialize.
    * @returns The deserialized value.
+   * @throws ReadBufferError if the buffer is truncated or insufficient.
+   * @throws Error if the buffer contains extra data after the value.
    */
   public fromSyncBuffer(buffer: ArrayBuffer): T {
-    const tap = new SyncReadableTap(buffer);
+    const uint8View = new Uint8Array(buffer);
+    const tap = new DirectSyncReadableTap(uint8View);
     const value = this.readSync(tap);
-    if (!tap.isValid() || tap.getPos() !== buffer.byteLength) {
-      throw new Error("Insufficient data for type");
+    if (!tap.isValid()) {
+      throw new ReadBufferError(
+        "Operation exceeds buffer bounds",
+        tap.pos,
+        0,
+        buffer.byteLength,
+      );
+    }
+    if (tap.pos !== buffer.byteLength) {
+      throw new Error("Extra data after value");
     }
     return value;
   }

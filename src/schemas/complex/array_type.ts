@@ -11,6 +11,7 @@ import type {
   SyncReadableTapLike,
   SyncWritableTapLike,
 } from "../../serialization/tap_sync.ts";
+import type { DirectSyncReadableTap } from "../../serialization/direct_tap_sync.ts";
 
 /**
  * Helper function to read an array from a tap.
@@ -86,6 +87,7 @@ export interface ArrayTypeParams<T> {
  */
 export class ArrayType<T = unknown> extends BaseType<T[]> {
   readonly #itemsType: Type<T>;
+  #primitiveKind: string | null | undefined = undefined;
 
   /**
    * Creates a new ArrayType.
@@ -97,6 +99,22 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
       throw new Error("ArrayType requires an items type.");
     }
     this.#itemsType = params.items;
+  }
+
+  #getPrimitiveKind(): string | null {
+    if (this.#primitiveKind === undefined) {
+      const json = this.#itemsType.toJSON();
+      if (
+        typeof json === "string" &&
+        (json === "int" || json === "long" || json === "float" ||
+          json === "double" || json === "boolean" || json === "string")
+      ) {
+        this.#primitiveKind = json;
+      } else {
+        this.#primitiveKind = null;
+      }
+    }
+    return this.#primitiveKind;
   }
 
   /**
@@ -267,20 +285,69 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
 
   /**
    * Reads the entire array synchronously from the tap.
-   */
-  /**
-   * Reads resolved elements synchronously through the item resolver.
+   * Optimized: inlined loop, uses readInt() for block counts, pre-sizes array.
    */
   public override readSync(tap: SyncReadableTapLike): T[] {
+    const primitiveKind = this.#getPrimitiveKind();
+    if (
+      primitiveKind !== null &&
+      typeof (tap as DirectSyncReadableTap).readIntArrayInto === "function"
+    ) {
+      return this.#readSyncBulk(tap as DirectSyncReadableTap, primitiveKind);
+    }
+
     const result: T[] = [];
-    readArrayIntoSync(
-      tap,
-      (innerTap) => this.#itemsType.readSync(innerTap),
-      (value) => {
-        result.push(value);
-      },
-    );
+    const itemsType = this.#itemsType;
+    while (true) {
+      let count = tap.readInt();
+      if (count === 0) break;
+      if (count < 0) {
+        count = -count;
+        tap.skipLong();
+      }
+      const startIdx = result.length;
+      result.length = startIdx + count;
+      for (let i = 0; i < count; i++) {
+        result[startIdx + i] = itemsType.readSync(tap);
+      }
+    }
     return result;
+  }
+
+  #readSyncBulk(tap: DirectSyncReadableTap, kind: string): T[] {
+    const result: unknown[] = [];
+    while (true) {
+      let count = tap.readInt();
+      if (count === 0) break;
+      if (count < 0) {
+        count = -count;
+        tap.skipLong();
+      }
+      const startIdx = result.length;
+      result.length = startIdx + count;
+
+      switch (kind) {
+        case "int":
+          tap.readIntArrayInto(result as number[], startIdx, count);
+          break;
+        case "long":
+          tap.readLongArrayInto(result as bigint[], startIdx, count);
+          break;
+        case "float":
+          tap.readFloatArrayInto(result as number[], startIdx, count);
+          break;
+        case "double":
+          tap.readDoubleArrayInto(result as number[], startIdx, count);
+          break;
+        case "boolean":
+          tap.readBooleanArrayInto(result as boolean[], startIdx, count);
+          break;
+        case "string":
+          tap.readStringArrayInto(result as string[], startIdx, count);
+          break;
+      }
+    }
+    return result as T[];
   }
 
   /**
@@ -481,13 +548,20 @@ class ArrayResolver<T> extends Resolver<T[]> {
 
   public override readSync(tap: SyncReadableTapLike): T[] {
     const result: T[] = [];
-    readArrayIntoSync(
-      tap,
-      (innerTap) => this.#itemResolver.readSync(innerTap),
-      (value) => {
-        result.push(value);
-      },
-    );
+    const itemResolver = this.#itemResolver;
+    while (true) {
+      let count = tap.readInt();
+      if (count === 0) break;
+      if (count < 0) {
+        count = -count;
+        tap.skipLong();
+      }
+      const startIdx = result.length;
+      result.length = startIdx + count;
+      for (let i = 0; i < count; i++) {
+        result[startIdx + i] = itemResolver.readSync(tap);
+      }
+    }
     return result;
   }
 }
