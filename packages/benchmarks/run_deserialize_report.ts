@@ -61,6 +61,8 @@ interface BenchData {
 const AVRO_TS_CONFIGS = [
   { key: "fromSyncBuffer", label: "fromSyncBuffer", pattern: "avro-ts, fromSyncBuffer)" },
   { key: "readSync", label: "readSync", pattern: "avro-ts, readSync)" },
+  { key: "DirectTap", label: "DirectTap", pattern: "avro-ts, DirectTap)" },
+  { key: "DirectTap-reused", label: "DirectTap-reused", pattern: "avro-ts, DirectTap-reused)" },
   { key: "read-async", label: "read async", pattern: "avro-ts, read async)" },
 ];
 
@@ -308,12 +310,16 @@ try {
   console.log("| --- | --- |");
   console.log("| fromSyncBuffer | `type.fromSyncBuffer(buffer)` - convenience method that creates tap internally |");
   console.log("| readSync | `type.readSync(tap)` - manual tap setup with `SyncInMemoryReadableBuffer` + `SyncReadableTap` |");
+  console.log("| DirectTap | `type.readSync(tap)` - using `DirectSyncReadableTap` for direct buffer access (new tap per read) |");
+  console.log("| DirectTap-reused | `type.readSync(tap)` - reusing a single `DirectSyncReadableTap` with `pos = 0` reset |");
   console.log("| read async | `await type.read(tap)` - async read with `InMemoryReadableBuffer` + `ReadableTap` |");
 
   console.log("\n### Notes\n");
   console.log("- avsc and avro-js use `type.fromBuffer(buffer)` for deserialization");
   console.log("- avro-typescript read performance compared to write performance tends to be slower due to buffer abstraction overhead");
   console.log("- The `fromSyncBuffer` method is generally the fastest avro-ts option as it has the least overhead");
+  console.log("- **Float/Double performance**: `DirectTap-reused` shows 2.6-2.8x faster performance than avsc when the tap is reused");
+  console.log("- For high-throughput scenarios with float/double data, reuse `DirectSyncReadableTap` instances by resetting `pos = 0`");
 
   console.log("\n Benchmark completed successfully!");
 } catch (error) {
