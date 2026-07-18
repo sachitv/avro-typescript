@@ -17,7 +17,7 @@ fi
 
 echo "Running deno fmt on staged files..."
 # Format only the staged files
-echo "$STAGED_TS_FILES" | xargs deno fmt
+echo "$STAGED_TS_FILES" | xargs deno fmt --no-config --permit-no-files
 
 # Check if deno fmt made changes to staged files
 CHANGED_STAGED_FILES=""
@@ -33,7 +33,7 @@ if [ -n "$CHANGED_STAGED_FILES" ]; then
 fi
 
 echo "Running deno lint on staged files..."
-echo "$STAGED_TS_FILES" | xargs deno lint
+echo "$STAGED_TS_FILES" | xargs deno lint --no-config
 
 if [ $? -ne 0 ]; then
     echo "deno lint failed. Aborting commit."
