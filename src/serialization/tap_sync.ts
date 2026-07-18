@@ -1,6 +1,6 @@
 import { bigIntToSafeNumber } from "./conversion.ts";
 import { compareUint8Arrays } from "./compare_bytes.ts";
-import { decode, encoder } from "./text_encoding.ts";
+import { decodeWithFastPath, encoder } from "./text_encoding.ts";
 import { TapBase } from "./tap.ts";
 import type { ISyncReadable, ISyncWritable } from "./buffers/buffer_sync.ts";
 import { ReadBufferError } from "./buffers/buffer_error.ts";
@@ -354,11 +354,18 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
     this.pos += len;
   }
 
-  /** Reads a length-prefixed UTF-8 string. */
+  /**
+   * Reads a length-prefixed UTF-8 string.
+   */
   readString(): string {
-    const len = bigIntToSafeNumber(this.readLong(), "readString length");
-    const bytes = this.readFixed(len);
-    return decode(bytes);
+    const len = this.readInt();
+    if (len < 0) {
+      throw new RangeError(`Invalid negative string length: ${len}`);
+    }
+    if (len === 0) {
+      return "";
+    }
+    return decodeWithFastPath(this.readFixed(len));
   }
 
   /** Skips a length-prefixed UTF-8 string. */
