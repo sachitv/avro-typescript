@@ -214,7 +214,7 @@ describe("Type", () => {
       await assertRejects(
         () => type.fromBuffer(extraBuffer),
         Error,
-        "Insufficient data for type",
+        "Extra data after value",
       );
     });
   });
@@ -434,7 +434,7 @@ describe("Type", () => {
         assertThrows(
           () => type.fromSyncBuffer(extraBuffer),
           Error,
-          "Insufficient data for type",
+          "Extra data after value",
         );
       });
     });
