@@ -56,7 +56,7 @@ if [ -n "$STAGED_REPO_TS_FILES" ]; then
     echo "$STAGED_REPO_TS_FILES" | xargs deno lint --permit-no-files
 fi
 if [ -n "$STAGED_BENCHMARK_TS_FILES" ]; then
-    echo "$STAGED_BENCHMARK_TS_FILES" | xargs deno lint --no-config --permit-no-files --rules-exclude=no-unversioned-import --rules-exclude=ban-unused-ignore
+    echo "$STAGED_BENCHMARK_TS_FILES" | xargs deno lint --no-config --permit-no-files --rules-exclude=no-unversioned-import,ban-unused-ignore
 fi
 
 if [ $? -ne 0 ]; then
