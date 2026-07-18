@@ -222,6 +222,37 @@ describe("SyncTap primitive round-trips", () => {
     );
   });
 
+  it("readString decodes length prefixes wider than the int32 fast path", () => {
+    // Length 5 (zigzag 10) padded to a 6-byte long varint: too wide for the
+    // int32 fast path, so the fallback long read must decode it.
+    const buffer = new ArrayBuffer(16);
+    new Uint8Array(buffer).set([
+      0x8a,
+      0x80,
+      0x80,
+      0x80,
+      0x80,
+      0x00,
+      0x68,
+      0x65,
+      0x6c,
+      0x6c,
+      0x6f, // "hello"
+    ]);
+    const tap = new SyncReadableTap(new SyncInMemoryReadableBuffer(buffer));
+    expect(tap.readString()).toBe("hello");
+  });
+
+  it("readString reads lengths beyond int32 range as longs", () => {
+    // Length 2^31 (zigzag 2^32, varint 0x80 0x80 0x80 0x80 0x10): the sync
+    // writer can emit such lengths via writeLong, so the length must decode
+    // as a long; the failure is then insufficient data, not a varint error.
+    const buffer = new ArrayBuffer(5);
+    new Uint8Array(buffer).set([0x80, 0x80, 0x80, 0x80, 0x10]);
+    const tap = new SyncReadableTap(new SyncInMemoryReadableBuffer(buffer));
+    assertThrows(() => tap.readString(), ReadBufferError);
+  });
+
   registerSyncWriterReaderTests<Uint8Array>("bytes", {
     elems: [
       toUint8Array([0x61, 0x62, 0x63]),

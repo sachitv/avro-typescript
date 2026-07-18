@@ -340,6 +340,15 @@ describe("DirectSyncReadableTap", () => {
         "Invalid negative bytes length",
       );
     });
+
+    it("readBytes decodes length prefixes wider than the int32 fast path", () => {
+      // Length 3 (zigzag 6) padded to a 6-byte long varint takes the
+      // fallback long read instead of the int32 fast path.
+      const tap = new DirectSyncReadableTap(
+        new Uint8Array([0x86, 0x80, 0x80, 0x80, 0x80, 0x00, 1, 2, 3]),
+      );
+      expect(tap.readBytes()).toEqual(new Uint8Array([1, 2, 3]));
+    });
   });
 
   describe("readString and skipString", () => {
@@ -365,6 +374,38 @@ describe("DirectSyncReadableTap", () => {
         RangeError,
         "Invalid negative string length",
       );
+    });
+
+    it("decodes length prefixes wider than the int32 fast path", () => {
+      // Length 5 (zigzag 10) padded to a 6-byte long varint: too wide for
+      // the int32 fast path, so the fallback long read must decode it.
+      const tap = new DirectSyncReadableTap(
+        new Uint8Array([
+          0x8a,
+          0x80,
+          0x80,
+          0x80,
+          0x80,
+          0x00,
+          0x68,
+          0x65,
+          0x6c,
+          0x6c,
+          0x6f, // "hello"
+        ]),
+      );
+      expect(tap.readString()).toBe("hello");
+    });
+
+    it("skipString accepts lengths beyond int32 range", () => {
+      // Length 2^31 (zigzag 2^32): the sync writer can emit this via
+      // writeLong, so skipping must decode the long instead of rejecting
+      // the varint as out of int32 range.
+      const tap = new DirectSyncReadableTap(
+        new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x10]),
+      );
+      tap.skipString();
+      expect(tap.pos).toBe(5 + 2 ** 31);
     });
 
     it("decodes only available bytes for a truncated string and invalidates the tap", () => {

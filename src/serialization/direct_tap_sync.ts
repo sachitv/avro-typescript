@@ -1,6 +1,7 @@
 import { decodeUtf8Range } from "./text_encoding.ts";
 import type { SyncReadableTapLike } from "./tap_sync.ts";
 import { compareUint8Arrays } from "./compare_bytes.ts";
+import { bigIntToSafeNumber } from "./conversion.ts";
 
 /**
  * Powers of 2^7 for number-space varint accumulation. Seven payload bytes
@@ -232,9 +233,34 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
     this.#pos += len;
   }
 
+  /**
+   * Reads a length prefix as a number. Avro encodes lengths as longs; the
+   * 32-bit fast path covers varints up to 4 payload bytes (lengths below
+   * 2^27), and wider varints fall back to a full long read from the
+   * unchanged cursor position so valid long lengths decode the same as in
+   * the async path.
+   */
+  #readLength(context: string): number {
+    const buf = this.#buf;
+    let pos = this.#pos;
+    let result = 0;
+    let shift = 0;
+    let byte: number;
+    do {
+      byte = buf[pos++]!;
+      if (shift >= 28) {
+        return bigIntToSafeNumber(this.readLong(), context);
+      }
+      result |= (byte & 0x7f) << shift;
+      shift += 7;
+    } while ((byte & 0x80) !== 0);
+    this.#pos = pos;
+    return (result >>> 1) ^ -(result & 1);
+  }
+
   /** Reads a length-prefixed byte sequence. */
   readBytes(): Readonly<Uint8Array> {
-    const length = this.readInt();
+    const length = this.#readLength("readBytes length");
     if (length < 0) {
       throw new RangeError(`Invalid negative bytes length: ${length}`);
     }
@@ -243,7 +269,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
 
   /** Skips a length-prefixed byte sequence. */
   skipBytes(): void {
-    const len = this.readInt();
+    const len = this.#readLength("skipBytes length");
     if (len < 0) {
       throw new RangeError(`Invalid negative bytes length: ${len}`);
     }
@@ -259,7 +285,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
    * See packages/benchmarks/text_encoding_bench.ts for benchmark data.
    */
   readString(): string {
-    const len = this.readInt();
+    const len = this.#readLength("readString length");
     if (len < 0) {
       throw new RangeError(`Invalid negative string length: ${len}`);
     }
@@ -273,7 +299,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
 
   /** Skips a length-prefixed UTF-8 string. */
   skipString(): void {
-    const len = this.readInt();
+    const len = this.#readLength("skipString length");
     if (len < 0) {
       throw new RangeError(`Invalid negative string length: ${len}`);
     }
