@@ -36,7 +36,7 @@ function waitForOpen(socket: WebSocket, timeout?: number): Promise<void> {
     return Promise.resolve();
   }
   return new Promise((resolve, reject) => {
-    let timer: number | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const cleanup = () => {
       socket.removeEventListener("open", handleOpen);
       socket.removeEventListener("error", handleError);
