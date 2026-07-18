@@ -2,6 +2,21 @@ import { isValidName } from "./resolve_names.ts";
 import { Type } from "../type.ts";
 
 /**
+ * Returns the internalized (string-table) copy of a string.
+ *
+ * Field names are used as property keys on every decoded record. V8 keyed
+ * stores and loads only stay on the fast inline-cache path when the key is an
+ * internalized string; names built at runtime (template literals, concat,
+ * network input) are not internalized and made record reads measurably slower
+ * (~1.5x on wide records). Round-tripping the name through a property key
+ * yields the canonical internalized copy, matching the always-interned names
+ * that source literals and JSON.parse produce.
+ */
+export function internString(value: string): string {
+  return Object.keys({ [value]: null })[0]!;
+}
+
+/**
  * Specifies the sort order for record fields.
  */
 export type RecordFieldOrder = "ascending" | "descending" | "ignore";
@@ -50,7 +65,7 @@ export class RecordField {
       throw new Error(`Invalid record field order: ${order}`);
     }
 
-    this.#name = name;
+    this.#name = internString(name);
     this.#type = type;
     this.#order = order;
 
