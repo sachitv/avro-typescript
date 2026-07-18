@@ -108,6 +108,7 @@ export interface RecordTypeParams extends ResolvedNames {
  * Avro \`record\` type supporting ordered fields, aliases, and schema evolution.
  */
 export class RecordType extends NamedType<Record<string, unknown>> {
+  /** Internal marker for structural record-type detection in hot paths. */
   static readonly __AVRO_RECORD_TYPE__ = true;
 
   #fields: RecordField[];
@@ -159,6 +160,7 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     return this.#writerCache.getStrategy();
   }
 
+  /** Gets the reader strategy used by this record type. */
   public getReaderStrategy(): RecordReaderStrategy {
     return this.#readerCache.getStrategy();
   }

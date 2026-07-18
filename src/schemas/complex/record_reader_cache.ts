@@ -21,14 +21,20 @@ export class RecordReaderCache {
   #compiledReader?: CompiledReader;
   #strategy: RecordReaderStrategy;
 
+  /**
+   * Creates a cache backed by the supplied reader strategy.
+   * @param strategy The strategy used to compile record readers.
+   */
   constructor(strategy: RecordReaderStrategy = defaultReaderStrategy) {
     this.#strategy = strategy;
   }
 
+  /** Returns the reader strategy backing this cache. */
   public getStrategy(): RecordReaderStrategy {
     return this.#strategy;
   }
 
+  /** Clears all compiled reader slots. */
   public clear(): void {
     this.#compiledSyncReader = undefined;
     this.#compiledSyncRecordBlockReader = undefined;
@@ -36,6 +42,11 @@ export class RecordReaderCache {
     this.#compiledReader = undefined;
   }
 
+  /**
+   * Gets or compiles the async record reader for a field context.
+   * @param context Ordered field metadata for the record.
+   * @param getNestedReader Callback for resolving nested record readers.
+   */
   public getOrCreateReader(
     context: RecordReaderContext,
     getNestedReader: (type: Type) => CompiledReader,
@@ -71,6 +82,11 @@ export class RecordReaderCache {
     return placeholder;
   }
 
+  /**
+   * Gets or compiles the sync record reader for a field context.
+   * @param context Ordered field metadata for the record.
+   * @param getNestedReader Callback for resolving nested record readers.
+   */
   public getOrCreateSyncReader(
     context: RecordReaderContext,
     getNestedReader: (type: Type) => CompiledSyncReader,

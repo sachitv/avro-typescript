@@ -297,6 +297,11 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     return result;
   }
 
+  /**
+   * Deserializes an array from a sync tap.
+   * @param tap The tap to read from.
+   * @returns The deserialized array.
+   */
   public override readSync(tap: SyncReadableTapLike): T[] {
     const primitiveKind = this.#getPrimitiveKind();
     if (

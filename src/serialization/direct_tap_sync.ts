@@ -42,6 +42,11 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
   // DataView is a measurable cost when a tap is created per decode call.
   #dataView: DataView | null = null;
 
+  /**
+   * Creates a direct sync tap over an existing byte buffer.
+   * @param buf The buffer to read from.
+   * @param pos The initial read position.
+   */
   constructor(buf: Uint8Array, pos = 0) {
     this.#buf = buf;
     this.#pos = pos;
@@ -191,6 +196,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
     this.#pos = pos;
   }
 
+  /** Reads a 32-bit little-endian floating point number. */
   readFloat(): number {
     const pos = this.#pos;
     this.#pos = pos + 4;
@@ -202,6 +208,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
     this.#pos += 4;
   }
 
+  /** Reads a 64-bit little-endian floating point number. */
   readDouble(): number {
     const pos = this.#pos;
     this.#pos = pos + 8;
@@ -429,6 +436,12 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
     this.#pos = pos;
   }
 
+  /**
+   * Reads 32-bit floats directly into an array.
+   * @param result Pre-allocated array to fill starting at startIdx.
+   * @param startIdx Index in result to start writing.
+   * @param count Number of floats to read.
+   */
   readFloatArrayInto(result: number[], startIdx: number, count: number): void {
     const dv = this.#getDataView();
     let pos = this.#pos;
@@ -441,6 +454,12 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
     this.#pos = pos;
   }
 
+  /**
+   * Reads 64-bit doubles directly into an array.
+   * @param result Pre-allocated array to fill starting at startIdx.
+   * @param startIdx Index in result to start writing.
+   * @param count Number of doubles to read.
+   */
   readDoubleArrayInto(result: number[], startIdx: number, count: number): void {
     const dv = this.#getDataView();
     let pos = this.#pos;

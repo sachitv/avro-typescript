@@ -11,6 +11,9 @@ import { DirectSyncReadableTap } from "../../../serialization/direct_tap_sync.ts
 import { ArrayType, readArrayInto, readArrayIntoSync } from "../array_type.ts";
 import { IntType } from "../../primitive/int_type.ts";
 import { LongType } from "../../primitive/long_type.ts";
+import { FloatType } from "../../primitive/float_type.ts";
+import { DoubleType } from "../../primitive/double_type.ts";
+import { BooleanType } from "../../primitive/boolean_type.ts";
 import { StringType } from "../../primitive/string_type.ts";
 import { BytesType } from "../../primitive/bytes_type.ts";
 import type { Type } from "../../type.ts";
@@ -25,6 +28,11 @@ import { createRecord } from "./record_test_utils.ts";
 
 function createArray<T>(items: Type<T>): ArrayType<T> {
   return new ArrayType({ items });
+}
+
+function readWithDirectTap<T>(type: ArrayType<T>, values: T[]): T[] {
+  const buffer = type.toSyncBuffer(values);
+  return type.readSync(new DirectSyncReadableTap(new Uint8Array(buffer)));
 }
 
 describe("ArrayType", () => {
@@ -119,6 +127,81 @@ describe("ArrayType", () => {
       assertEquals(readTap.getPos(), 0);
       assertEquals(intArray.readSync(readTap), [10, 20]);
       assertEquals(readTap.getPos(), writeTap.getPos());
+    });
+
+    it("reads primitive arrays through the direct sync bulk path", () => {
+      assertEquals(readWithDirectTap(intArray, [1, -2, 3]), [1, -2, 3]);
+      assertEquals(
+        readWithDirectTap(createArray(new LongType()), [1n, -2n, 3n]),
+        [1n, -2n, 3n],
+      );
+      assertEquals(
+        readWithDirectTap(createArray(new FloatType()), [1.5, -2.25]),
+        [1.5, -2.25],
+      );
+      assertEquals(
+        readWithDirectTap(createArray(new DoubleType()), [1.25, -2.5]),
+        [1.25, -2.5],
+      );
+      assertEquals(
+        readWithDirectTap(createArray(new BooleanType()), [true, false, true]),
+        [true, false, true],
+      );
+      assertEquals(
+        readWithDirectTap(createArray(new StringType()), ["alpha", "beta"]),
+        ["alpha", "beta"],
+      );
+    });
+
+    it("reads size-prefixed primitive blocks through the direct sync bulk path", () => {
+      const buffer = new ArrayBuffer(64);
+      const writeTap = new SyncWritableTap(buffer);
+      writeTap.writeInt(-2);
+      writeTap.writeLong(2n);
+      writeTap.writeInt(10);
+      writeTap.writeInt(20);
+      writeTap.writeInt(0);
+      const encoded = buffer.slice(0, writeTap.getPos());
+
+      assertEquals(
+        intArray.readSync(new DirectSyncReadableTap(new Uint8Array(encoded))),
+        [10, 20],
+      );
+    });
+
+    it("reads later size-prefixed primitive blocks through the direct sync bulk path", () => {
+      const buffer = new ArrayBuffer(64);
+      const writeTap = new SyncWritableTap(buffer);
+      writeTap.writeInt(1);
+      writeTap.writeInt(10);
+      writeTap.writeInt(-2);
+      writeTap.writeLong(2n);
+      writeTap.writeInt(20);
+      writeTap.writeInt(30);
+      writeTap.writeInt(0);
+      const encoded = buffer.slice(0, writeTap.getPos());
+
+      assertEquals(
+        intArray.readSync(new DirectSyncReadableTap(new Uint8Array(encoded))),
+        [10, 20, 30],
+      );
+    });
+
+    it("falls back from direct sync reads for non-primitive arrays", () => {
+      const bytesArray = createArray(new BytesType());
+      const buffer = new ArrayBuffer(64);
+      const writeTap = new SyncWritableTap(buffer);
+      writeTap.writeInt(-1);
+      writeTap.writeLong(3n);
+      writeTap.writeBytes(new Uint8Array([1, 2]));
+      writeTap.writeInt(0);
+      const encoded = buffer.slice(0, writeTap.getPos());
+
+      const [value] = bytesArray.readSync(
+        new DirectSyncReadableTap(new Uint8Array(encoded)),
+      );
+      assert(value);
+      assertEquals([...value], [1, 2]);
     });
   });
 
@@ -483,6 +566,22 @@ describe("ArrayType", () => {
       w.writeInt(0);
       const tap = new SyncReadableTap(buffer);
       assertEquals(resolver.readSync(tap), [5n, 6n, 7n]);
+    });
+
+    it("reads initial size-prefixed blocks through the sync resolver", () => {
+      const intArrayWriter = createArray(new IntType());
+      const longArrayReader = createArray(new LongType());
+      const resolver = longArrayReader.createResolver(intArrayWriter);
+      const buffer = new ArrayBuffer(64);
+      const writeTap = new SyncWritableTap(buffer);
+      writeTap.writeInt(-2);
+      writeTap.writeLong(2n);
+      writeTap.writeInt(5);
+      writeTap.writeInt(6);
+      writeTap.writeInt(0);
+      const tap = new SyncReadableTap(buffer);
+
+      assertEquals(resolver.readSync(tap), [5n, 6n]);
     });
 
     it("reads resolver values synchronously", () => {

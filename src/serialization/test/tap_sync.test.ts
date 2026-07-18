@@ -210,6 +210,18 @@ describe("SyncTap primitive round-trips", () => {
     writer: (tap, value) => tap.writeString(value),
   });
 
+  it("readString throws on negative length", () => {
+    const tap = createSyncReadableTapWithWrites((writer) => {
+      writer.writeInt(-1);
+    });
+
+    assertThrows(
+      () => tap.readString(),
+      RangeError,
+      "Invalid negative string length",
+    );
+  });
+
   registerSyncWriterReaderTests<Uint8Array>("bytes", {
     elems: [
       toUint8Array([0x61, 0x62, 0x63]),

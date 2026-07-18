@@ -40,22 +40,24 @@ export type CompiledSyncRecordBlockReader = (
 ) => void;
 
 /** Internal capability for obtaining an assembled asynchronous record reader. */
-export const compiledRecordReader = Symbol.for(
+export const compiledRecordReader: unique symbol = Symbol.for(
   "@sachitv/avro-typescript/compiled-record-reader/v1",
 );
 
 /** A type exposing its assembled asynchronous record reader. */
 export interface CompiledRecordReaderProvider {
+  /** Returns this type's assembled asynchronous record reader. */
   [compiledRecordReader](): CompiledReader;
 }
 
 /** Internal capability for obtaining an assembled synchronous record reader. */
-export const compiledSyncRecordReader = Symbol.for(
+export const compiledSyncRecordReader: unique symbol = Symbol.for(
   "@sachitv/avro-typescript/compiled-sync-record-reader/v1",
 );
 
 /** A type exposing its assembled synchronous record reader. */
 export interface CompiledSyncRecordReaderProvider {
+  /** Returns this type's assembled synchronous record reader. */
   [compiledSyncRecordReader](): CompiledSyncReader;
 }
 
@@ -64,12 +66,13 @@ export interface CompiledSyncRecordReaderProvider {
  * A versioned global symbol keeps the optimization off the package's public
  * string-named API while still working across duplicate package instances.
  */
-export const compiledSyncRecordBlockReader = Symbol.for(
+export const compiledSyncRecordBlockReader: unique symbol = Symbol.for(
   "@sachitv/avro-typescript/compiled-sync-record-block-reader/v1",
 );
 
 /** A type exposing the internal compiled record-block capability. */
 export interface CompiledSyncRecordBlockReaderProvider {
+  /** Returns this type's compiled sync record-block reader. */
   [compiledSyncRecordBlockReader](): CompiledSyncRecordBlockReader;
 }
 
