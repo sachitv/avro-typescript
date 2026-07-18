@@ -1,6 +1,23 @@
-import { decode } from "./text_encoding.ts";
+import { decodeUtf8Range } from "./text_encoding.ts";
 import type { SyncReadableTapLike } from "./tap_sync.ts";
 import { compareUint8Arrays } from "./compare_bytes.ts";
+
+/**
+ * Powers of 2^7 for number-space varint accumulation. Seven payload bytes
+ * carry 49 bits, comfortably inside the 53-bit exact-integer range of a
+ * double, so longs encoded in up to 7 bytes (magnitudes below 2^48) decode
+ * with plain float arithmetic and a single BigInt conversion instead of a
+ * BigInt operation per byte. Longer varints fall back to the BigInt loop.
+ */
+const VARINT_POW7 = [
+  1,
+  128,
+  16384,
+  2097152,
+  268435456,
+  34359738368,
+  4398046511104,
+];
 
 /**
  * High-performance synchronous readable tap that works directly on a Uint8Array.
@@ -21,12 +38,21 @@ import { compareUint8Arrays } from "./compare_bytes.ts";
 export class DirectSyncReadableTap implements SyncReadableTapLike {
   readonly #buf: Uint8Array;
   #pos: number;
-  readonly #dataView: DataView;
+  // Created lazily: only float/double reads need it, and constructing a
+  // DataView is a measurable cost when a tap is created per decode call.
+  #dataView: DataView | null = null;
 
   constructor(buf: Uint8Array, pos = 0) {
     this.#buf = buf;
     this.#pos = pos;
-    this.#dataView = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  }
+
+  #getDataView(): DataView {
+    return this.#dataView ??= new DataView(
+      this.#buf.buffer,
+      this.#buf.byteOffset,
+      this.#buf.byteLength,
+    );
   }
 
   /** Returns the current position in the buffer. */
@@ -95,9 +121,36 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
 
   /**
    * Reads a variable-length zig-zag encoded 64-bit signed integer as bigint.
-   * Optimized: direct array access without bounds checking.
+   *
+   * Optimized: varints of up to 7 payload bytes (magnitudes below 2^48 —
+   * every timestamp and most ids) accumulate in exact double arithmetic and
+   * convert to bigint once; only longer varints take the per-byte BigInt loop.
    */
   readLong(): bigint {
+    const buf = this.#buf;
+    let pos = this.#pos;
+    let value = 0;
+    let i = 0;
+    let byte: number;
+
+    do {
+      byte = buf[pos++]!;
+      if (i === 7) {
+        // 8+ payload bytes exceed the exact double range; redo in bigint
+        // from the unchanged cursor position.
+        return this.#readLongBig();
+      }
+      value += (byte & 0x7f) * VARINT_POW7[i]!;
+      i++;
+    } while ((byte & 0x80) !== 0);
+
+    this.#pos = pos;
+    const half = value / 2;
+    return value % 2 === 0 ? BigInt(half) : BigInt(-(half + 0.5));
+  }
+
+  /** BigInt fallback for varints longer than 7 payload bytes. */
+  #readLongBig(): bigint {
     const buf = this.#buf;
     let pos = this.#pos;
     let shift = 0n;
@@ -141,7 +194,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
   readFloat(): number {
     const pos = this.#pos;
     this.#pos = pos + 4;
-    return this.#dataView.getFloat32(pos, true);
+    return this.#getDataView().getFloat32(pos, true);
   }
 
   /** Skips a 32-bit floating point value by advancing four bytes. */
@@ -152,7 +205,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
   readDouble(): number {
     const pos = this.#pos;
     this.#pos = pos + 8;
-    return this.#dataView.getFloat64(pos, true);
+    return this.#getDataView().getFloat64(pos, true);
   }
 
   /** Skips a 64-bit floating point value by advancing eight bytes. */
@@ -190,15 +243,25 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
     this.#pos += len;
   }
 
-  /** Reads a length-prefixed UTF-8 string. */
+  /**
+   * Reads a length-prefixed UTF-8 string.
+   *
+   * Performance: Uses decodeUtf8Range, which applies String.fromCharCode for
+   * short ASCII strings and TextDecoder for larger strings, decoding directly
+   * from the backing buffer without a subarray allocation.
+   * See packages/benchmarks/text_encoding_bench.ts for benchmark data.
+   */
   readString(): string {
     const len = this.readInt();
     if (len < 0) {
       throw new RangeError(`Invalid negative string length: ${len}`);
     }
+    if (len === 0) {
+      return "";
+    }
     const pos = this.#pos;
     this.#pos += len;
-    return decode(this.#buf.subarray(pos, pos + len));
+    return decodeUtf8Range(this.#buf, pos, pos + len);
   }
 
   /** Skips a length-prefixed UTF-8 string. */
@@ -333,32 +396,41 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
     let pos = this.#pos;
 
     for (let i = 0; i < count; i++) {
-      // Inline varint decode + zig-zag for bigint
-      let shift = 0n;
-      let value = 0n;
+      // Number-space accumulation, exact for varints up to 7 payload bytes;
+      // longer varints re-decode this element through the BigInt fallback.
+      const elementStart = pos;
+      let value = 0;
+      let byteIndex = 0;
       let byte: number;
+      let overflowed = false;
       do {
         byte = buf[pos++]!;
-        if (shift >= 64n) {
-          throw new RangeError(
-            "Varint requires more than 10 bytes (int64 range exceeded)",
-          );
+        if (byteIndex === 7) {
+          overflowed = true;
+          break;
         }
-        const chunk = BigInt.asUintN(64, BigInt(byte & 0x7f) << shift);
-        value = BigInt.asUintN(64, value | chunk);
-        shift += 7n;
+        value += (byte & 0x7f) * VARINT_POW7[byteIndex]!;
+        byteIndex++;
       } while ((byte & 0x80) !== 0);
 
-      const shifted = BigInt.asUintN(64, value >> 1n);
-      const sign = BigInt.asUintN(64, -(value & 1n));
-      result[startIdx + i] = BigInt.asIntN(64, shifted ^ sign);
+      if (overflowed) {
+        this.#pos = elementStart;
+        result[startIdx + i] = this.#readLongBig();
+        pos = this.#pos;
+        continue;
+      }
+
+      const half = value / 2;
+      result[startIdx + i] = value % 2 === 0
+        ? BigInt(half)
+        : BigInt(-(half + 0.5));
     }
 
     this.#pos = pos;
   }
 
   readFloatArrayInto(result: number[], startIdx: number, count: number): void {
-    const dv = this.#dataView;
+    const dv = this.#getDataView();
     let pos = this.#pos;
 
     for (let i = 0; i < count; i++) {
@@ -370,7 +442,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
   }
 
   readDoubleArrayInto(result: number[], startIdx: number, count: number): void {
-    const dv = this.#dataView;
+    const dv = this.#getDataView();
     let pos = this.#pos;
 
     for (let i = 0; i < count; i++) {
@@ -420,7 +492,6 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
       do {
         byte = buf[pos++]!;
         if (shift >= 28) {
-          // 5th byte: only 4 bits allowed for int32
           if ((byte & 0x70) !== 0) {
             throw new RangeError(
               "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
@@ -431,10 +502,13 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
         shift += 7;
       } while ((byte & 0x80) !== 0);
       len = (len >>> 1) ^ -(len & 1);
+      if (len < 0) {
+        throw new RangeError(`Invalid negative string length: ${len}`);
+      }
 
-      // Decode UTF-8 string
-      result[startIdx + i] = decode(buf.subarray(pos, pos + len));
-      pos += len;
+      const end = pos + len;
+      result[startIdx + i] = decodeUtf8Range(buf, pos, end);
+      pos = end;
     }
 
     this.#pos = pos;
@@ -474,7 +548,10 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
         keyShift += 7;
       } while ((keyByte & 0x80) !== 0);
       keyLen = (keyLen >>> 1) ^ -(keyLen & 1);
-      const key = decode(buf.subarray(pos, pos + keyLen));
+      if (keyLen < 0) {
+        throw new RangeError(`Invalid negative string length: ${keyLen}`);
+      }
+      const key = decodeUtf8Range(buf, pos, pos + keyLen);
       pos += keyLen;
 
       // Read value (inline varint decode + zig-zag)
@@ -529,7 +606,10 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
         keyShift += 7;
       } while ((keyByte & 0x80) !== 0);
       keyLen = (keyLen >>> 1) ^ -(keyLen & 1);
-      const key = decode(buf.subarray(pos, pos + keyLen));
+      if (keyLen < 0) {
+        throw new RangeError(`Invalid negative string length: ${keyLen}`);
+      }
+      const key = decodeUtf8Range(buf, pos, pos + keyLen);
       pos += keyLen;
 
       // Read value (inline varint decode for length + string decode)
@@ -550,7 +630,10 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
         valShift += 7;
       } while ((valByte & 0x80) !== 0);
       valLen = (valLen >>> 1) ^ -(valLen & 1);
-      const value = decode(buf.subarray(pos, pos + valLen));
+      if (valLen < 0) {
+        throw new RangeError(`Invalid negative string length: ${valLen}`);
+      }
+      const value = decodeUtf8Range(buf, pos, pos + valLen);
       pos += valLen;
 
       result.set(key, value);
