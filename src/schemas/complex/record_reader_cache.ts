@@ -2,6 +2,7 @@ import type { Type } from "../type.ts";
 import type {
   CompiledReader,
   CompiledSyncReader,
+  CompiledSyncRecordBlockReader,
   RecordReaderContext,
   RecordReaderStrategy,
 } from "./record_reader_strategy.ts";
@@ -15,6 +16,8 @@ import { defaultReaderStrategy } from "./record_reader_strategy.ts";
  */
 export class RecordReaderCache {
   #compiledSyncReader?: CompiledSyncReader;
+  #compiledSyncRecordBlockReader?: CompiledSyncRecordBlockReader;
+  #compiledSyncFieldReaders?: CompiledSyncReader[];
   #compiledReader?: CompiledReader;
   #strategy: RecordReaderStrategy;
 
@@ -28,6 +31,8 @@ export class RecordReaderCache {
 
   public clear(): void {
     this.#compiledSyncReader = undefined;
+    this.#compiledSyncRecordBlockReader = undefined;
+    this.#compiledSyncFieldReaders = undefined;
     this.#compiledReader = undefined;
   }
 
@@ -97,7 +102,39 @@ export class RecordReaderCache {
     );
 
     impl[0] = actualReader;
+    this.#compiledSyncFieldReaders = fieldReaders;
     this.#compiledSyncReader = actualReader;
     return placeholder;
+  }
+
+  /**
+   * Gets or creates a reader which fills a complete block of record values.
+   * Custom strategies without a block hook retain their assembled scalar
+   * reader semantics through the fallback loop.
+   */
+  public getOrCreateSyncRecordBlockReader(
+    context: RecordReaderContext,
+    getNestedReader: (type: Type) => CompiledSyncReader,
+  ): CompiledSyncRecordBlockReader {
+    if (this.#compiledSyncRecordBlockReader) {
+      return this.#compiledSyncRecordBlockReader;
+    }
+
+    this.getOrCreateSyncReader(context, getNestedReader);
+    const scalarReader = this.#compiledSyncReader!;
+    const fieldReaders = this.#compiledSyncFieldReaders!;
+    const specialized = this.#strategy.assembleSyncRecordBlockReader?.(
+      context,
+      fieldReaders,
+    );
+
+    this.#compiledSyncRecordBlockReader = specialized ??
+      ((tap, result, startIndex, count) => {
+        const end = startIndex + count;
+        for (let i = startIndex; i < end; i++) {
+          result[i] = scalarReader(tap) as Record<string, unknown>;
+        }
+      });
+    return this.#compiledSyncRecordBlockReader;
   }
 }

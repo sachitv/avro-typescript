@@ -56,9 +56,15 @@ import { RecordWriterCache } from "./record_writer_cache.ts";
 import type {
   CompiledReader,
   CompiledSyncReader,
+  CompiledSyncRecordBlockReader,
   RecordReaderStrategy,
 } from "./record_reader_strategy.ts";
-import { defaultReaderStrategy } from "./record_reader_strategy.ts";
+import {
+  compiledRecordReader,
+  compiledSyncRecordBlockReader,
+  compiledSyncRecordReader,
+  defaultReaderStrategy,
+} from "./record_reader_strategy.ts";
 import { RecordReaderCache } from "./record_reader_cache.ts";
 
 /**
@@ -154,6 +160,35 @@ export class RecordType extends NamedType<Record<string, unknown>> {
 
   public getReaderStrategy(): RecordReaderStrategy {
     return this.#readerCache.getStrategy();
+  }
+
+  /** Provides the assembled async reader to composite types. */
+  public [compiledRecordReader](): CompiledReader {
+    this.#ensureFields();
+    // Initial compilation can return a recursive placeholder; the cache then
+    // exposes the assembled reader on the second lookup.
+    this.#getOrCreateCompiledReader();
+    return this.#getOrCreateCompiledReader();
+  }
+
+  /** Provides the assembled sync reader to composite types. */
+  public [compiledSyncRecordReader](): CompiledSyncReader {
+    this.#ensureFields();
+    // Keep the sync path identical to the async recursive-reader protocol.
+    this.#getOrCreateCompiledSyncReader();
+    return this.#getOrCreateCompiledSyncReader();
+  }
+
+  /** Provides the internal fused block-reader capability to composite types. */
+  public [compiledSyncRecordBlockReader](): CompiledSyncRecordBlockReader {
+    this.#ensureFields();
+    return this.#readerCache.getOrCreateSyncRecordBlockReader(
+      {
+        fieldNames: this.#fieldNames,
+        fieldTypes: this.#fieldTypes,
+      },
+      (type) => (type as RecordType).#getOrCreateCompiledSyncReader(),
+    );
   }
 
   /**

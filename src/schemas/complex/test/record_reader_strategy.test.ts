@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { IntType } from "../../primitive/int_type.ts";
@@ -564,6 +564,145 @@ describe("RecordReaderStrategy", () => {
         for (let i = 0; i < 12; i++) {
           assertEquals(result[`f${i}`], i + i * 100);
         }
+      });
+
+      it("assembles wide sync readers for every chunk remainder (11-20 fields)", () => {
+        const strategy = new CompiledReaderStrategy();
+
+        for (let fieldCount = 11; fieldCount <= 20; fieldCount++) {
+          const fieldNames = Array.from(
+            { length: fieldCount },
+            (_, i) => `f${i}`,
+          );
+          const context: RecordReaderContext = {
+            fieldNames,
+            fieldTypes: fieldNames.map(() => new IntType()),
+          };
+          const fieldReaders: CompiledSyncReader[] = fieldNames.map(
+            () => (tap: SyncReadableTapLike) => tap.readInt(),
+          );
+
+          const reader = strategy.assembleSyncRecordReader(
+            context,
+            fieldReaders,
+          );
+
+          const buffer = new ArrayBuffer(128);
+          const writeTap = new SyncWritableTap(buffer);
+          for (let i = 0; i < fieldCount; i++) {
+            writeTap.writeInt(i * 3);
+          }
+          const readTap = new SyncReadableTap(buffer);
+
+          const result = reader(readTap) as Record<string, number>;
+          assertEquals(Object.keys(result), fieldNames);
+          for (let i = 0; i < fieldCount; i++) {
+            assertEquals(result[`f${i}`], i * 3);
+          }
+        }
+      });
+    });
+
+    describe("assembleSyncRecordBlockReader direct API", () => {
+      it("specializes record blocks with zero through ten fields", () => {
+        const strategy = new CompiledReaderStrategy();
+
+        for (let fieldCount = 0; fieldCount <= 10; fieldCount++) {
+          const fieldNames = Array.from(
+            { length: fieldCount },
+            (_, index) => `f${index}`,
+          );
+          const context: RecordReaderContext = {
+            fieldNames,
+            fieldTypes: fieldNames.map(() => new IntType()),
+          };
+          const fieldReaders: CompiledSyncReader[] = fieldNames.map(
+            () => (tap) => tap.readInt(),
+          );
+          const readBlock = strategy.assembleSyncRecordBlockReader(
+            context,
+            fieldReaders,
+          );
+          assert(readBlock);
+
+          const buffer = new ArrayBuffer(128);
+          const writeTap = new SyncWritableTap(buffer);
+          for (let recordIndex = 0; recordIndex < 2; recordIndex++) {
+            for (let fieldIndex = 0; fieldIndex < fieldCount; fieldIndex++) {
+              writeTap.writeInt(recordIndex * 10 + fieldIndex);
+            }
+          }
+
+          const sentinel = { sentinel: true };
+          const result: Record<string, unknown>[] = [sentinel];
+          readBlock(new SyncReadableTap(buffer), result, 1, 2);
+
+          assertEquals(result[0], sentinel);
+          for (let recordIndex = 0; recordIndex < 2; recordIndex++) {
+            const expected: Record<string, number> = {};
+            for (let fieldIndex = 0; fieldIndex < fieldCount; fieldIndex++) {
+              expected[`f${fieldIndex}`] = recordIndex * 10 + fieldIndex;
+            }
+            assertEquals(result[recordIndex + 1], expected);
+          }
+        }
+      });
+
+      it("falls back for wide records and customized scalar assembly", () => {
+        const wideContext: RecordReaderContext = {
+          fieldNames: Array.from({ length: 12 }, (_, i) => `f${i}`),
+          fieldTypes: Array.from({ length: 12 }, () => new IntType()),
+        };
+        const fieldReaders = wideContext.fieldNames.map(
+          () => (tap: SyncReadableTapLike) => tap.readInt(),
+        );
+        const strategy = new CompiledReaderStrategy();
+        assertEquals(
+          strategy.assembleSyncRecordBlockReader(
+            wideContext,
+            fieldReaders,
+          ),
+          undefined,
+        );
+
+        class CustomizedStrategy extends CompiledReaderStrategy {
+          public override assembleSyncRecordReader(
+            context: RecordReaderContext,
+            readers: CompiledSyncReader[],
+          ): CompiledSyncReader {
+            const readRecord = super.assembleSyncRecordReader(
+              context,
+              readers,
+            );
+            return (tap) => ({
+              ...(readRecord(tap) as Record<string, unknown>),
+              customized: true,
+            });
+          }
+        }
+
+        assertEquals(
+          new CustomizedStrategy().assembleSyncRecordBlockReader(
+            {
+              fieldNames: ["value"],
+              fieldTypes: [new IntType()],
+            },
+            [(tap) => tap.readInt()],
+          ),
+          undefined,
+        );
+      });
+
+      it("falls back to safe scalar construction for __proto__", () => {
+        const strategy = new CompiledReaderStrategy();
+        const readBlock = strategy.assembleSyncRecordBlockReader(
+          {
+            fieldNames: ["__proto__"],
+            fieldTypes: [new StringType()],
+          },
+          [(tap) => tap.readString()],
+        );
+        assertEquals(readBlock, undefined);
       });
     });
   });
