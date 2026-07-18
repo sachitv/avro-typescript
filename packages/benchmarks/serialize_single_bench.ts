@@ -132,7 +132,10 @@ const deeplyNestedRecordSchema: SchemaLike = {
                     fields: [
                       { name: "id", type: "int" },
                       { name: "data", type: "bytes" },
-                      { name: "tags", type: { type: "array", items: "string" } },
+                      {
+                        name: "tags",
+                        type: { type: "array", items: "string" },
+                      },
                     ],
                   },
                 },
@@ -308,9 +311,7 @@ const arrayOfArraysDepth4Schema: SchemaLike = {
 const compiledStrategy = new CompiledWriterStrategy();
 const interpretedStrategy = new InterpretedWriterStrategy();
 
-// deno-lint-ignore no-explicit-any
 type AvscType = ReturnType<typeof avsc.Type.forSchema>;
-// deno-lint-ignore no-explicit-any
 type AvroJsType = ReturnType<typeof avrojs.parse>;
 
 interface LibraryTypes {
@@ -326,8 +327,7 @@ interface LibraryTypes {
 
 function createLibraryTypes(schema: SchemaLike): LibraryTypes {
   // avro-js requires object schema format, convert string primitives
-  const avroJsSchema =
-    typeof schema === "string" ? { type: schema } : schema;
+  const avroJsSchema = typeof schema === "string" ? { type: schema } : schema;
 
   return {
     avroTs: createType(schema),
@@ -381,7 +381,8 @@ function toNodeFormat(data: any): any {
     // Only do this for single-key objects where the key is a primitive Avro type name
     if (
       keys.length === 1 &&
-      ["null", "boolean", "int", "long", "float", "double", "bytes", "string"].includes(keys[0])
+      ["null", "boolean", "int", "long", "float", "double", "bytes", "string"]
+        .includes(keys[0])
     ) {
       const value = data[keys[0]];
       return toNodeFormat(value);
@@ -580,7 +581,7 @@ function runFullComparisonBenchmark(config: BenchmarkConfig) {
 /**
  * Fixed test data to ensure deterministic, reproducible benchmarks.
  * Using random data causes massive variance (65%+) between runs.
- * 
+ *
  * Design principles:
  * - Arrays always have 10 elements (large, realistic workload)
  * - Ints use large values (stress varint encoding)
@@ -596,7 +597,16 @@ const FIXTURES = {
   float: 3.14159,
   double: 2.718281828459045,
   bytes: new Uint8Array([
-    0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x57, 0x6f, 0x72, 0x6c,
+    0x48,
+    0x65,
+    0x6c,
+    0x6c,
+    0x6f,
+    0x20,
+    0x57,
+    0x6f,
+    0x72,
+    0x6c,
   ]), // "Hello Worl" - 10 bytes
   string: "The quick brown fox jumps over the lazy dog",
 
@@ -605,8 +615,22 @@ const FIXTURES = {
 
   // Fixed
   fixed: new Uint8Array([
-    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
-    0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
+    0x01,
+    0x23,
+    0x45,
+    0x67,
+    0x89,
+    0xab,
+    0xcd,
+    0xef,
+    0xfe,
+    0xdc,
+    0xba,
+    0x98,
+    0x76,
+    0x54,
+    0x32,
+    0x10,
   ]), // 16 bytes
 
   // Arrays - always 10 elements with large values
@@ -681,7 +705,18 @@ const FIXTURES = {
         value: 123.456,
         level4: {
           id: 4000004,
-          data: new Uint8Array([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a]),
+          data: new Uint8Array([
+            0x01,
+            0x02,
+            0x03,
+            0x04,
+            0x05,
+            0x06,
+            0x07,
+            0x08,
+            0x09,
+            0x0a,
+          ]),
           tags: [
             "tag_001",
             "tag_002",
@@ -856,71 +891,206 @@ const FIXTURES = {
 
   // Array of records - depth 3 (10x10x10 = 1000 records total)
   // Using compact notation for readability, but maintaining 10 elements per level
-  arrayOfRecordsDepth3: Array.from({ length: 10 }, (_, i) =>
-    Array.from({ length: 10 }, (_, j) =>
-      Array.from({ length: 10 }, (_, k) => ({
-        id: 8000000 + i * 10000 + j * 100 + k,
-        name: `R${String(i + 1).padStart(2, "0")}-${String(j + 1).padStart(2, "0")}-${String(k + 1).padStart(2, "0")}`,
-        value: (i + 1) + (j + 1) / 10 + (k + 1) / 100,
-      }))
-    )
+  arrayOfRecordsDepth3: Array.from(
+    { length: 10 },
+    (_, i) =>
+      Array.from(
+        { length: 10 },
+        (_, j) =>
+          Array.from({ length: 10 }, (_, k) => ({
+            id: 8000000 + i * 10000 + j * 100 + k,
+            name: `R${String(i + 1).padStart(2, "0")}-${
+              String(j + 1).padStart(2, "0")
+            }-${String(k + 1).padStart(2, "0")}`,
+            value: (i + 1) + (j + 1) / 10 + (k + 1) / 100,
+          })),
+      ),
   ),
 
   // Array of records - depth 4 (10x10x10x10 = 10,000 records total)
   // This is a very large dataset to stress-test performance
-  arrayOfRecordsDepth4: Array.from({ length: 10 }, (_, i) =>
-    Array.from({ length: 10 }, (_, j) =>
-      Array.from({ length: 10 }, (_, k) =>
-        Array.from({ length: 10 }, (_, l) => ({
-          id: 9000000 + i * 100000 + j * 10000 + k * 100 + l,
-          name: `R${String(i + 1).padStart(2, "0")}-${String(j + 1).padStart(2, "0")}-${String(k + 1).padStart(2, "0")}-${String(l + 1).padStart(2, "0")}`,
-          value: (i + 1) + (j + 1) / 10 + (k + 1) / 100 + (l + 1) / 1000,
-        }))
-      )
-    )
+  arrayOfRecordsDepth4: Array.from(
+    { length: 10 },
+    (_, i) =>
+      Array.from(
+        { length: 10 },
+        (_, j) =>
+          Array.from({ length: 10 }, (_, k) =>
+            Array.from({ length: 10 }, (_, l) => ({
+              id: 9000000 + i * 100000 + j * 10000 + k * 100 + l,
+              name: `R${String(i + 1).padStart(2, "0")}-${
+                String(j + 1).padStart(2, "0")
+              }-${String(k + 1).padStart(2, "0")}-${
+                String(l + 1).padStart(2, "0")
+              }`,
+              value: (i + 1) + (j + 1) / 10 + (k + 1) / 100 + (l + 1) / 1000,
+            }))),
+      ),
   ),
 
   // Array of arrays - depth 1 (array<array<int>>) - 10x10 = 100 ints
   arrayOfArraysDepth1: [
-    [1000001, 1000002, 1000003, 1000004, 1000005, 1000006, 1000007, 1000008, 1000009, 1000010],
-    [1000011, 1000012, 1000013, 1000014, 1000015, 1000016, 1000017, 1000018, 1000019, 1000020],
-    [1000021, 1000022, 1000023, 1000024, 1000025, 1000026, 1000027, 1000028, 1000029, 1000030],
-    [1000031, 1000032, 1000033, 1000034, 1000035, 1000036, 1000037, 1000038, 1000039, 1000040],
-    [1000041, 1000042, 1000043, 1000044, 1000045, 1000046, 1000047, 1000048, 1000049, 1000050],
-    [1000051, 1000052, 1000053, 1000054, 1000055, 1000056, 1000057, 1000058, 1000059, 1000060],
-    [1000061, 1000062, 1000063, 1000064, 1000065, 1000066, 1000067, 1000068, 1000069, 1000070],
-    [1000071, 1000072, 1000073, 1000074, 1000075, 1000076, 1000077, 1000078, 1000079, 1000080],
-    [1000081, 1000082, 1000083, 1000084, 1000085, 1000086, 1000087, 1000088, 1000089, 1000090],
-    [1000091, 1000092, 1000093, 1000094, 1000095, 1000096, 1000097, 1000098, 1000099, 1000100],
+    [
+      1000001,
+      1000002,
+      1000003,
+      1000004,
+      1000005,
+      1000006,
+      1000007,
+      1000008,
+      1000009,
+      1000010,
+    ],
+    [
+      1000011,
+      1000012,
+      1000013,
+      1000014,
+      1000015,
+      1000016,
+      1000017,
+      1000018,
+      1000019,
+      1000020,
+    ],
+    [
+      1000021,
+      1000022,
+      1000023,
+      1000024,
+      1000025,
+      1000026,
+      1000027,
+      1000028,
+      1000029,
+      1000030,
+    ],
+    [
+      1000031,
+      1000032,
+      1000033,
+      1000034,
+      1000035,
+      1000036,
+      1000037,
+      1000038,
+      1000039,
+      1000040,
+    ],
+    [
+      1000041,
+      1000042,
+      1000043,
+      1000044,
+      1000045,
+      1000046,
+      1000047,
+      1000048,
+      1000049,
+      1000050,
+    ],
+    [
+      1000051,
+      1000052,
+      1000053,
+      1000054,
+      1000055,
+      1000056,
+      1000057,
+      1000058,
+      1000059,
+      1000060,
+    ],
+    [
+      1000061,
+      1000062,
+      1000063,
+      1000064,
+      1000065,
+      1000066,
+      1000067,
+      1000068,
+      1000069,
+      1000070,
+    ],
+    [
+      1000071,
+      1000072,
+      1000073,
+      1000074,
+      1000075,
+      1000076,
+      1000077,
+      1000078,
+      1000079,
+      1000080,
+    ],
+    [
+      1000081,
+      1000082,
+      1000083,
+      1000084,
+      1000085,
+      1000086,
+      1000087,
+      1000088,
+      1000089,
+      1000090,
+    ],
+    [
+      1000091,
+      1000092,
+      1000093,
+      1000094,
+      1000095,
+      1000096,
+      1000097,
+      1000098,
+      1000099,
+      1000100,
+    ],
   ],
 
   // Array of arrays - depth 2 (array<array<array<int>>>) - 10x10x10 = 1000 ints
-  arrayOfArraysDepth2: Array.from({ length: 10 }, (_, i) =>
-    Array.from({ length: 10 }, (_, j) =>
-      Array.from({ length: 10 }, (_, k) => 2000000 + i * 10000 + j * 100 + k)
-    )
+  arrayOfArraysDepth2: Array.from(
+    { length: 10 },
+    (_, i) =>
+      Array.from(
+        { length: 10 },
+        (_, j) =>
+          Array.from(
+            { length: 10 },
+            (_, k) => 2000000 + i * 10000 + j * 100 + k,
+          ),
+      ),
   ),
 
   // Array of arrays - depth 3 (array<array<array<array<int>>>>) - 10x10x10x10 = 10,000 ints
-  arrayOfArraysDepth3: Array.from({ length: 10 }, (_, i) =>
-    Array.from({ length: 10 }, (_, j) =>
-      Array.from({ length: 10 }, (_, k) =>
-        Array.from({ length: 10 }, (_, l) => 3000000 + i * 100000 + j * 10000 + k * 100 + l)
-      )
-    )
+  arrayOfArraysDepth3: Array.from(
+    { length: 10 },
+    (_, i) =>
+      Array.from(
+        { length: 10 },
+        (_, j) =>
+          Array.from({ length: 10 }, (_, k) =>
+            Array.from({ length: 10 }, (_, l) =>
+              3000000 + i * 100000 + j * 10000 + k * 100 + l)),
+      ),
   ),
 
   // Array of arrays - depth 4 (array<array<array<array<array<int>>>>>) - 10x10x10x10x10 = 100,000 ints
-  arrayOfArraysDepth4: Array.from({ length: 10 }, (_, i) =>
-    Array.from({ length: 10 }, (_, j) =>
-      Array.from({ length: 10 }, (_, k) =>
-        Array.from({ length: 10 }, (_, l) =>
-          Array.from({ length: 10 }, (_, m) =>
-            4000000 + i * 1000000 + j * 100000 + k * 10000 + l * 100 + m
-          )
-        )
-      )
-    )
+  arrayOfArraysDepth4: Array.from(
+    { length: 10 },
+    (_, i) =>
+      Array.from(
+        { length: 10 },
+        (_, j) =>
+          Array.from({ length: 10 }, (_, k) =>
+            Array.from({ length: 10 }, (_, l) =>
+              Array.from({ length: 10 }, (_, m) =>
+                4000000 + i * 1000000 + j * 100000 + k * 10000 + l * 100 + m))),
+      ),
   ),
 };
 
@@ -1057,7 +1227,7 @@ const FIXTURES = {
   const types = createLibraryTypes(arrayOfIntsSchema);
   const data = FIXTURES.arrayOfInts;
   runFullComparisonBenchmark({
-    groupName: "complex: array<int>",
+    groupName: "complex: array\\<int\\>",
     types,
     avroTsData: data,
     nodeData: data,
@@ -1069,7 +1239,7 @@ const FIXTURES = {
   const types = createLibraryTypes(arrayOfStringsSchema);
   const data = FIXTURES.arrayOfStrings;
   runFullComparisonBenchmark({
-    groupName: "complex: array<string>",
+    groupName: "complex: array\\<string\\>",
     types,
     avroTsData: data,
     nodeData: data,
@@ -1084,7 +1254,7 @@ const FIXTURES = {
   const nodeData = Object.fromEntries(avroTsData.entries());
 
   runFullComparisonBenchmark({
-    groupName: "complex: map<int>",
+    groupName: "complex: map\\<int\\>",
     types,
     avroTsData,
     nodeData,
@@ -1099,7 +1269,7 @@ const FIXTURES = {
   const nodeData = Object.fromEntries(avroTsData.entries());
 
   runFullComparisonBenchmark({
-    groupName: "complex: map<string>",
+    groupName: "complex: map\\<string\\>",
     types,
     avroTsData,
     nodeData,

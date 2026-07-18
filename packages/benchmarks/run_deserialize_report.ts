@@ -59,10 +59,18 @@ interface BenchData {
 
 // Configuration keys for avro-ts variants (deserialization-specific)
 const AVRO_TS_CONFIGS = [
-  { key: "fromSyncBuffer", label: "fromSyncBuffer", pattern: "avro-ts, fromSyncBuffer)" },
+  {
+    key: "fromSyncBuffer",
+    label: "fromSyncBuffer",
+    pattern: "avro-ts, fromSyncBuffer)",
+  },
   { key: "readSync", label: "readSync", pattern: "avro-ts, readSync)" },
   { key: "DirectTap", label: "DirectTap", pattern: "avro-ts, DirectTap)" },
-  { key: "DirectTap-reused", label: "DirectTap-reused", pattern: "avro-ts, DirectTap-reused)" },
+  {
+    key: "DirectTap-reused",
+    label: "DirectTap-reused",
+    pattern: "avro-ts, DirectTap-reused)",
+  },
   { key: "read-async", label: "read async", pattern: "avro-ts, read async)" },
 ];
 
@@ -87,7 +95,8 @@ try {
     const match = bench.name.match(/^(.+?)\s*\(/);
     if (!match) continue;
 
-    const groupName = match[1].trim();
+    // Unescape backslash-escaped angle brackets for display (e.g., array\<int\> -> array<int>)
+    const groupName = match[1].trim().replace(/\\</g, "<").replace(/\\>/g, ">");
     if (!groups.has(groupName)) {
       groups.set(groupName, new Map());
     }
@@ -110,7 +119,9 @@ try {
     groups.get(groupName)!.set(configKey, bench);
   }
 
-  console.log("\n# Deserialize (Read) Benchmark Results - Cross-Library Comparison\n");
+  console.log(
+    "\n# Deserialize (Read) Benchmark Results - Cross-Library Comparison\n",
+  );
   console.log(`Generated on ${new Date().toISOString()}\n`);
 
   // Build header
@@ -120,7 +131,8 @@ try {
     "avro-js",
     ...AVRO_TS_CONFIGS.map((c) => c.label),
     "Best avro-ts",
-    "Best Config",
+    "Best config overall",
+    "Best config avro-typescript",
     "vs avsc",
   ];
   console.log(`| ${headers.join(" | ")} |`);
@@ -128,7 +140,13 @@ try {
 
   // Sort groups by category then name
   const sortedGroups = Array.from(groups.entries()).sort((a, b) => {
-    const order = ["primitive:", "complex:", "record:", "array-of-records:", "array-of-arrays:"];
+    const order = [
+      "primitive:",
+      "complex:",
+      "record:",
+      "array-of-records:",
+      "array-of-arrays:",
+    ];
     const aOrder = order.findIndex((p) => a[0].startsWith(p));
     const bOrder = order.findIndex((p) => b[0].startsWith(p));
     if (aOrder !== bOrder) return aOrder - bOrder;
@@ -153,6 +171,23 @@ try {
       }
     }
 
+    // Find best config overall (including avsc and avro-js)
+    let bestOverall: { label: string; time: number } | null = avscTime !== null
+      ? { label: "avsc", time: avscTime }
+      : null;
+    if (
+      avroJsTime !== null &&
+      (bestOverall === null || avroJsTime < bestOverall.time)
+    ) {
+      bestOverall = { label: "avro-js", time: avroJsTime };
+    }
+    if (
+      bestConfig !== null &&
+      (bestOverall === null || bestConfig.time < bestOverall.time)
+    ) {
+      bestOverall = { label: bestConfig.label, time: bestConfig.time };
+    }
+
     // Calculate speedup vs avsc
     let vsAvsc = "-";
     if (bestConfig && avscTime) {
@@ -165,11 +200,12 @@ try {
     }
 
     const row = [
-      `**${groupName}**`,
+      `\`${groupName}\``,
       avscTime !== null ? formatTime(avscTime) : "-",
       avroJsTime !== null ? formatTime(avroJsTime) : "-",
       ...avroTsTimes,
       bestConfig ? formatTime(bestConfig.time) : "-",
+      bestOverall ? bestOverall.label : "-",
       bestConfig ? bestConfig.label : "-",
       vsAvsc,
     ];
@@ -210,14 +246,16 @@ try {
 
   console.log(`- **Benchmarks compared**: ${benchmarksWithAvsc}`);
   console.log(
-    `- **avro-ts faster than avsc**: ${fasterCount}/${benchmarksWithAvsc}`
+    `- **avro-ts faster than avsc**: ${fasterCount}/${benchmarksWithAvsc}`,
   );
   console.log(
-    `- **avro-ts slower than avsc**: ${slowerCount}/${benchmarksWithAvsc}`
+    `- **avro-ts slower than avsc**: ${slowerCount}/${benchmarksWithAvsc}`,
   );
   if (benchmarksWithAvsc > 0) {
     console.log(
-      `- **Average speedup (best config)**: ${(totalSpeedup / benchmarksWithAvsc).toFixed(2)}x`
+      `- **Average speedup (best config)**: ${
+        (totalSpeedup / benchmarksWithAvsc).toFixed(2)
+      }x`,
     );
   }
 
@@ -228,11 +266,17 @@ try {
   const depthGroups = ["depth 1", "depth 2", "depth 3", "depth 4"];
 
   for (const category of arrayDepthCategories) {
-    const categoryGroups = sortedGroups.filter(([name]) => name.startsWith(category));
+    const categoryGroups = sortedGroups.filter(([name]) =>
+      name.startsWith(category)
+    );
 
     if (categoryGroups.length > 0) {
       const categoryTitle = category.replace(":", "").replace(/-/g, " ").trim();
-      console.log(`\n## ${categoryTitle.charAt(0).toUpperCase() + categoryTitle.slice(1)} - Depth Comparison\n`);
+      console.log(
+        `\n## ${
+          categoryTitle.charAt(0).toUpperCase() + categoryTitle.slice(1)
+        } - Depth Comparison\n`,
+      );
 
       const depthHeaders = ["Config", ...depthGroups];
       console.log(`| ${depthHeaders.join(" | ")} |`);
@@ -308,18 +352,38 @@ try {
   console.log("\n### Configuration Legend\n");
   console.log("| Abbreviation | Full Configuration |");
   console.log("| --- | --- |");
-  console.log("| fromSyncBuffer | `type.fromSyncBuffer(buffer)` - convenience method that creates tap internally |");
-  console.log("| readSync | `type.readSync(tap)` - manual tap setup with `SyncInMemoryReadableBuffer` + `SyncReadableTap` |");
-  console.log("| DirectTap | `type.readSync(tap)` - using `DirectSyncReadableTap` for direct buffer access (new tap per read) |");
-  console.log("| DirectTap-reused | `type.readSync(tap)` - reusing a single `DirectSyncReadableTap` with `pos = 0` reset |");
-  console.log("| read async | `await type.read(tap)` - async read with `InMemoryReadableBuffer` + `ReadableTap` |");
+  console.log(
+    "| fromSyncBuffer | `type.fromSyncBuffer(buffer)` - convenience method that creates tap internally |",
+  );
+  console.log(
+    "| readSync | `type.readSync(tap)` - manual tap setup with `SyncInMemoryReadableBuffer` + `SyncReadableTap` |",
+  );
+  console.log(
+    "| DirectTap | `type.readSync(tap)` - using `DirectSyncReadableTap` for direct buffer access (new tap per read) |",
+  );
+  console.log(
+    "| DirectTap-reused | `type.readSync(tap)` - reusing a single `DirectSyncReadableTap` with `pos = 0` reset |",
+  );
+  console.log(
+    "| read async | `await type.read(tap)` - async read with `InMemoryReadableBuffer` + `ReadableTap` |",
+  );
 
   console.log("\n### Notes\n");
-  console.log("- avsc and avro-js use `type.fromBuffer(buffer)` for deserialization");
-  console.log("- avro-typescript read performance compared to write performance tends to be slower due to buffer abstraction overhead");
-  console.log("- The `fromSyncBuffer` method is generally the fastest avro-ts option as it has the least overhead");
-  console.log("- **Float/Double performance**: `DirectTap-reused` shows 2.6-2.8x faster performance than avsc when the tap is reused");
-  console.log("- For high-throughput scenarios with float/double data, reuse `DirectSyncReadableTap` instances by resetting `pos = 0`");
+  console.log(
+    "- avsc and avro-js use `type.fromBuffer(buffer)` for deserialization",
+  );
+  console.log(
+    "- avro-typescript read performance compared to write performance tends to be slower due to buffer abstraction overhead",
+  );
+  console.log(
+    "- The `fromSyncBuffer` method is generally the fastest avro-ts option as it has the least overhead",
+  );
+  console.log(
+    "- **Float/Double performance**: `DirectTap-reused` shows 2.6-2.8x faster performance than avsc when the tap is reused",
+  );
+  console.log(
+    "- For high-throughput scenarios with float/double data, reuse `DirectSyncReadableTap` instances by resetting `pos = 0`",
+  );
 
   console.log("\n Benchmark completed successfully!");
 } catch (error) {
