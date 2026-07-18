@@ -108,6 +108,8 @@ export interface RecordTypeParams extends ResolvedNames {
  * Avro \`record\` type supporting ordered fields, aliases, and schema evolution.
  */
 export class RecordType extends NamedType<Record<string, unknown>> {
+  static readonly __AVRO_RECORD_TYPE__ = true;
+
   #fields: RecordField[];
   #fieldNameToIndex: Map<string, number>;
   #fieldsThunk?: () => RecordFieldParams[];
