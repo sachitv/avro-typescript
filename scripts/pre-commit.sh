@@ -52,14 +52,15 @@ if [ -n "$CHANGED_STAGED_FILES" ]; then
 fi
 
 echo "Running deno lint on staged files..."
+LINT_STATUS=0
 if [ -n "$STAGED_REPO_TS_FILES" ]; then
-    echo "$STAGED_REPO_TS_FILES" | xargs deno lint --permit-no-files
+    echo "$STAGED_REPO_TS_FILES" | xargs deno lint --permit-no-files || LINT_STATUS=$?
 fi
 if [ -n "$STAGED_BENCHMARK_TS_FILES" ]; then
-    echo "$STAGED_BENCHMARK_TS_FILES" | xargs deno lint --no-config --permit-no-files --rules-exclude=no-unversioned-import,ban-unused-ignore
+    echo "$STAGED_BENCHMARK_TS_FILES" | xargs deno lint --no-config --permit-no-files --rules-exclude=no-unversioned-import,ban-unused-ignore || LINT_STATUS=$?
 fi
 
-if [ $? -ne 0 ]; then
+if [ "$LINT_STATUS" -ne 0 ]; then
     echo "deno lint failed. Aborting commit."
     exit 1
 fi
