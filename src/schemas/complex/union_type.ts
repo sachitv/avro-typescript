@@ -1,5 +1,6 @@
 import { BaseType } from "../base_type.ts";
 import { NamedType } from "./named_type.ts";
+import { internString } from "./record_field.ts";
 import { Resolver } from "../resolver.ts";
 import { type JSONType, Type } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
@@ -11,7 +12,14 @@ import type {
   SyncReadableTapLike,
   SyncWritableTapLike,
 } from "../../serialization/tap_sync.ts";
-import { bigIntToSafeNumber } from "../../serialization/conversion.ts";
+import {
+  type CompiledReader,
+  compiledRecordReader,
+  type CompiledRecordReaderProvider,
+  type CompiledSyncReader,
+  compiledSyncRecordReader,
+  type CompiledSyncRecordReaderProvider,
+} from "./record_reader_strategy.ts";
 
 /**
  * Represents a wrapped value for a union type.
@@ -41,6 +49,27 @@ interface BranchInfo {
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null &&
     !Array.isArray(value);
+}
+
+function wrapUnionValue(name: string, value: unknown): UnionWrappedValue {
+  // Assignment lets V8 use a cached hidden-class transition. A computed-key
+  // object literal takes the slower generic property-definition path.
+  // `__proto__` is a valid Avro name but the one key whose assignment would
+  // invoke the legacy prototype setter instead of creating an own property,
+  // so that rare branch name takes the defineProperty path.
+  if (name === "__proto__") {
+    const wrapped: UnionWrappedValue = {};
+    Object.defineProperty(wrapped, name, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    });
+    return wrapped;
+  }
+  const wrapped: UnionWrappedValue = {};
+  wrapped[name] = value;
+  return wrapped;
 }
 
 /** @internal */
@@ -77,6 +106,9 @@ export class UnionType extends BaseType<UnionValue> {
   readonly #types: Type[];
   readonly #branches: BranchInfo[];
   readonly #indices: Map<string, number>;
+  readonly #hasCompiledRecordReaders: boolean;
+  #compiledReaders?: Array<CompiledReader | null>;
+  #compiledSyncReaders?: Array<CompiledSyncReader | null>;
 
   /**
    * Creates a new UnionType.
@@ -104,7 +136,10 @@ export class UnionType extends BaseType<UnionValue> {
       if (type instanceof UnionType) {
         throw new Error("Unions cannot be directly nested.");
       }
-      const name = getBranchTypeName(type);
+      // Branch names become property keys on every wrapped union value; the
+      // interned copy keeps those keyed stores on V8's fast path (see
+      // internString in record_field.ts).
+      const name = internString(getBranchTypeName(type));
       if (this.#indices.has(name)) {
         throw new Error(`Duplicate union branch of type name: ${name}`);
       }
@@ -119,6 +154,10 @@ export class UnionType extends BaseType<UnionValue> {
       this.#branches.push(branch);
       this.#indices.set(name, index);
     });
+
+    this.#hasCompiledRecordReaders = this.#types.some((type) =>
+      compiledRecordReader in type
+    );
   }
 
   /**
@@ -211,7 +250,7 @@ export class UnionType extends BaseType<UnionValue> {
     value: UnionValue,
   ): Promise<void> {
     const { index, branchValue } = this.#resolveBranch(value);
-    await tap.writeLong(BigInt(index));
+    await tap.writeInt(index);
     if (branchValue !== undefined) {
       await this.#branches[index].type.writeUnchecked(
         tap,
@@ -228,7 +267,7 @@ export class UnionType extends BaseType<UnionValue> {
     value: UnionValue,
   ): void {
     const { index, branchValue } = this.#resolveBranch(value);
-    tap.writeLong(BigInt(index));
+    tap.writeInt(index);
     if (branchValue !== undefined) {
       this.#branches[index].type.writeSyncUnchecked(
         tap,
@@ -249,8 +288,13 @@ export class UnionType extends BaseType<UnionValue> {
     if (branch.isNull) {
       return null;
     }
-    const branchValue = await branch.type.read(tap);
-    return { [branch.name]: branchValue };
+    const reader = this.#hasCompiledRecordReaders
+      ? this.#getCompiledReaders()[index]
+      : null;
+    const branchValue = reader
+      ? await reader(tap)
+      : await branch.type.read(tap);
+    return wrapUnionValue(branch.name, branchValue);
   }
 
   /**
@@ -265,8 +309,11 @@ export class UnionType extends BaseType<UnionValue> {
     if (branch.isNull) {
       return null;
     }
-    const branchValue = branch.type.readSync(tap);
-    return { [branch.name]: branchValue };
+    const reader = this.#hasCompiledRecordReaders
+      ? this.#getCompiledSyncReaders()[index]
+      : null;
+    const branchValue = reader ? reader(tap) : branch.type.readSync(tap);
+    return wrapUnionValue(branch.name, branchValue);
   }
 
   /**
@@ -313,7 +360,7 @@ export class UnionType extends BaseType<UnionValue> {
     }
 
     const cloned = this.#branches[index].type.cloneFromValue(branchValue);
-    return { [this.#branches[index].name]: cloned };
+    return wrapUnionValue(this.#branches[index].name, cloned);
   }
 
   /**
@@ -352,7 +399,7 @@ export class UnionType extends BaseType<UnionValue> {
       return null;
     }
     const value = branch.type.random();
-    return { [branch.name]: value };
+    return wrapUnionValue(branch.name, value);
   }
 
   /**
@@ -474,9 +521,29 @@ export class UnionType extends BaseType<UnionValue> {
     return { index: branchIndex, branchValue };
   }
 
+  #getCompiledReaders(): Array<CompiledReader | null> {
+    return this.#compiledReaders ??= this.#branches.map(({ type }) => {
+      const provider = type as Type & Partial<CompiledRecordReaderProvider>;
+      const getReader = provider[compiledRecordReader];
+      return typeof getReader === "function" ? getReader.call(provider) : null;
+    });
+  }
+
+  #getCompiledSyncReaders(): Array<CompiledSyncReader | null> {
+    return this.#compiledSyncReaders ??= this.#branches.map(({ type }) => {
+      const provider = type as
+        & Type
+        & Partial<CompiledSyncRecordReaderProvider>;
+      const getReader = provider[compiledSyncRecordReader];
+      return typeof getReader === "function" ? getReader.call(provider) : null;
+    });
+  }
+
   async #readBranchIndex(tap: ReadableTapLike): Promise<number> {
-    const indexBigInt = await tap.readLong();
-    const index = bigIntToSafeNumber(indexBigInt, "Union branch index");
+    // Union indices are non-negative schema-array offsets. Avro int and long
+    // share the same zig-zag varint encoding in this range, while readInt
+    // avoids allocating BigInts for every decoded union value.
+    const index = await tap.readInt();
     if (index < 0 || index >= this.#branches.length) {
       throw new Error(`Invalid union index: ${index}`);
     }
@@ -487,8 +554,7 @@ export class UnionType extends BaseType<UnionValue> {
    * Decodes a branch index from a sync tap with validation.
    */
   #readBranchIndexSync(tap: SyncReadableTapLike): number {
-    const indexBigInt = tap.readLong();
-    const index = bigIntToSafeNumber(indexBigInt, "Union branch index");
+    const index = tap.readInt();
     if (index < 0 || index >= this.#branches.length) {
       throw new Error(`Invalid union index: ${index}`);
     }
@@ -517,7 +583,7 @@ class UnionBranchResolver extends Resolver<UnionValue> {
     if (this.#branch.isNull) {
       return null;
     }
-    return { [this.#branch.name]: resolvedValue };
+    return wrapUnionValue(this.#branch.name, resolvedValue);
   }
 
   /**
@@ -528,7 +594,7 @@ class UnionBranchResolver extends Resolver<UnionValue> {
     if (this.#branch.isNull) {
       return null;
     }
-    return { [this.#branch.name]: resolvedValue };
+    return wrapUnionValue(this.#branch.name, resolvedValue);
   }
 }
 
@@ -543,8 +609,7 @@ class UnionFromUnionResolver extends Resolver<UnionValue> {
   public override async read(
     tap: ReadableTapLike,
   ): Promise<UnionValue> {
-    const indexBigInt = await tap.readLong();
-    const index = bigIntToSafeNumber(indexBigInt, "Union branch index");
+    const index = await tap.readInt();
     const resolver = this.#resolvers[index];
     if (!resolver) {
       throw new Error(`Invalid union index: ${index}`);
@@ -553,8 +618,7 @@ class UnionFromUnionResolver extends Resolver<UnionValue> {
   }
 
   public override readSync(tap: SyncReadableTapLike): UnionValue {
-    const indexBigInt = tap.readLong();
-    const index = bigIntToSafeNumber(indexBigInt, "Union branch index");
+    const index = tap.readInt();
     const resolver = this.#resolvers[index];
     if (!resolver) {
       throw new Error(`Invalid union index: ${index}`);
