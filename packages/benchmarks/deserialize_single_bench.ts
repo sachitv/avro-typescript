@@ -3,8 +3,7 @@
 import { Buffer } from "node:buffer";
 import avsc from "npm:avsc";
 import avrojs from "npm:avro-js";
-import type { SchemaLike } from "../../src/type/create_type.ts";
-import { createType } from "../../src/mod.ts";
+import { createType, type SchemaLike } from "../../src/type/create_type.ts";
 import {
   SyncInMemoryReadableBuffer,
 } from "../../src/serialization/buffers/in_memory_buffer_sync.ts";
@@ -30,15 +29,9 @@ import { ReadableTap } from "../../src/serialization/tap.ts";
 // BENCHMARK CONFIGURATION
 // =============================================================================
 
-/**
- * Number of iterations per benchmark.
- * Higher values = more accurate results but slower execution.
- * - 100000: High accuracy (slow, ~5-10 min)
- * - 10000: Good accuracy (moderate, ~30-60 sec)
- * - 1000: Quick comparison (fast, ~5-10 sec)
- * - 100: Very quick (for initial testing)
- */
-const BENCH_ITERATIONS = 100;
+// Iteration counts are left to Deno.bench's time-based calibration. Fixed low
+// counts (e.g. n: 1000) end before V8 finishes tiering sub-microsecond
+// benches, which produced bimodal results and overstated cross-library gaps.
 
 // =============================================================================
 // SCHEMA DEFINITIONS
@@ -132,7 +125,10 @@ const deeplyNestedRecordSchema: SchemaLike = {
                     fields: [
                       { name: "id", type: "int" },
                       { name: "data", type: "bytes" },
-                      { name: "tags", type: { type: "array", items: "string" } },
+                      {
+                        name: "tags",
+                        type: { type: "array", items: "string" },
+                      },
                     ],
                   },
                 },
@@ -305,12 +301,11 @@ const arrayOfArraysDepth4Schema: SchemaLike = {
 // TYPE CREATION
 // =============================================================================
 
-// deno-lint-ignore no-explicit-any
 type AvscType = ReturnType<typeof avsc.Type.forSchema>;
-// deno-lint-ignore no-explicit-any
 type AvroJsType = ReturnType<typeof avrojs.parse>;
 
 interface LibraryTypes {
+  schema: SchemaLike;
   avroTs: ReturnType<typeof createType>;
   avsc: AvscType;
   avroJs: AvroJsType;
@@ -318,10 +313,10 @@ interface LibraryTypes {
 
 function createLibraryTypes(schema: SchemaLike): LibraryTypes {
   // avro-js requires object schema format, convert string primitives
-  const avroJsSchema =
-    typeof schema === "string" ? { type: schema } : schema;
+  const avroJsSchema = typeof schema === "string" ? { type: schema } : schema;
 
   return {
+    schema,
     avroTs: createType(schema),
     avsc: avsc.Type.forSchema(
       schema as Parameters<typeof avsc.Type.forSchema>[0],
@@ -372,12 +367,23 @@ function runDeserializeBenchmark(config: DeserializeBenchmarkConfig) {
   // Pre-serialize data once using avro-ts (binary format is the same)
   const { avroTsBuffer, nodeBuffer } = preSerializeData(types, avroTsData);
 
+  // Each avro-ts variant gets its own type instance. Compiled field readers
+  // are closures cached per type instance; driving one instance with multiple
+  // tap classes makes every primitive read dispatch polymorphically, which
+  // penalizes whichever variant runs later (~12% measured on DirectTap-reused).
+  // avsc and avro-js only ever see one tap class, so sharing would skew the
+  // comparison against avro-ts.
+  const avroTsFromSyncBuffer = createType(types.schema);
+  const avroTsReadSync = createType(types.schema);
+  const avroTsDirectTap = createType(types.schema);
+  const avroTsDirectTapReused = createType(types.schema);
+  const avroTsAsync = createType(types.schema);
+
   // --- avsc (baseline) ---
   Deno.bench({
     name: `${groupName} (avsc)`,
     group: groupName,
     baseline: true,
-    n: BENCH_ITERATIONS,
   }, () => {
     types.avsc.fromBuffer(nodeBuffer);
   });
@@ -386,7 +392,6 @@ function runDeserializeBenchmark(config: DeserializeBenchmarkConfig) {
   Deno.bench({
     name: `${groupName} (avro-js)`,
     group: groupName,
-    n: BENCH_ITERATIONS,
   }, () => {
     types.avroJs.fromBuffer(nodeBuffer);
   });
@@ -395,20 +400,8 @@ function runDeserializeBenchmark(config: DeserializeBenchmarkConfig) {
   Deno.bench({
     name: `${groupName} (avro-ts, fromSyncBuffer)`,
     group: groupName,
-    n: BENCH_ITERATIONS,
   }, () => {
-    types.avroTs.fromSyncBuffer(avroTsBuffer);
-  });
-
-  // --- avro-typescript: readSync with tap (manual setup) ---
-  Deno.bench({
-    name: `${groupName} (avro-ts, readSync)`,
-    group: groupName,
-    n: BENCH_ITERATIONS,
-  }, () => {
-    const readable = new SyncInMemoryReadableBuffer(avroTsBuffer);
-    const tap = new SyncReadableTap(readable);
-    types.avroTs.readSync(tap);
+    avroTsFromSyncBuffer.fromSyncBuffer(avroTsBuffer);
   });
 
   // --- avro-typescript: DirectSyncReadableTap (optimized) ---
@@ -416,10 +409,9 @@ function runDeserializeBenchmark(config: DeserializeBenchmarkConfig) {
   Deno.bench({
     name: `${groupName} (avro-ts, DirectTap)`,
     group: groupName,
-    n: BENCH_ITERATIONS,
   }, () => {
     const tap = new DirectSyncReadableTap(uint8View);
-    types.avroTs.readSync(tap);
+    avroTsDirectTap.readSync(tap);
   });
 
   // --- avro-typescript: DirectSyncReadableTap REUSED (no allocation per iteration) ---
@@ -427,25 +419,36 @@ function runDeserializeBenchmark(config: DeserializeBenchmarkConfig) {
   // This tests the hypothesis that float/double slowdown is from tap+DataView allocation.
   const reusedTap = new DirectSyncReadableTap(uint8View);
   // Pre-warm the DataView by doing one read (forces lazy DataView creation)
-  types.avroTs.readSync(reusedTap);
+  avroTsDirectTapReused.readSync(reusedTap);
   Deno.bench({
     name: `${groupName} (avro-ts, DirectTap-reused)`,
     group: groupName,
-    n: BENCH_ITERATIONS,
   }, () => {
     reusedTap.pos = 0; // Just reset position, reuse everything else
-    types.avroTs.readSync(reusedTap);
+    avroTsDirectTapReused.readSync(reusedTap);
+  });
+
+  // --- avro-typescript: readSync with tap (manual setup) ---
+  // Defined after the DirectTap variants: the shared field-reader closure
+  // literals share V8 feedback vectors across type instances, so running a
+  // second tap class first would make the DirectTap benches polymorphic.
+  Deno.bench({
+    name: `${groupName} (avro-ts, readSync)`,
+    group: groupName,
+  }, () => {
+    const readable = new SyncInMemoryReadableBuffer(avroTsBuffer);
+    const tap = new SyncReadableTap(readable);
+    avroTsReadSync.readSync(tap);
   });
 
   // --- avro-typescript: async read (for comparison) ---
   Deno.bench({
     name: `${groupName} (avro-ts, read async)`,
     group: groupName,
-    n: BENCH_ITERATIONS,
   }, async () => {
     const readable = new InMemoryReadableBuffer(avroTsBuffer);
     const tap = new ReadableTap(readable);
-    await types.avroTs.read(tap);
+    await avroTsAsync.read(tap);
   });
 }
 
@@ -472,17 +475,54 @@ const FIXTURES = {
   float: 3.14159,
   double: 2.718281828459045,
   bytes: new Uint8Array([
-    0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x57, 0x6f, 0x72, 0x6c,
+    0x48,
+    0x65,
+    0x6c,
+    0x6c,
+    0x6f,
+    0x20,
+    0x57,
+    0x6f,
+    0x72,
+    0x6c,
   ]), // "Hello Worl" - 10 bytes
-  string: "The quick brown fox jumps over the lazy dog",
+
+  // String samples - variety of lengths and character types
+  // Average performance across these samples is what matters
+  strings: [
+    "海賊王", // 5 chars Japanese
+    "俺は海賊王になる！", // 10 chars Japanese
+    "Hello", // 5 chars ASCII
+    "The quick brown fox jumps", // 25 chars ASCII
+    "俺は海賊王になる！ - Luffy", // 25 chars mixed
+    "The quick brown fox jumps".repeat(4), // 100 chars ASCII
+    "俺は海賊王になる！ - Luffy".repeat(4), // 100 chars mixed
+    "The quick brown fox jumps".repeat(40), // 1000 chars ASCII
+    "俺は海賊王になる！ - Luffy".repeat(40), // 1000 chars mixed
+    "The quick brown fox jumps".repeat(400), // 10000 chars ASCII
+  ],
 
   // Enums
   enum: "ACTIVE",
 
   // Fixed
   fixed: new Uint8Array([
-    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
-    0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
+    0x01,
+    0x23,
+    0x45,
+    0x67,
+    0x89,
+    0xab,
+    0xcd,
+    0xef,
+    0xfe,
+    0xdc,
+    0xba,
+    0x98,
+    0x76,
+    0x54,
+    0x32,
+    0x10,
   ]), // 16 bytes
 
   // Arrays - always 10 elements with large values
@@ -557,7 +597,18 @@ const FIXTURES = {
         value: 123.456,
         level4: {
           id: 4000004,
-          data: new Uint8Array([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a]),
+          data: new Uint8Array([
+            0x01,
+            0x02,
+            0x03,
+            0x04,
+            0x05,
+            0x06,
+            0x07,
+            0x08,
+            0x09,
+            0x0a,
+          ]),
           tags: [
             "tag_001",
             "tag_002",
@@ -732,71 +783,206 @@ const FIXTURES = {
 
   // Array of records - depth 3 (10x10x10 = 1000 records total)
   // Using compact notation for readability, but maintaining 10 elements per level
-  arrayOfRecordsDepth3: Array.from({ length: 10 }, (_, i) =>
-    Array.from({ length: 10 }, (_, j) =>
-      Array.from({ length: 10 }, (_, k) => ({
-        id: 8000000 + i * 10000 + j * 100 + k,
-        name: `R${String(i + 1).padStart(2, "0")}-${String(j + 1).padStart(2, "0")}-${String(k + 1).padStart(2, "0")}`,
-        value: (i + 1) + (j + 1) / 10 + (k + 1) / 100,
-      }))
-    )
+  arrayOfRecordsDepth3: Array.from(
+    { length: 10 },
+    (_, i) =>
+      Array.from(
+        { length: 10 },
+        (_, j) =>
+          Array.from({ length: 10 }, (_, k) => ({
+            id: 8000000 + i * 10000 + j * 100 + k,
+            name: `R${String(i + 1).padStart(2, "0")}-${
+              String(j + 1).padStart(2, "0")
+            }-${String(k + 1).padStart(2, "0")}`,
+            value: (i + 1) + (j + 1) / 10 + (k + 1) / 100,
+          })),
+      ),
   ),
 
   // Array of records - depth 4 (10x10x10x10 = 10,000 records total)
   // This is a very large dataset to stress-test performance
-  arrayOfRecordsDepth4: Array.from({ length: 10 }, (_, i) =>
-    Array.from({ length: 10 }, (_, j) =>
-      Array.from({ length: 10 }, (_, k) =>
-        Array.from({ length: 10 }, (_, l) => ({
-          id: 9000000 + i * 100000 + j * 10000 + k * 100 + l,
-          name: `R${String(i + 1).padStart(2, "0")}-${String(j + 1).padStart(2, "0")}-${String(k + 1).padStart(2, "0")}-${String(l + 1).padStart(2, "0")}`,
-          value: (i + 1) + (j + 1) / 10 + (k + 1) / 100 + (l + 1) / 1000,
-        }))
-      )
-    )
+  arrayOfRecordsDepth4: Array.from(
+    { length: 10 },
+    (_, i) =>
+      Array.from(
+        { length: 10 },
+        (_, j) =>
+          Array.from({ length: 10 }, (_, k) =>
+            Array.from({ length: 10 }, (_, l) => ({
+              id: 9000000 + i * 100000 + j * 10000 + k * 100 + l,
+              name: `R${String(i + 1).padStart(2, "0")}-${
+                String(j + 1).padStart(2, "0")
+              }-${String(k + 1).padStart(2, "0")}-${
+                String(l + 1).padStart(2, "0")
+              }`,
+              value: (i + 1) + (j + 1) / 10 + (k + 1) / 100 + (l + 1) / 1000,
+            }))),
+      ),
   ),
 
   // Array of arrays - depth 1 (array<array<int>>) - 10x10 = 100 ints
   arrayOfArraysDepth1: [
-    [1000001, 1000002, 1000003, 1000004, 1000005, 1000006, 1000007, 1000008, 1000009, 1000010],
-    [1000011, 1000012, 1000013, 1000014, 1000015, 1000016, 1000017, 1000018, 1000019, 1000020],
-    [1000021, 1000022, 1000023, 1000024, 1000025, 1000026, 1000027, 1000028, 1000029, 1000030],
-    [1000031, 1000032, 1000033, 1000034, 1000035, 1000036, 1000037, 1000038, 1000039, 1000040],
-    [1000041, 1000042, 1000043, 1000044, 1000045, 1000046, 1000047, 1000048, 1000049, 1000050],
-    [1000051, 1000052, 1000053, 1000054, 1000055, 1000056, 1000057, 1000058, 1000059, 1000060],
-    [1000061, 1000062, 1000063, 1000064, 1000065, 1000066, 1000067, 1000068, 1000069, 1000070],
-    [1000071, 1000072, 1000073, 1000074, 1000075, 1000076, 1000077, 1000078, 1000079, 1000080],
-    [1000081, 1000082, 1000083, 1000084, 1000085, 1000086, 1000087, 1000088, 1000089, 1000090],
-    [1000091, 1000092, 1000093, 1000094, 1000095, 1000096, 1000097, 1000098, 1000099, 1000100],
+    [
+      1000001,
+      1000002,
+      1000003,
+      1000004,
+      1000005,
+      1000006,
+      1000007,
+      1000008,
+      1000009,
+      1000010,
+    ],
+    [
+      1000011,
+      1000012,
+      1000013,
+      1000014,
+      1000015,
+      1000016,
+      1000017,
+      1000018,
+      1000019,
+      1000020,
+    ],
+    [
+      1000021,
+      1000022,
+      1000023,
+      1000024,
+      1000025,
+      1000026,
+      1000027,
+      1000028,
+      1000029,
+      1000030,
+    ],
+    [
+      1000031,
+      1000032,
+      1000033,
+      1000034,
+      1000035,
+      1000036,
+      1000037,
+      1000038,
+      1000039,
+      1000040,
+    ],
+    [
+      1000041,
+      1000042,
+      1000043,
+      1000044,
+      1000045,
+      1000046,
+      1000047,
+      1000048,
+      1000049,
+      1000050,
+    ],
+    [
+      1000051,
+      1000052,
+      1000053,
+      1000054,
+      1000055,
+      1000056,
+      1000057,
+      1000058,
+      1000059,
+      1000060,
+    ],
+    [
+      1000061,
+      1000062,
+      1000063,
+      1000064,
+      1000065,
+      1000066,
+      1000067,
+      1000068,
+      1000069,
+      1000070,
+    ],
+    [
+      1000071,
+      1000072,
+      1000073,
+      1000074,
+      1000075,
+      1000076,
+      1000077,
+      1000078,
+      1000079,
+      1000080,
+    ],
+    [
+      1000081,
+      1000082,
+      1000083,
+      1000084,
+      1000085,
+      1000086,
+      1000087,
+      1000088,
+      1000089,
+      1000090,
+    ],
+    [
+      1000091,
+      1000092,
+      1000093,
+      1000094,
+      1000095,
+      1000096,
+      1000097,
+      1000098,
+      1000099,
+      1000100,
+    ],
   ],
 
   // Array of arrays - depth 2 (array<array<array<int>>>) - 10x10x10 = 1000 ints
-  arrayOfArraysDepth2: Array.from({ length: 10 }, (_, i) =>
-    Array.from({ length: 10 }, (_, j) =>
-      Array.from({ length: 10 }, (_, k) => 2000000 + i * 10000 + j * 100 + k)
-    )
+  arrayOfArraysDepth2: Array.from(
+    { length: 10 },
+    (_, i) =>
+      Array.from(
+        { length: 10 },
+        (_, j) =>
+          Array.from(
+            { length: 10 },
+            (_, k) => 2000000 + i * 10000 + j * 100 + k,
+          ),
+      ),
   ),
 
   // Array of arrays - depth 3 (array<array<array<array<int>>>>) - 10x10x10x10 = 10,000 ints
-  arrayOfArraysDepth3: Array.from({ length: 10 }, (_, i) =>
-    Array.from({ length: 10 }, (_, j) =>
-      Array.from({ length: 10 }, (_, k) =>
-        Array.from({ length: 10 }, (_, l) => 3000000 + i * 100000 + j * 10000 + k * 100 + l)
-      )
-    )
+  arrayOfArraysDepth3: Array.from(
+    { length: 10 },
+    (_, i) =>
+      Array.from(
+        { length: 10 },
+        (_, j) =>
+          Array.from({ length: 10 }, (_, k) =>
+            Array.from({ length: 10 }, (_, l) =>
+              3000000 + i * 100000 + j * 10000 + k * 100 + l)),
+      ),
   ),
 
   // Array of arrays - depth 4 (array<array<array<array<array<int>>>>>) - 10x10x10x10x10 = 100,000 ints
-  arrayOfArraysDepth4: Array.from({ length: 10 }, (_, i) =>
-    Array.from({ length: 10 }, (_, j) =>
-      Array.from({ length: 10 }, (_, k) =>
-        Array.from({ length: 10 }, (_, l) =>
-          Array.from({ length: 10 }, (_, m) =>
-            4000000 + i * 1000000 + j * 100000 + k * 10000 + l * 100 + m
-          )
-        )
-      )
-    )
+  arrayOfArraysDepth4: Array.from(
+    { length: 10 },
+    (_, i) =>
+      Array.from(
+        { length: 10 },
+        (_, j) =>
+          Array.from({ length: 10 }, (_, k) =>
+            Array.from({ length: 10 }, (_, l) =>
+              Array.from({ length: 10 }, (_, m) =>
+                4000000 + i * 1000000 + j * 100000 + k * 10000 + l * 100 + m))),
+      ),
   ),
 };
 
@@ -874,13 +1060,102 @@ const FIXTURES = {
   });
 }
 
-// --- String ---
+// --- String (average across variety of lengths) ---
 {
   const types = createLibraryTypes(primitiveSchemas.string);
-  runDeserializeBenchmark({
-    groupName: "primitive: string",
-    types,
-    avroTsData: FIXTURES.string,
+  const groupName = "primitive: string";
+
+  const stringBuffers = FIXTURES.strings.map((str) => {
+    const avroTsBuffer = new Uint8Array(types.avroTs.toSyncBuffer(str));
+    const nodeBuffer = Buffer.from(avroTsBuffer);
+    return { avroTsBuffer, nodeBuffer };
+  });
+
+  // Per-variant instances for the same reason as runDeserializeBenchmark:
+  // keep each type's compiled readers monomorphic on a single tap class.
+  const avroTsFromSyncBuffer = createType(types.schema);
+  const avroTsReadSync = createType(types.schema);
+  const avroTsDirectTap = createType(types.schema);
+  const avroTsDirectTapReused = createType(types.schema);
+  const avroTsAsync = createType(types.schema);
+
+  Deno.bench({
+    name: `${groupName} (avsc)`,
+    group: groupName,
+    baseline: true,
+  }, () => {
+    for (const { nodeBuffer } of stringBuffers) {
+      types.avsc.fromBuffer(nodeBuffer);
+    }
+  });
+
+  Deno.bench({
+    name: `${groupName} (avro-js)`,
+    group: groupName,
+  }, () => {
+    for (const { nodeBuffer } of stringBuffers) {
+      types.avroJs.fromBuffer(nodeBuffer);
+    }
+  });
+
+  Deno.bench({
+    name: `${groupName} (avro-ts, fromSyncBuffer)`,
+    group: groupName,
+  }, () => {
+    for (const { avroTsBuffer } of stringBuffers) {
+      avroTsFromSyncBuffer.fromSyncBuffer(avroTsBuffer.buffer);
+    }
+  });
+
+  Deno.bench({
+    name: `${groupName} (avro-ts, DirectTap)`,
+    group: groupName,
+  }, () => {
+    for (const { avroTsBuffer } of stringBuffers) {
+      const tap = new DirectSyncReadableTap(avroTsBuffer);
+      avroTsDirectTap.readSync(tap);
+    }
+  });
+
+  const reusedTaps = stringBuffers.map(({ avroTsBuffer }) =>
+    new DirectSyncReadableTap(avroTsBuffer)
+  );
+  reusedTaps.forEach((tap) => {
+    avroTsDirectTapReused.readSync(tap);
+  });
+
+  Deno.bench({
+    name: `${groupName} (avro-ts, DirectTap-reused)`,
+    group: groupName,
+  }, () => {
+    for (const tap of reusedTaps) {
+      tap.pos = 0;
+      avroTsDirectTapReused.readSync(tap);
+    }
+  });
+
+  // Defined after the DirectTap variants; see runDeserializeBenchmark for the
+  // feedback-vector rationale.
+  Deno.bench({
+    name: `${groupName} (avro-ts, readSync)`,
+    group: groupName,
+  }, () => {
+    for (const { avroTsBuffer } of stringBuffers) {
+      const readable = new SyncInMemoryReadableBuffer(avroTsBuffer.buffer);
+      const tap = new SyncReadableTap(readable);
+      avroTsReadSync.readSync(tap);
+    }
+  });
+
+  Deno.bench({
+    name: `${groupName} (avro-ts, read async)`,
+    group: groupName,
+  }, async () => {
+    for (const { avroTsBuffer } of stringBuffers) {
+      const readable = new InMemoryReadableBuffer(avroTsBuffer.buffer);
+      const tap = new ReadableTap(readable);
+      await avroTsAsync.read(tap);
+    }
   });
 }
 
@@ -912,7 +1187,7 @@ const FIXTURES = {
 {
   const types = createLibraryTypes(arrayOfIntsSchema);
   runDeserializeBenchmark({
-    groupName: "complex: array<int>",
+    groupName: "complex: array\\<int\\>",
     types,
     avroTsData: FIXTURES.arrayOfInts,
   });
@@ -922,7 +1197,7 @@ const FIXTURES = {
 {
   const types = createLibraryTypes(arrayOfStringsSchema);
   runDeserializeBenchmark({
-    groupName: "complex: array<string>",
+    groupName: "complex: array\\<string\\>",
     types,
     avroTsData: FIXTURES.arrayOfStrings,
   });
@@ -932,7 +1207,7 @@ const FIXTURES = {
 {
   const types = createLibraryTypes(mapOfIntsSchema);
   runDeserializeBenchmark({
-    groupName: "complex: map<int>",
+    groupName: "complex: map\\<int\\>",
     types,
     avroTsData: FIXTURES.mapOfInts,
   });
@@ -942,7 +1217,7 @@ const FIXTURES = {
 {
   const types = createLibraryTypes(mapOfStringsSchema);
   runDeserializeBenchmark({
-    groupName: "complex: map<string>",
+    groupName: "complex: map\\<string\\>",
     types,
     avroTsData: FIXTURES.mapOfStrings,
   });
