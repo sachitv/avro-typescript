@@ -7,12 +7,21 @@ import {
   type SyncReadableTapLike,
   SyncWritableTap,
 } from "../../../serialization/tap_sync.ts";
+import { DirectSyncReadableTap } from "../../../serialization/direct_tap_sync.ts";
 import { ArrayType, readArrayInto, readArrayIntoSync } from "../array_type.ts";
 import { IntType } from "../../primitive/int_type.ts";
 import { LongType } from "../../primitive/long_type.ts";
 import { StringType } from "../../primitive/string_type.ts";
 import { BytesType } from "../../primitive/bytes_type.ts";
 import type { Type } from "../../type.ts";
+import { createType } from "../../../type/create_type.ts";
+import {
+  CompiledReaderStrategy,
+  type CompiledSyncReader,
+  InterpretedReaderStrategy,
+  type RecordReaderContext,
+} from "../record_reader_strategy.ts";
+import { createRecord } from "./record_test_utils.ts";
 
 function createArray<T>(items: Type<T>): ArrayType<T> {
   return new ArrayType({ items });
@@ -458,6 +467,24 @@ describe("ArrayType", () => {
       assertEquals([...result[1]], [3, 4]); // Second string "\x03\x04" -> bytes [3, 4]
     });
 
+    it("reads size-prefixed trailing blocks through the sync resolver", () => {
+      const intArrayWriter = createArray(new IntType());
+      const longArrayReader = createArray(new LongType());
+      const resolver = longArrayReader.createResolver(intArrayWriter);
+      const buffer = new ArrayBuffer(64);
+      const w = new SyncWritableTap(buffer);
+      w.writeInt(1);
+      w.writeInt(5);
+      // Second block uses a negative (size-prefixed) count.
+      w.writeInt(-2);
+      w.writeLong(2n);
+      w.writeInt(6);
+      w.writeInt(7);
+      w.writeInt(0);
+      const tap = new SyncReadableTap(buffer);
+      assertEquals(resolver.readSync(tap), [5n, 6n, 7n]);
+    });
+
     it("reads resolver values synchronously", () => {
       const stringArray = createArray(new StringType());
       const bytesArray = createArray(new BytesType());
@@ -575,6 +602,259 @@ describe("ArrayType", () => {
       assertEquals(cloned, nestedData);
       cloned[0][0] = 99;
       assertEquals(nestedData[0][0], 1); // deep clone
+    });
+  });
+
+  describe("compiled record block reading", () => {
+    it("round-trips records and reuses the cached block reader", () => {
+      const recordArray = createType({
+        type: "array",
+        items: {
+          type: "record",
+          name: "CachedArrayItem",
+          fields: [
+            { name: "id", type: "int" },
+            { name: "name", type: "string" },
+          ],
+        },
+      }) as ArrayType<Record<string, unknown>>;
+      const values = [
+        { id: 1, name: "one" },
+        { id: 2, name: "two" },
+      ];
+      const buffer = recordArray.toSyncBuffer(values);
+
+      assertEquals(recordArray.fromSyncBuffer(buffer), values);
+      assertEquals(recordArray.fromSyncBuffer(buffer), values);
+      assertEquals(
+        recordArray.fromSyncBuffer(recordArray.toSyncBuffer([])),
+        [],
+      );
+    });
+
+    it("reads mixed positive and size-prefixed record blocks", () => {
+      const itemType = createRecord({
+        name: "MixedBlockItem",
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+        ],
+      });
+      const recordArray = createArray(itemType);
+      const values = [
+        { id: 1, name: "one" },
+        { id: 2, name: "two" },
+      ];
+      const secondRecord = itemType.toSyncBuffer(values[1]);
+      const buffer = new ArrayBuffer(128);
+      const writeTap = new SyncWritableTap(buffer);
+      writeTap.writeInt(1);
+      itemType.writeSync(writeTap, values[0]);
+      writeTap.writeInt(-1);
+      writeTap.writeLong(BigInt(secondRecord.byteLength));
+      writeTap.writeFixed(new Uint8Array(secondRecord));
+      writeTap.writeInt(0);
+      const encoded = buffer.slice(0, writeTap.getPos());
+
+      assertEquals(
+        recordArray.readSync(
+          new DirectSyncReadableTap(new Uint8Array(encoded)),
+        ),
+        values,
+      );
+    });
+
+    it("reads size-prefixed blocks after the first block via the generic path", () => {
+      const arr = createArray(new IntType());
+      const buffer = new ArrayBuffer(64);
+      const w = new SyncWritableTap(buffer);
+      w.writeInt(2);
+      w.writeInt(1);
+      w.writeInt(2);
+      // Second block uses a negative (size-prefixed) count.
+      w.writeInt(-2);
+      w.writeLong(2n);
+      w.writeInt(3);
+      w.writeInt(4);
+      w.writeInt(0);
+      // SyncReadableTap has no bulk methods, so this takes the generic loop.
+      const tap = new SyncReadableTap(buffer);
+      assertEquals(arr.readSync(tap), [1, 2, 3, 4]);
+    });
+
+    it("reads size-prefixed and trailing blocks through the record block reader", () => {
+      const recordArray = createType({
+        type: "array",
+        items: {
+          type: "record",
+          name: "BlockLayoutRecord",
+          fields: [{ name: "id", type: "int" }],
+        },
+      }) as ArrayType<Record<string, unknown>>;
+      const buffer = new ArrayBuffer(64);
+      const w = new SyncWritableTap(buffer);
+      // First block is size-prefixed (negative count), then a plain block.
+      w.writeInt(-2);
+      w.writeLong(2n);
+      w.writeInt(7);
+      w.writeInt(8);
+      w.writeInt(1);
+      w.writeInt(9);
+      w.writeInt(0);
+      const tap = new DirectSyncReadableTap(
+        new Uint8Array(buffer, 0, w.getPos()),
+      );
+      assertEquals(recordArray.readSync(tap), [
+        { id: 7 },
+        { id: 8 },
+        { id: 9 },
+      ]);
+    });
+
+    it("falls back to the scalar reader for records wider than ten fields", () => {
+      const fieldNames = Array.from({ length: 12 }, (_, i) => `field${i}`);
+      const recordArray = createType({
+        type: "array",
+        items: {
+          type: "record",
+          name: "WideArrayItem",
+          fields: fieldNames.map((name) => ({
+            name,
+            type: "int",
+          })),
+        },
+      }) as ArrayType<Record<string, unknown>>;
+      const values = [0, 100].map((base) =>
+        Object.fromEntries(fieldNames.map((name, i) => [name, base + i]))
+      );
+
+      assertEquals(
+        recordArray.fromSyncBuffer(recordArray.toSyncBuffer(values)),
+        values,
+      );
+    });
+
+    it("preserves custom scalar reader strategy semantics", () => {
+      class TaggedReaderStrategy extends CompiledReaderStrategy {
+        public override assembleSyncRecordReader(
+          context: RecordReaderContext,
+          fieldReaders: CompiledSyncReader[],
+        ): CompiledSyncReader {
+          const readRecord = super.assembleSyncRecordReader(
+            context,
+            fieldReaders,
+          );
+          return (tap) => ({
+            ...(readRecord(tap) as Record<string, unknown>),
+            tagged: true,
+          });
+        }
+      }
+
+      const itemType = createRecord({
+        name: "TaggedArrayItem",
+        fields: [{ name: "id", type: new IntType() }],
+        readerStrategy: new TaggedReaderStrategy(),
+      });
+      const recordArray = createArray(itemType);
+      const buffer = recordArray.toSyncBuffer([{ id: 1 }, { id: 2 }]);
+
+      assertEquals(recordArray.fromSyncBuffer(buffer), [
+        { id: 1, tagged: true },
+        { id: 2, tagged: true },
+      ]);
+    });
+
+    it("uses the scalar fallback for interpreted reader strategies", () => {
+      const itemType = createRecord({
+        name: "InterpretedArrayItem",
+        fields: [
+          { name: "id", type: new IntType() },
+          { name: "name", type: new StringType() },
+        ],
+        readerStrategy: new InterpretedReaderStrategy(),
+      });
+      const recordArray = createArray(itemType);
+      const values = [
+        { id: 1, name: "one" },
+        { id: 2, name: "two" },
+      ];
+
+      assertEquals(
+        recordArray.fromSyncBuffer(recordArray.toSyncBuffer(values)),
+        values,
+      );
+    });
+
+    it("supports recursive arrays of records", () => {
+      const nodeArray = createType({
+        type: "array",
+        items: {
+          type: "record",
+          name: "ArrayTreeNode",
+          fields: [
+            { name: "value", type: "int" },
+            {
+              name: "children",
+              type: { type: "array", items: "ArrayTreeNode" },
+            },
+          ],
+        },
+      }) as ArrayType<Record<string, unknown>>;
+      const values = [
+        {
+          value: 1,
+          children: [
+            { value: 2, children: [] },
+            {
+              value: 3,
+              children: [{ value: 4, children: [] }],
+            },
+          ],
+        },
+      ];
+
+      assertEquals(
+        nodeArray.fromSyncBuffer(nodeArray.toSyncBuffer(values)),
+        values,
+      );
+    });
+
+    it("preserves __proto__ in wide async and sync record fallbacks", async () => {
+      const itemType = createRecord({
+        name: "PrototypeFieldArrayItem",
+        fields: [
+          ...Array.from({ length: 10 }, (_, index) => ({
+            name: `f${index}`,
+            type: new IntType(),
+          })),
+          { name: "__proto__", type: new StringType() },
+        ],
+      });
+      const recordArray = createArray(itemType);
+      const value: Record<string, unknown> = Object.fromEntries(
+        Array.from({ length: 10 }, (_, index) => [`f${index}`, index]),
+      );
+      Object.defineProperty(value, "__proto__", {
+        configurable: true,
+        enumerable: true,
+        value: "safe",
+        writable: true,
+      });
+
+      const [asyncDecoded] = await recordArray.fromBuffer(
+        await recordArray.toBuffer([value]),
+      );
+      assert(Object.hasOwn(asyncDecoded, "__proto__"));
+      assertEquals(asyncDecoded["__proto__"], "safe");
+      assertEquals(Object.getPrototypeOf(asyncDecoded), Object.prototype);
+
+      const [syncDecoded] = recordArray.fromSyncBuffer(
+        recordArray.toSyncBuffer([value]),
+      );
+      assert(Object.hasOwn(syncDecoded, "__proto__"));
+      assertEquals(syncDecoded["__proto__"], "safe");
+      assertEquals(Object.getPrototypeOf(syncDecoded), Object.prototype);
     });
   });
 });
