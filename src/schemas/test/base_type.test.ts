@@ -96,6 +96,23 @@ class TestType extends BaseType<string> {
 }
 
 /**
+ * A type whose read skips past the end of the buffer without touching the
+ * bytes, leaving the cursor out of bounds so fromBuffer/fromSyncBuffer must
+ * detect the overrun via the tap validity check.
+ */
+class OverrunningType extends TestType {
+  public override async read(tap: Tap): Promise<string> {
+    tap.skipFixed(9999);
+    return await Promise.resolve("");
+  }
+
+  public override readSync(tap: SyncReadableTap): string {
+    tap.skipFixed(9999);
+    return "";
+  }
+}
+
+/**
  * Another type for testing incompatible resolvers.
  */
 class OtherType extends FixedSizeBaseType<number> {
@@ -213,6 +230,15 @@ describe("Type", () => {
       new Uint8Array(extraBuffer)[buffer.byteLength] = 0;
       await assertRejects(
         () => type.fromBuffer(extraBuffer),
+        Error,
+        "Extra data after value",
+      );
+    });
+
+    it("should throw for a read that overruns the buffer without reading", async () => {
+      const overrunningType = new OverrunningType();
+      await assertRejects(
+        () => overrunningType.fromBuffer(new ArrayBuffer(1)),
         Error,
         "Insufficient data for type",
       );
@@ -433,6 +459,15 @@ describe("Type", () => {
         new Uint8Array(extraBuffer)[buffer.byteLength] = 0;
         assertThrows(
           () => type.fromSyncBuffer(extraBuffer),
+          Error,
+          "Extra data after value",
+        );
+      });
+
+      it("should throw for a read that overruns the buffer without reading", () => {
+        const overrunningType = new OverrunningType();
+        assertThrows(
+          () => overrunningType.fromSyncBuffer(new ArrayBuffer(1)),
           Error,
           "Insufficient data for type",
         );

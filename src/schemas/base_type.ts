@@ -43,8 +43,11 @@ export abstract class BaseType<T = unknown> extends Type<T> {
   public async fromBuffer(buffer: ArrayBuffer): Promise<T> {
     const tap = new ReadableTap(buffer);
     const value = await this.read(tap);
-    if (!await tap.isValid() || tap.getPos() !== buffer.byteLength) {
+    if (!await tap.isValid()) {
       throw new Error("Insufficient data for type");
+    }
+    if (tap.getPos() !== buffer.byteLength) {
+      throw new Error("Extra data after value");
     }
     return value;
   }
@@ -92,8 +95,11 @@ export abstract class BaseType<T = unknown> extends Type<T> {
   public fromSyncBuffer(buffer: ArrayBuffer): T {
     const tap = new SyncReadableTap(buffer);
     const value = this.readSync(tap);
-    if (!tap.isValid() || tap.getPos() !== buffer.byteLength) {
+    if (!tap.isValid()) {
       throw new Error("Insufficient data for type");
+    }
+    if (tap.getPos() !== buffer.byteLength) {
+      throw new Error("Extra data after value");
     }
     return value;
   }
