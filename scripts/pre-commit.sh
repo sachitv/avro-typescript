@@ -16,8 +16,27 @@ if [ -z "$STAGED_TS_FILES" ]; then
 fi
 
 echo "Running deno fmt on staged files..."
-# Format only the staged files
-echo "$STAGED_TS_FILES" | xargs deno fmt
+# Format only the staged files. Benchmark files are excluded by the root Deno
+# config, so they must be checked without auto-discovered config.
+STAGED_BENCHMARK_TS_FILES=""
+STAGED_REPO_TS_FILES=""
+for file in $STAGED_TS_FILES; do
+    case "$file" in
+        packages/benchmarks/*)
+            STAGED_BENCHMARK_TS_FILES="$STAGED_BENCHMARK_TS_FILES $file"
+            ;;
+        *)
+            STAGED_REPO_TS_FILES="$STAGED_REPO_TS_FILES $file"
+            ;;
+    esac
+done
+
+if [ -n "$STAGED_REPO_TS_FILES" ]; then
+    echo "$STAGED_REPO_TS_FILES" | xargs deno fmt --permit-no-files
+fi
+if [ -n "$STAGED_BENCHMARK_TS_FILES" ]; then
+    echo "$STAGED_BENCHMARK_TS_FILES" | xargs deno fmt --no-config --permit-no-files
+fi
 
 # Check if deno fmt made changes to staged files
 CHANGED_STAGED_FILES=""
@@ -33,9 +52,15 @@ if [ -n "$CHANGED_STAGED_FILES" ]; then
 fi
 
 echo "Running deno lint on staged files..."
-echo "$STAGED_TS_FILES" | xargs deno lint
+LINT_STATUS=0
+if [ -n "$STAGED_REPO_TS_FILES" ]; then
+    echo "$STAGED_REPO_TS_FILES" | xargs deno lint --permit-no-files || LINT_STATUS=$?
+fi
+if [ -n "$STAGED_BENCHMARK_TS_FILES" ]; then
+    echo "$STAGED_BENCHMARK_TS_FILES" | xargs deno lint --no-config --permit-no-files --rules-exclude=no-unversioned-import,ban-unused-ignore || LINT_STATUS=$?
+fi
 
-if [ $? -ne 0 ]; then
+if [ "$LINT_STATUS" -ne 0 ]; then
     echo "deno lint failed. Aborting commit."
     exit 1
 fi
