@@ -1,6 +1,7 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { UnionType, type UnionValue } from "../union_type.ts";
+import { createRecord } from "./record_test_utils.ts";
 import { StringType } from "../../primitive/string_type.ts";
 import { IntType } from "../../primitive/int_type.ts";
 import { LongType } from "../../primitive/long_type.ts";
@@ -528,6 +529,72 @@ describe("UnionType", () => {
       const tap = new Tap(buf);
       const result = await unionType.read(tap);
       assertEquals(result, value);
+    });
+
+    it("should deserialize compiled record and primitive branches synchronously", () => {
+      const recordValue = { TestRecord: { id: 1, name: "test" } };
+      assertEquals(
+        unionType.fromSyncBuffer(unionType.toSyncBuffer(recordValue)),
+        recordValue,
+      );
+
+      const intValue = { int: 42 };
+      assertEquals(
+        unionType.fromSyncBuffer(unionType.toSyncBuffer(intValue)),
+        intValue,
+      );
+    });
+  });
+
+  describe("union with a branch named __proto__", () => {
+    // `__proto__` is a valid Avro name; the wrapped value must carry it as an
+    // own property, never by invoking the legacy prototype setter.
+    const protoRecord = createRecord({
+      name: "__proto__",
+      fields: [{ name: "id", type: new IntType() }],
+    });
+    const unionType = new UnionType({
+      types: [new NullType(), protoRecord],
+    });
+
+    it("wraps the branch as an own property synchronously", () => {
+      const value: UnionValue = {};
+      Object.defineProperty(value, "__proto__", {
+        configurable: true,
+        enumerable: true,
+        value: { id: 7 },
+        writable: true,
+      });
+      const decoded = unionType.fromSyncBuffer(
+        unionType.toSyncBuffer(value),
+      ) as Record<string, unknown>;
+      assertEquals(Object.hasOwn(decoded, "__proto__"), true);
+      assertEquals(
+        Object.getOwnPropertyDescriptor(decoded, "__proto__")!.value,
+        { id: 7 },
+      );
+      assertEquals(Object.getPrototypeOf(decoded), Object.prototype);
+    });
+
+    it("wraps the branch as an own property asynchronously", async () => {
+      const value: UnionValue = {};
+      Object.defineProperty(value, "__proto__", {
+        configurable: true,
+        enumerable: true,
+        value: { id: 9 },
+        writable: true,
+      });
+      const buf = await unionType.toBuffer(value);
+      const decoded = await unionType.read(new Tap(buf)) as Record<
+        string,
+        unknown
+      >;
+      assertEquals(Object.hasOwn(decoded, "__proto__"), true);
+      assertEquals(
+        Object.getOwnPropertyDescriptor(decoded, "__proto__")!.value,
+        { id: 9 },
+      );
+      assertEquals(Object.getPrototypeOf(decoded), Object.prototype);
     });
   });
 

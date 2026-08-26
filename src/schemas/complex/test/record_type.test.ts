@@ -17,6 +17,7 @@ import { ValidationError } from "../../error.ts";
 import { NullType } from "../../primitive/null_type.ts";
 import { UnionType } from "../union_type.ts";
 import { createType } from "../../../type/create_type.ts";
+import { InterpretedReaderStrategy } from "../record_reader_strategy.ts";
 
 interface FieldSpec {
   name: string;
@@ -185,6 +186,20 @@ describe("RecordType", () => {
         Error,
         "Invalid record field alias",
       );
+    });
+  });
+
+  describe("reader strategy", () => {
+    it("returns the configured reader strategy", () => {
+      const strategy = new InterpretedReaderStrategy();
+      const names = resolveNames({ name: "example.StrategyRecord" });
+      const type = new RecordType({
+        ...names,
+        fields: [{ name: "id", type: new IntType() }],
+        readerStrategy: strategy,
+      });
+
+      assertEquals(type.getReaderStrategy(), strategy);
     });
   });
 
