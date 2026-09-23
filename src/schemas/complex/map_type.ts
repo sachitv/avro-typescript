@@ -7,6 +7,7 @@ import type {
   SyncWritableTapLike,
 } from "../../serialization/tap_sync.ts";
 import { bigIntToSafeNumber } from "../../serialization/conversion.ts";
+import { readBlockCountSync } from "../../serialization/block_count_sync.ts";
 import { BaseType } from "../base_type.ts";
 import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
@@ -65,21 +66,14 @@ export function readMapIntoSync<T>(
   /**
    * Synchronously reads map blocks from the tap and populates the provided map.
    */
-  while (true) {
-    let rawCount = tap.readLong();
-    if (rawCount === 0n) {
-      break;
-    }
-    if (rawCount < 0n) {
-      rawCount = -rawCount;
-      tap.skipLong();
-    }
-    const count = bigIntToSafeNumber(rawCount, "Map block length");
+  let count = readBlockCountSync(tap, "Map block length");
+  while (count !== 0) {
     for (let i = 0; i < count; i++) {
       const key = tap.readString();
       const value = readValue(tap);
       collect(key, value);
     }
+    count = readBlockCountSync(tap, "Map block length");
   }
 }
 

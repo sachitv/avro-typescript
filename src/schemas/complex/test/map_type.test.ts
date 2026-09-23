@@ -9,6 +9,7 @@ import {
   type SyncReadableTapLike,
   SyncWritableTap,
 } from "../../../serialization/tap_sync.ts";
+import { DirectSyncReadableTap } from "../../../serialization/direct_tap_sync.ts";
 import { MapType, readMapInto, readMapIntoSync } from "../map_type.ts";
 import { IntType } from "../../primitive/int_type.ts";
 import { LongType } from "../../primitive/long_type.ts";
@@ -1011,4 +1012,63 @@ describe("MapType large map writeLong fallback", () => {
     assertEquals(calls[1].method, "writeInt");
     assertEquals(calls[1].value, 0);
   });
+});
+
+describe("MapType sync block counts beyond the int32 fast path", () => {
+  // Map block counts are Avro longs. A count padded to six varint bytes is
+  // valid Avro that the async path accepts, so the sync map readers must decode
+  // it as a long rather than rejecting it as an out-of-range int.
+  const paddedCount = (count: number) => [
+    (count << 1) | 0x80,
+    0x80,
+    0x80,
+    0x80,
+    0x80,
+    0x00,
+  ];
+  // Key "a" (length 1, zig-zag 2) followed by an int value.
+  const entry = (value: number) => [0x02, 0x61, value << 1];
+
+  const syncTaps = [
+    {
+      name: "SyncReadableTap",
+      open: (bytes: number[]) =>
+        new SyncReadableTap(new Uint8Array(bytes).buffer),
+    },
+    {
+      name: "DirectSyncReadableTap",
+      open: (bytes: number[]) =>
+        new DirectSyncReadableTap(new Uint8Array(bytes)),
+    },
+  ];
+
+  for (const { name, open } of syncTaps) {
+    it(`reads maps via ${name}`, async () => {
+      const intMap = createMap(new IntType());
+      const bytes = [...paddedCount(1), ...entry(3), 0];
+
+      assertEquals(intMap.readSync(open(bytes)), new Map([["a", 3]]));
+      assertEquals(
+        await intMap.read(new Tap(new Uint8Array(bytes).buffer)),
+        new Map([["a", 3]]),
+      );
+    });
+
+    it(`reads size-prefixed maps via ${name}`, () => {
+      const intMap = createMap(new IntType());
+      // Padded count -1 (zig-zag 1), then the three-byte block size.
+      const bytes = [0x81, 0x80, 0x80, 0x80, 0x80, 0x00, 6, ...entry(4), 0];
+
+      assertEquals(intMap.readSync(open(bytes)), new Map([["a", 4]]));
+    });
+
+    it(`reads resolved maps via ${name}`, () => {
+      const resolver = createMap(new LongType()).createResolver(
+        createMap(new IntType()),
+      );
+      const bytes = [...paddedCount(1), ...entry(5), 0];
+
+      assertEquals(resolver.readSync(open(bytes)), new Map([["a", 5n]]));
+    });
+  }
 });
