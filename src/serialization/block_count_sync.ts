@@ -10,6 +10,9 @@ import type { SyncReadableTapLike } from "./tap_sync.ts";
  * maps read two block headers per value. A negative count announces a
  * size-prefixed block, whose byte size is skipped here.
  *
+ * Like the tap's own read methods, this consumes the header: the tap is left
+ * positioned at the block's first item, ready for the caller to read it.
+ *
  * @param tap The tap positioned at a block header.
  * @param context Names the count in the RangeError raised when it is outside
  * the safe integer range.
