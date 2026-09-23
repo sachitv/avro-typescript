@@ -9,6 +9,7 @@ import {
   type SyncReadableTapLike,
   SyncWritableTap,
 } from "../../../serialization/tap_sync.ts";
+import { DirectSyncReadableTap } from "../../../serialization/direct_tap_sync.ts";
 import { MapType, readMapInto, readMapIntoSync } from "../map_type.ts";
 import { IntType } from "../../primitive/int_type.ts";
 import { LongType } from "../../primitive/long_type.ts";
@@ -1011,4 +1012,122 @@ describe("MapType large map writeLong fallback", () => {
     assertEquals(calls[1].method, "writeInt");
     assertEquals(calls[1].value, 0);
   });
+});
+
+describe("MapType sync block counts beyond the int32 fast path", () => {
+  // Map block counts are Avro longs. A count padded to six varint bytes is
+  // valid Avro that the async path accepts, so the sync map readers must decode
+  // it as a long rather than rejecting it as an out-of-range int.
+  const paddedCount = (count: number) => [
+    (count << 1) | 0x80,
+    0x80,
+    0x80,
+    0x80,
+    0x80,
+    0x00,
+  ];
+  // Key "a" (length 1, zig-zag 2) followed by an int value.
+  const entry = (value: number) => [0x02, 0x61, value << 1];
+
+  const syncTaps = [
+    {
+      name: "SyncReadableTap",
+      open: (bytes: number[]) =>
+        new SyncReadableTap(new Uint8Array(bytes).buffer),
+    },
+    {
+      name: "DirectSyncReadableTap",
+      open: (bytes: number[]) =>
+        new DirectSyncReadableTap(new Uint8Array(bytes)),
+    },
+  ];
+
+  for (const { name, open } of syncTaps) {
+    it(`reads maps via ${name}`, async () => {
+      const intMap = createMap(new IntType());
+      const bytes = [...paddedCount(1), ...entry(3), 0];
+
+      assertEquals(intMap.readSync(open(bytes)), new Map([["a", 3]]));
+      assertEquals(
+        await intMap.read(new Tap(new Uint8Array(bytes).buffer)),
+        new Map([["a", 3]]),
+      );
+    });
+
+    it(`reads size-prefixed maps via ${name}`, () => {
+      const intMap = createMap(new IntType());
+      // Padded count -1 (zig-zag 1), then the three-byte block size.
+      const bytes = [0x81, 0x80, 0x80, 0x80, 0x80, 0x00, 6, ...entry(4), 0];
+
+      assertEquals(intMap.readSync(open(bytes)), new Map([["a", 4]]));
+    });
+
+    it(`rejects a count beyond the safe integer range via ${name}`, () => {
+      // readLength's long fallback names the block in the error, matching the
+      // message the async reader raises for the same bytes.
+      const buffer = new ArrayBuffer(16);
+      const writeTap = new SyncWritableTap(buffer);
+      writeTap.writeLong(BigInt(Number.MAX_SAFE_INTEGER) + 1n);
+      const bytes = Array.from(new Uint8Array(buffer, 0, writeTap.getPos()));
+
+      assertThrows(
+        () => createMap(new IntType()).readSync(open(bytes)),
+        RangeError,
+        "Map block length value 9007199254740992 is outside the safe integer range.",
+      );
+    });
+
+    it(`reports a negative oversized count like the async reader via ${name}`, async () => {
+      // The signed count is range-checked before it is negated, so sync and
+      // async name the same (negative) value for a corrupt size-prefixed count.
+      const buffer = new ArrayBuffer(16);
+      const writeTap = new SyncWritableTap(buffer);
+      writeTap.writeLong(-(BigInt(Number.MAX_SAFE_INTEGER) + 1n));
+      const bytes = Array.from(new Uint8Array(buffer, 0, writeTap.getPos()));
+      const expected =
+        "Map block length value -9007199254740992 is outside the safe integer range.";
+
+      assertThrows(
+        () => createMap(new IntType()).readSync(open(bytes)),
+        RangeError,
+        expected,
+      );
+      await assertRejects(
+        () =>
+          createMap(new IntType()).read(new Tap(new Uint8Array(bytes).buffer)),
+        RangeError,
+        expected,
+      );
+    });
+
+    it(`reads multiple blocks, mixing plain and size-prefixed, via ${name}`, () => {
+      // Exercises the trailing block-count read returning a non-zero count,
+      // which the single-block cases never reach.
+      const intMap = createMap(new IntType());
+      const bytes = [
+        0x02, // count 1
+        ...entry(1),
+        0x01, // count -1: size-prefixed
+        0x06, // block size 3
+        0x02,
+        0x62, // key "b"
+        0x04, // value 2
+        0x00,
+      ];
+
+      assertEquals(
+        intMap.readSync(open(bytes)),
+        new Map([["a", 1], ["b", 2]]),
+      );
+    });
+
+    it(`reads resolved maps via ${name}`, () => {
+      const resolver = createMap(new LongType()).createResolver(
+        createMap(new IntType()),
+      );
+      const bytes = [...paddedCount(1), ...entry(5), 0];
+
+      assertEquals(resolver.readSync(open(bytes)), new Map([["a", 5n]]));
+    });
+  }
 });

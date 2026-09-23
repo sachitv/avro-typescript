@@ -17,6 +17,7 @@ import {
   compiledSyncRecordBlockReader,
   type CompiledSyncRecordBlockReaderProvider,
 } from "./record_reader_strategy.ts";
+import { readBlockCountSync } from "../../serialization/block_count_sync.ts";
 import { BooleanType } from "../primitive/boolean_type.ts";
 import { DoubleType } from "../primitive/double_type.ts";
 import { FloatType } from "../primitive/float_type.ts";
@@ -56,25 +57,6 @@ export async function readArrayInto<T>(
       collect(await readElement(tap));
     }
   }
-}
-
-/**
- * Reads a sync array block header and returns its element count.
- *
- * Block counts are Avro longs, so this accepts every count the async
- * {@link readArrayInto} does; an int-only read would reject valid counts whose
- * varint is wider than int32 allows. `readLength` still decodes the common
- * short varint without allocating a bigint, which matters because small
- * nested arrays read two block headers per value. A negative count announces
- * a size-prefixed block, whose byte size is skipped here.
- */
-function readBlockCountSync(tap: SyncReadableTapLike): number {
-  const count = tap.readLength("Array block length");
-  if (count < 0) {
-    tap.skipLong();
-    return -count;
-  }
-  return count;
 }
 
 /**
@@ -335,7 +317,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     // Allocate the first (and almost always only) block exactly with
     // new Array(count): growing an empty array via `.length =` measured about
     // 45 ns of overhead per small array, which dominated nested-array reads.
-    let count = readBlockCountSync(tap);
+    let count = readBlockCountSync(tap, "Array block length");
     const result: T[] = new Array(count);
     let startIdx = 0;
     while (count !== 0) {
@@ -343,7 +325,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
         result[startIdx + i] = itemsType.readSync(tap);
       }
       startIdx += count;
-      count = readBlockCountSync(tap);
+      count = readBlockCountSync(tap, "Array block length");
       if (count !== 0) {
         result.length = startIdx + count;
       }
@@ -368,13 +350,13 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     tap: SyncReadableTapLike,
     readBlock: CompiledSyncRecordBlockReader,
   ): T[] {
-    let count = readBlockCountSync(tap);
+    let count = readBlockCountSync(tap, "Array block length");
     const result: Record<string, unknown>[] = new Array(count);
     let startIndex = 0;
     while (count !== 0) {
       readBlock(tap, result, startIndex, count);
       startIndex += count;
-      count = readBlockCountSync(tap);
+      count = readBlockCountSync(tap, "Array block length");
       if (count !== 0) {
         result.length = startIndex + count;
       }
@@ -383,7 +365,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
   }
 
   #readSyncBulk(tap: DirectSyncReadableTap, kind: BulkArrayKind): T[] {
-    let count = readBlockCountSync(tap);
+    let count = readBlockCountSync(tap, "Array block length");
     const result: unknown[] = new Array(count);
     let startIdx = 0;
     while (count !== 0) {
@@ -408,7 +390,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
           break;
       }
       startIdx += count;
-      count = readBlockCountSync(tap);
+      count = readBlockCountSync(tap, "Array block length");
       if (count !== 0) {
         result.length = startIdx + count;
       }
@@ -614,7 +596,7 @@ class ArrayResolver<T> extends Resolver<T[]> {
 
   public override readSync(tap: SyncReadableTapLike): T[] {
     const itemResolver = this.#itemResolver;
-    let count = readBlockCountSync(tap);
+    let count = readBlockCountSync(tap, "Array block length");
     const result: T[] = new Array(count);
     let startIdx = 0;
     while (count !== 0) {
@@ -622,7 +604,7 @@ class ArrayResolver<T> extends Resolver<T[]> {
         result[startIdx + i] = itemResolver.readSync(tap);
       }
       startIdx += count;
-      count = readBlockCountSync(tap);
+      count = readBlockCountSync(tap, "Array block length");
       if (count !== 0) {
         result.length = startIdx + count;
       }
