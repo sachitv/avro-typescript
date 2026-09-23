@@ -1077,6 +1077,29 @@ describe("MapType sync block counts beyond the int32 fast path", () => {
       );
     });
 
+    it(`reports a negative oversized count like the async reader via ${name}`, async () => {
+      // The signed count is range-checked before it is negated, so sync and
+      // async name the same (negative) value for a corrupt size-prefixed count.
+      const buffer = new ArrayBuffer(16);
+      const writeTap = new SyncWritableTap(buffer);
+      writeTap.writeLong(-(BigInt(Number.MAX_SAFE_INTEGER) + 1n));
+      const bytes = Array.from(new Uint8Array(buffer, 0, writeTap.getPos()));
+      const expected =
+        "Map block length value -9007199254740992 is outside the safe integer range.";
+
+      assertThrows(
+        () => createMap(new IntType()).readSync(open(bytes)),
+        RangeError,
+        expected,
+      );
+      await assertRejects(
+        () =>
+          createMap(new IntType()).read(new Tap(new Uint8Array(bytes).buffer)),
+        RangeError,
+        expected,
+      );
+    });
+
     it(`reads resolved maps via ${name}`, () => {
       const resolver = createMap(new LongType()).createResolver(
         createMap(new IntType()),

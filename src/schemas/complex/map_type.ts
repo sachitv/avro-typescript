@@ -35,15 +35,18 @@ export async function readMapInto<T>(
   collect: (key: string, value: T) => void,
 ): Promise<void> {
   while (true) {
-    let rawCount = await tap.readLong();
+    const rawCount = await tap.readLong();
     if (rawCount === 0n) {
       break;
     }
-    if (rawCount < 0n) {
-      rawCount = -rawCount;
+    // Range-check the signed count before negating it, as readArrayInto and
+    // the sync readers do, so a corrupt count reports the same value on every
+    // path.
+    let count = bigIntToSafeNumber(rawCount, "Map block length");
+    if (count < 0) {
+      count = -count;
       await tap.skipLong(); // skip block size
     }
-    const count = bigIntToSafeNumber(rawCount, "Map block length");
     for (let i = 0; i < count; i++) {
       const key = await tap.readString();
       const value = await readValue(tap);
