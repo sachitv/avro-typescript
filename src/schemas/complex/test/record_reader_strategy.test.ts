@@ -14,10 +14,14 @@ import {
   type CompiledReader,
   CompiledReaderStrategy,
   type CompiledSyncReader,
+  type CompiledSyncRecordBlockReader,
+  compiledSyncRecordBlockReader,
   defaultReaderStrategy,
   InterpretedReaderStrategy,
   type RecordReaderContext,
 } from "../record_reader_strategy.ts";
+import type { RecordType } from "../record_type.ts";
+import type { Type } from "../../type.ts";
 import { createRecord } from "./record_test_utils.ts";
 import { createType } from "../../../type/create_type.ts";
 import { TestTap } from "../../../serialization/test/test_tap.ts";
@@ -879,5 +883,85 @@ describe("RecordReaderStrategy", () => {
       const decoded = nodeType.fromSyncBuffer(buffer);
       assertEquals(decoded, value);
     });
+  });
+});
+
+describe("RecordReaderCache block reader reentrancy", () => {
+  // The block reader is normally requested after the record has finished
+  // compiling. A strategy that asks for it from inside compileSyncFieldReader
+  // reaches the cache while the compiled sync reader is still a recursion
+  // placeholder and the field readers are not yet assigned.
+  class ReentrantStrategy extends CompiledReaderStrategy {
+    public record?: RecordType;
+    public reentrantBlockReader?: CompiledSyncRecordBlockReader;
+
+    public override compileSyncFieldReader(
+      fieldType: Type,
+      getRecordReader: (type: Type) => CompiledSyncReader,
+    ): CompiledSyncReader {
+      if (this.record && !this.reentrantBlockReader) {
+        this.reentrantBlockReader = this.record
+          [compiledSyncRecordBlockReader]();
+      }
+      return super.compileSyncFieldReader(fieldType, getRecordReader);
+    }
+  }
+
+  const buildRecord = (strategy: ReentrantStrategy) => {
+    const record = createRecord({
+      name: "Reentrant",
+      fields: [
+        { name: "a", type: new IntType() },
+        { name: "b", type: new StringType() },
+      ],
+      readerStrategy: strategy,
+    });
+    strategy.record = record;
+    return record;
+  };
+
+  const encodeTwo = (record: RecordType) => {
+    const buffer = new ArrayBuffer(64);
+    const writeTap = new SyncWritableTap(buffer);
+    record.writeSync(writeTap, { a: 1, b: "one" });
+    record.writeSync(writeTap, { a: 2, b: "two" });
+    return buffer.slice(0, writeTap.getPos());
+  };
+
+  it("returns a working block reader when re-entered mid-compilation", () => {
+    const strategy = new ReentrantStrategy();
+    const record = buildRecord(strategy);
+    const encoded = encodeTwo(record);
+
+    // Triggers compilation, which re-enters the block-reader capability.
+    record.readSync(new SyncReadableTap(encoded));
+    const reentrant = strategy.reentrantBlockReader;
+    assert(reentrant);
+
+    // The reader handed out during compilation still decodes correctly once
+    // the placeholder it closes over has been resolved.
+    const result: Record<string, unknown>[] = new Array(2);
+    reentrant(new SyncReadableTap(encoded), result, 0, 2);
+    assertEquals(result, [{ a: 1, b: "one" }, { a: 2, b: "two" }]);
+  });
+
+  it("does not cache the reentrant fallback for later callers", () => {
+    const strategy = new ReentrantStrategy();
+    const record = buildRecord(strategy);
+    const encoded = encodeTwo(record);
+
+    record.readSync(new SyncReadableTap(encoded));
+    const reentrant = strategy.reentrantBlockReader;
+    const settled = record[compiledSyncRecordBlockReader]();
+
+    assert(reentrant);
+    // The post-compilation lookup must resolve to the specialized reader
+    // rather than the fallback that was handed out mid-compilation.
+    assertEquals(settled === reentrant, false);
+    assertEquals(settled === record[compiledSyncRecordBlockReader](), true);
+
+    const result: Record<string, unknown>[] = new Array(2);
+    settled(new SyncReadableTap(encoded), result, 0, 2);
+    assertEquals(result, [{ a: 1, b: "one" }, { a: 2, b: "two" }]);
   });
 });

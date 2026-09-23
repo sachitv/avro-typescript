@@ -136,21 +136,31 @@ export class RecordReaderCache {
       return this.#compiledSyncRecordBlockReader;
     }
 
-    this.getOrCreateSyncReader(context, getNestedReader);
-    const scalarReader = this.#compiledSyncReader!;
-    const fieldReaders = this.#compiledSyncFieldReaders!;
-    const specialized = this.#strategy.assembleSyncRecordBlockReader?.(
-      context,
-      fieldReaders,
-    );
+    const scalarReader = this.getOrCreateSyncReader(context, getNestedReader);
+    const fieldReaders = this.#compiledSyncFieldReaders;
 
-    this.#compiledSyncRecordBlockReader = specialized ??
+    // Fall back to the scalar reader whenever the field readers are not yet
+    // available. That happens if this method is re-entered while
+    // getOrCreateSyncReader is still compiling — the compiled sync reader is a
+    // recursion placeholder at that point and the field readers are not
+    // assigned until assembly completes.
+    const specialized = fieldReaders === undefined
+      ? undefined
+      : this.#strategy.assembleSyncRecordBlockReader?.(context, fieldReaders);
+
+    const blockReader: CompiledSyncRecordBlockReader = specialized ??
       ((tap, result, startIndex, count) => {
         const end = startIndex + count;
         for (let i = startIndex; i < end; i++) {
           result[i] = scalarReader(tap) as Record<string, unknown>;
         }
       });
-    return this.#compiledSyncRecordBlockReader;
+
+    // Only cache once the field readers were available; otherwise a reentrant
+    // call would pin the fallback for the fully compiled record too.
+    if (fieldReaders !== undefined) {
+      this.#compiledSyncRecordBlockReader = blockReader;
+    }
+    return blockReader;
   }
 }

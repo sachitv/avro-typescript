@@ -3,7 +3,7 @@ import { expect } from "@std/expect";
 import { assertThrows } from "@std/assert";
 
 import { DirectSyncReadableTap } from "../direct_tap_sync.ts";
-import { SyncWritableTap } from "../tap_sync.ts";
+import { SyncReadableTap, SyncWritableTap } from "../tap_sync.ts";
 import { SyncInMemoryWritableBuffer } from "../buffers/in_memory_buffer_sync.ts";
 
 // Helper to create a DirectSyncReadableTap from values written by SyncWritableTap
@@ -928,5 +928,122 @@ describe("DirectSyncReadableTap", () => {
       const tap = new DirectSyncReadableTap(subView);
       expect(tap.readFloat()).toBeCloseTo(3.14, 5);
     });
+  });
+});
+
+describe("DirectSyncReadableTap int32 range parity with SyncReadableTap", () => {
+  // A six-byte varint must be rejected, not silently wrapped: `1 << 35`
+  // evaluates as `1 << 3` in JavaScript, so an unvalidated decode returns a
+  // plausible small number for malformed input.
+  const sixByteVarint = [0x80, 0x80, 0x80, 0x80, 0x80, 0x02];
+  // Fifth byte carrying bits above 0x0F.
+  const fifthByteOverflow = [0x80, 0x80, 0x80, 0x80, 0x70];
+
+  const bothTaps = (bytes: number[]) => {
+    const buffer = new Uint8Array(bytes);
+    return {
+      direct: new DirectSyncReadableTap(buffer),
+      standard: new SyncReadableTap(buffer.slice().buffer),
+    };
+  };
+
+  it("rejects a six-byte varint in readInt exactly as SyncReadableTap does", () => {
+    const { direct, standard } = bothTaps(sixByteVarint);
+    const expected = "Varint requires more than 5 bytes (int32 range exceeded)";
+    assertThrows(() => standard.readInt(), RangeError, expected);
+    assertThrows(() => direct.readInt(), RangeError, expected);
+  });
+
+  it("rejects a fifth byte above 0x0F exactly as SyncReadableTap does", () => {
+    const { direct, standard } = bothTaps(fifthByteOverflow);
+    const expected =
+      "5th byte of varint has bits above 0x0F set (int32 range exceeded)";
+    assertThrows(() => standard.readInt(), RangeError, expected);
+    assertThrows(() => direct.readInt(), RangeError, expected);
+  });
+
+  it("rejects a six-byte varint in readIntArrayInto", () => {
+    const tap = new DirectSyncReadableTap(new Uint8Array(sixByteVarint));
+    assertThrows(
+      () => tap.readIntArrayInto([], 0, 1),
+      RangeError,
+      "Varint requires more than 5 bytes (int32 range exceeded)",
+    );
+  });
+
+  it("rejects a six-byte string length in readStringArrayInto", () => {
+    const tap = new DirectSyncReadableTap(new Uint8Array(sixByteVarint));
+    assertThrows(
+      () => tap.readStringArrayInto([], 0, 1),
+      RangeError,
+      "Varint requires more than 5 bytes (int32 range exceeded)",
+    );
+  });
+
+  it("rejects a six-byte varint in readMapIntBlockInto", () => {
+    const tap = new DirectSyncReadableTap(new Uint8Array(sixByteVarint));
+    assertThrows(
+      () => tap.readMapIntBlockInto(new Map(), 1),
+      RangeError,
+      "Varint requires more than 5 bytes (int32 range exceeded)",
+    );
+  });
+
+  it("rejects a six-byte varint in readMapStringBlockInto", () => {
+    const tap = new DirectSyncReadableTap(new Uint8Array(sixByteVarint));
+    assertThrows(
+      () => tap.readMapStringBlockInto(new Map(), 1),
+      RangeError,
+      "Varint requires more than 5 bytes (int32 range exceeded)",
+    );
+  });
+
+  it("still decodes the widest valid five-byte int32 varints", () => {
+    for (const value of [2147483647, -2147483648, 0, 1, -1, 268435455]) {
+      const buffer = new Uint8Array(16);
+      const writable = new SyncWritableTap(
+        new SyncInMemoryWritableBuffer(buffer.buffer),
+      );
+      writable.writeInt(value);
+      expect(new DirectSyncReadableTap(buffer).readInt()).toBe(value);
+
+      const bulk: number[] = [];
+      new DirectSyncReadableTap(buffer).readIntArrayInto(bulk, 0, 1);
+      expect(bulk[0]).toBe(value);
+    }
+  });
+});
+
+describe("DirectSyncReadableTap map block value range validation", () => {
+  // A valid one-character key, then a six-byte varint where the entry's value
+  // belongs: covers the value decode rather than the key decode.
+  const keyThenSixByteVarint = [
+    0x02,
+    0x61,
+    0x80,
+    0x80,
+    0x80,
+    0x80,
+    0x80,
+    0x02,
+  ];
+  const expected = "Varint requires more than 5 bytes (int32 range exceeded)";
+
+  it("rejects an over-long int value in readMapIntBlockInto", () => {
+    const tap = new DirectSyncReadableTap(new Uint8Array(keyThenSixByteVarint));
+    assertThrows(
+      () => tap.readMapIntBlockInto(new Map(), 1),
+      RangeError,
+      expected,
+    );
+  });
+
+  it("rejects an over-long string length in readMapStringBlockInto", () => {
+    const tap = new DirectSyncReadableTap(new Uint8Array(keyThenSixByteVarint));
+    assertThrows(
+      () => tap.readMapStringBlockInto(new Map(), 1),
+      RangeError,
+      expected,
+    );
   });
 });

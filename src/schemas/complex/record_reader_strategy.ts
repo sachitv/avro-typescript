@@ -153,24 +153,6 @@ function isRecordType(type: Type): boolean {
   return "__AVRO_RECORD_TYPE__" in type.constructor;
 }
 
-/**
- * Builds a template object holding every field name with an undefined value.
- *
- * Spread-cloning this seed gives each decoded record its final hidden class
- * and property backing store in a single allocation; the per-field stores
- * then overwrite existing properties instead of walking one map transition
- * (and possibly growing the out-of-object backing store) per field. This is
- * what keeps construction cost linear in field count for wide records.
- * Callers must exclude `__proto__` before building a seed.
- */
-function makeSeedRecord(fieldNames: string[]): Record<string, unknown> {
-  const seed: Record<string, unknown> = {};
-  for (const name of fieldNames) {
-    seed[name] = undefined;
-  }
-  return seed;
-}
-
 function setRecordField(
   record: Record<string, unknown>,
   name: string,
@@ -268,11 +250,12 @@ export class CompiledReaderStrategy implements RecordReaderStrategy {
         return this.#generateSpecializedSyncReader(fieldNames, fieldReaders);
       }
 
-      // Wide records compose hoisted 10-field chunk fillers over a cloned
-      // seed. Hoisted constant-key stores stay on V8's monomorphic fast path
-      // (~4 ns/field) where a dynamic `result[names[i]]` loop pays ~12
-      // ns/field, and the composition keeps code size fixed for any width.
-      const seed = makeSeedRecord(fieldNames);
+      // Wide records compose hoisted 10-field chunk fillers. Hoisted
+      // constant-key stores stay on V8's monomorphic fast path where a dynamic
+      // `result[names[i]]` loop does not, and the composition keeps code size
+      // fixed for any width. Pre-seeding the record's shape from a cloned
+      // template was measured to add nothing at these widths (1367 vs 1320
+      // ns/record on a 20-field record), so the fillers build a fresh object.
       const fillers: SyncFieldChunkFiller[] = [];
       for (let start = 0; start < fieldCount; start += 10) {
         fillers.push(CompiledReaderStrategy.#generateSyncFieldChunkFiller(
@@ -282,7 +265,7 @@ export class CompiledReaderStrategy implements RecordReaderStrategy {
       }
       const fillerCount = fillers.length;
       return (tap) => {
-        const result: Record<string, unknown> = { ...seed };
+        const result: Record<string, unknown> = {};
         for (let i = 0; i < fillerCount; i++) {
           fillers[i]!(tap, result);
         }
@@ -323,8 +306,7 @@ export class CompiledReaderStrategy implements RecordReaderStrategy {
 
   /**
    * Builds a filler writing 1-10 fields into an existing record with hoisted
-   * constant-key stores. The record already has its final shape from the
-   * cloned seed, so every store overwrites an existing property.
+   * constant-key stores.
    */
   static #generateSyncFieldChunkFiller(
     fieldNames: string[],
@@ -452,8 +434,6 @@ export class CompiledReaderStrategy implements RecordReaderStrategy {
     // property-definition runtime path. Profiling the nested-record workload
     // attributed roughly 200 ns per record level to that runtime path.
     // Hoisting names and readers into locals avoids captured-array loads.
-    // Seed-cloning (see makeSeedRecord) was measured slower than plain
-    // assignment at these widths and is reserved for records >10 fields.
     const r0 = fieldReaders[0]!;
     const r1 = fieldReaders[1]!;
     const r2 = fieldReaders[2]!;

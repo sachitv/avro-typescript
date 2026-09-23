@@ -21,6 +21,26 @@ const VARINT_POW7 = [
 ];
 
 /**
+ * Rejects a varint that needs more than the five bytes an int32 can occupy.
+ *
+ * Kept out of line so the inline decode loops stay small enough for V8 to
+ * inline while still reporting exactly what {@link SyncReadableTap.readInt}
+ * reports for the same bytes.
+ */
+function throwVarintTooLong(): never {
+  throw new RangeError(
+    "Varint requires more than 5 bytes (int32 range exceeded)",
+  );
+}
+
+/** Rejects a 5th varint byte carrying bits beyond the int32 range. */
+function throwVarintFifthByte(): never {
+  throw new RangeError(
+    "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
+  );
+}
+
+/**
  * High-performance synchronous readable tap that works directly on a Uint8Array.
  *
  * This tap eliminates the buffer abstraction overhead present in SyncReadableTap:
@@ -99,6 +119,10 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
   /**
    * Reads a variable-length zig-zag encoded 32-bit signed integer.
    * Optimized: direct array access without bounds checking.
+   *
+   * Range validation matches {@link SyncReadableTap.readInt} byte for byte:
+   * without the six-byte rejection a `1 << 35` shift silently wraps to
+   * `1 << 3` and a malformed varint decodes to a plausible wrong value.
    */
   readInt(): number {
     const buf = this.#buf;
@@ -109,12 +133,14 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
 
     do {
       byte = buf[pos++]!;
+      // Nested so well-formed varints pay a single branch per byte.
       if (shift >= 28) {
-        // 5th byte: only 4 bits allowed for int32
+        if (shift >= 35) {
+          throwVarintTooLong();
+        }
+        // 5th byte: only the low 4 bits encode valid int32 data.
         if ((byte & 0x70) !== 0) {
-          throw new RangeError(
-            "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
-          );
+          throwVarintFifthByte();
         }
       }
       result |= (byte & 0x7f) << shift;
@@ -240,7 +266,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
    * unchanged cursor position so valid long lengths decode the same as in
    * the async path.
    */
-  #readLength(context: string): number {
+  readLength(context: string): number {
     const buf = this.#buf;
     let pos = this.#pos;
     let result = 0;
@@ -260,7 +286,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
 
   /** Reads a length-prefixed byte sequence. */
   readBytes(): Readonly<Uint8Array> {
-    const length = this.#readLength("readBytes length");
+    const length = this.readLength("readBytes length");
     if (length < 0) {
       throw new RangeError(`Invalid negative bytes length: ${length}`);
     }
@@ -269,7 +295,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
 
   /** Skips a length-prefixed byte sequence. */
   skipBytes(): void {
-    const len = this.#readLength("skipBytes length");
+    const len = this.readLength("skipBytes length");
     if (len < 0) {
       throw new RangeError(`Invalid negative bytes length: ${len}`);
     }
@@ -285,7 +311,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
    * See packages/benchmarks/text_encoding_bench.ts for benchmark data.
    */
   readString(): string {
-    const len = this.#readLength("readString length");
+    const len = this.readLength("readString length");
     if (len < 0) {
       throw new RangeError(`Invalid negative string length: ${len}`);
     }
@@ -299,7 +325,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
 
   /** Skips a length-prefixed UTF-8 string. */
   skipString(): void {
-    const len = this.#readLength("skipString length");
+    const len = this.readLength("skipString length");
     if (len < 0) {
       throw new RangeError(`Invalid negative string length: ${len}`);
     }
@@ -369,11 +395,17 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
     return this.matchString(tap);
   }
 
-  /** Compares length-prefixed strings from this tap and another. */
+  /**
+   * Compares length-prefixed strings from this tap and another.
+   *
+   * Lengths decode through the long-capable path so a length above the int32
+   * fast-path range compares the same here as {@link SyncReadableTap} and as
+   * this tap's own {@link readString}.
+   */
   matchString(tap: SyncReadableTapLike): number {
-    const l1 = this.readInt();
+    const l1 = this.readLength("matchString length this");
     const b1 = this.readFixed(l1);
-    const l2 = tap.readInt();
+    const l2 = bigIntToSafeNumber(tap.readLong(), "matchString length other");
     const b2 = tap.readFixed(l2);
     return compareUint8Arrays(b1, b2);
   }
@@ -402,11 +434,11 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
       do {
         byte = buf[pos++]!;
         if (shift >= 28) {
-          // 5th byte: only 4 bits allowed for int32
+          if (shift >= 35) {
+            throwVarintTooLong();
+          }
           if ((byte & 0x70) !== 0) {
-            throw new RangeError(
-              "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
-            );
+            throwVarintFifthByte();
           }
         }
         value |= (byte & 0x7f) << shift;
@@ -537,10 +569,11 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
       do {
         byte = buf[pos++]!;
         if (shift >= 28) {
+          if (shift >= 35) {
+            throwVarintTooLong();
+          }
           if ((byte & 0x70) !== 0) {
-            throw new RangeError(
-              "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
-            );
+            throwVarintFifthByte();
           }
         }
         len |= (byte & 0x7f) << shift;
@@ -582,11 +615,11 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
       do {
         keyByte = buf[pos++]!;
         if (keyShift >= 28) {
-          // 5th byte: only 4 bits allowed for int32
+          if (keyShift >= 35) {
+            throwVarintTooLong();
+          }
           if ((keyByte & 0x70) !== 0) {
-            throw new RangeError(
-              "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
-            );
+            throwVarintFifthByte();
           }
         }
         keyLen |= (keyByte & 0x7f) << keyShift;
@@ -606,11 +639,11 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
       do {
         valByte = buf[pos++]!;
         if (valShift >= 28) {
-          // 5th byte: only 4 bits allowed for int32
+          if (valShift >= 35) {
+            throwVarintTooLong();
+          }
           if ((valByte & 0x70) !== 0) {
-            throw new RangeError(
-              "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
-            );
+            throwVarintFifthByte();
           }
         }
         value |= (valByte & 0x7f) << valShift;
@@ -640,11 +673,11 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
       do {
         keyByte = buf[pos++]!;
         if (keyShift >= 28) {
-          // 5th byte: only 4 bits allowed for int32
+          if (keyShift >= 35) {
+            throwVarintTooLong();
+          }
           if ((keyByte & 0x70) !== 0) {
-            throw new RangeError(
-              "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
-            );
+            throwVarintFifthByte();
           }
         }
         keyLen |= (keyByte & 0x7f) << keyShift;
@@ -664,11 +697,11 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
       do {
         valByte = buf[pos++]!;
         if (valShift >= 28) {
-          // 5th byte: only 4 bits allowed for int32
+          if (valShift >= 35) {
+            throwVarintTooLong();
+          }
           if ((valByte & 0x70) !== 0) {
-            throw new RangeError(
-              "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
-            );
+            throwVarintFifthByte();
           }
         }
         valLen |= (valByte & 0x7f) << valShift;
