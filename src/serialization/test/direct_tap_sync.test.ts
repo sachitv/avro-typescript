@@ -722,27 +722,44 @@ describe("DirectSyncReadableTap", () => {
         expect(result).toEqual(["日本語", "中文"]);
       });
 
-      it("throws on string length overflow in array element", () => {
-        // Array with one valid string followed by invalid length varint
-        const bytes = new Uint8Array([
-          0x0A, // length: 5
+      it("decodes wide string lengths like readString", () => {
+        // A length padded to six varint bytes is a valid Avro long that the
+        // int32 inline decode cannot hold; it must fall back to readLength
+        // and leave the cursor aligned for the next element.
+        const bytes = [
+          0x84,
+          0x80,
+          0x80,
+          0x80,
+          0x80,
+          0x00, // padded length: 2
           0x68,
-          0x65,
-          0x6C,
-          0x6C,
-          0x6F, // "hello"
-          0x80,
-          0x80,
-          0x80,
-          0x80,
-          0xF0, // invalid 5-byte varint for length
-        ]);
-        const tap = new DirectSyncReadableTap(bytes);
+          0x69, // "hi"
+          0x02, // length: 1
+          0x21, // "!"
+        ];
+        const tap = new DirectSyncReadableTap(new Uint8Array(bytes));
         const result: string[] = ["", ""];
+        tap.readStringArrayInto(result, 0, 2);
+        expect(result).toEqual(["hi", "!"]);
+        expect(tap.pos).toBe(bytes.length);
+
+        const single = new DirectSyncReadableTap(new Uint8Array(bytes));
+        const standard = new SyncReadableTap(new Uint8Array(bytes).buffer);
+        expect([single.readString(), single.readString()]).toEqual(result);
+        expect([standard.readString(), standard.readString()]).toEqual(result);
+      });
+
+      it("throws on a wide negative string length in array element", () => {
+        // Padded zigzag(-1) = 1 takes the readLength fallback before the
+        // negative-length check.
+        const tap = new DirectSyncReadableTap(
+          new Uint8Array([0x81, 0x80, 0x80, 0x80, 0x80, 0x00]),
+        );
         assertThrows(
-          () => tap.readStringArrayInto(result, 0, 2),
+          () => tap.readStringArrayInto([""], 0, 1),
           RangeError,
-          "5th byte of varint has bits above 0x0F set (int32 range exceeded)",
+          "Invalid negative string length: -1",
         );
       });
 
@@ -966,15 +983,6 @@ describe("DirectSyncReadableTap int32 range parity with SyncReadableTap", () => 
     const tap = new DirectSyncReadableTap(new Uint8Array(sixByteVarint));
     assertThrows(
       () => tap.readIntArrayInto([], 0, 1),
-      RangeError,
-      "Varint requires more than 5 bytes (int32 range exceeded)",
-    );
-  });
-
-  it("rejects a six-byte string length in readStringArrayInto", () => {
-    const tap = new DirectSyncReadableTap(new Uint8Array(sixByteVarint));
-    assertThrows(
-      () => tap.readStringArrayInto([], 0, 1),
       RangeError,
       "Varint requires more than 5 bytes (int32 range exceeded)",
     );

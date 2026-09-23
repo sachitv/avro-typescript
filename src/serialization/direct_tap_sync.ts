@@ -562,24 +562,30 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
     let pos = this.#pos;
 
     for (let i = 0; i < count; i++) {
-      // Inline varint decode for length
+      // Inline varint decode for length, mirroring readLength's 32-bit fast
+      // path. Lengths are Avro longs, so a varint reaching a fifth byte is
+      // re-read from the element start through readLength's long fallback,
+      // which returns the already zig-zag-decoded length.
+      const elementStart = pos;
       let len = 0;
       let shift = 0;
+      let wide = false;
       let byte: number;
       do {
         byte = buf[pos++]!;
         if (shift >= 28) {
-          if (shift >= 35) {
-            throwVarintTooLong();
-          }
-          if ((byte & 0x70) !== 0) {
-            throwVarintFifthByte();
-          }
+          this.#pos = elementStart;
+          len = this.readLength("readString length");
+          pos = this.#pos;
+          wide = true;
+          break;
         }
         len |= (byte & 0x7f) << shift;
         shift += 7;
       } while ((byte & 0x80) !== 0);
-      len = (len >>> 1) ^ -(len & 1);
+      if (!wide) {
+        len = (len >>> 1) ^ -(len & 1);
+      }
       if (len < 0) {
         throw new RangeError(`Invalid negative string length: ${len}`);
       }

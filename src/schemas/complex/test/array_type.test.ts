@@ -1291,6 +1291,15 @@ describe("ArrayType sync block counts beyond the int32 fast path", () => {
       );
     });
 
+    it(`reads string arrays with wide element lengths via ${name}`, () => {
+      // Element lengths are longs too, so the bulk string path must accept a
+      // padded length the per-element readString path accepts.
+      const stringArray = createArray(new StringType());
+      const bytes = [...paddedCount(1), ...paddedCount(1, [0x78]), 0];
+
+      assertEquals(stringArray.readSync(open(bytes)), ["x"]);
+    });
+
     it(`reads generic arrays via ${name}`, () => {
       const bytesArray = createArray(new BytesType());
       const bytes = [...paddedCount(1), 4, 7, 8, ...paddedCount(1), 0, 0];
