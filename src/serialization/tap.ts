@@ -1,6 +1,6 @@
 import { bigIntToSafeNumber } from "./conversion.ts";
 import { compareUint8Arrays } from "./compare_bytes.ts";
-import { decode, encode } from "./text_encoding.ts";
+import { decodeWithFastPath, encode } from "./text_encoding.ts";
 import type { IReadableBuffer, IWritableBuffer } from "./buffers/buffer.ts";
 import { ReadBufferError, WriteBufferError } from "./buffers/buffer_error.ts";
 import {
@@ -527,7 +527,7 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
   async readString(): Promise<string> {
     const len = bigIntToSafeNumber(await this.readLong(), "readString length");
     const bytes = await this.readFixed(len);
-    return decode(bytes);
+    return decodeWithFastPath(bytes);
   }
 
   /**

@@ -282,7 +282,7 @@ describe("createWebSocketTransport", () => {
   });
 
   it("handles WebSocket message in readable stream", async () => {
-    let messageTimer: number | undefined;
+    let messageTimer: ReturnType<typeof setTimeout> | undefined;
     const mockSocket = {
       readyState: WebSocket.OPEN,
       binaryType: "arraybuffer",
@@ -378,7 +378,7 @@ describe("createWebSocketTransport", () => {
   });
 
   it("extracts binary from ArrayBufferView message", async () => {
-    let messageTimer: number | undefined;
+    let messageTimer: ReturnType<typeof setTimeout> | undefined;
     const mockSocket = {
       readyState: 1,
       binaryType: "arraybuffer",
@@ -416,7 +416,7 @@ describe("createWebSocketTransport", () => {
   });
 
   it("extracts binary from string message", async () => {
-    let messageTimer: number | undefined;
+    let messageTimer: ReturnType<typeof setTimeout> | undefined;
     const mockSocket = {
       readyState: 1,
       binaryType: "arraybuffer",
@@ -451,7 +451,7 @@ describe("createWebSocketTransport", () => {
   });
 
   it("throws on Blob message", async () => {
-    let messageTimer: number | undefined;
+    let messageTimer: ReturnType<typeof setTimeout> | undefined;
     const mockSocket = {
       readyState: 1,
       binaryType: "blob",
@@ -491,7 +491,7 @@ describe("createWebSocketTransport", () => {
   });
 
   it("throws on unsupported message type", async () => {
-    let messageTimer: number | undefined;
+    let messageTimer: ReturnType<typeof setTimeout> | undefined;
     const mockSocket = {
       readyState: 1,
       binaryType: "arraybuffer",

@@ -1,6 +1,6 @@
 import { bigIntToSafeNumber } from "./conversion.ts";
 import { compareUint8Arrays } from "./compare_bytes.ts";
-import { decode, encoder } from "./text_encoding.ts";
+import { decodeWithFastPath, encoder } from "./text_encoding.ts";
 import { TapBase } from "./tap.ts";
 import type { ISyncReadable, ISyncWritable } from "./buffers/buffer_sync.ts";
 import { ReadBufferError } from "./buffers/buffer_error.ts";
@@ -56,6 +56,12 @@ export interface SyncReadableTapLike {
   readInt(): number;
   /** Reads a variable-length zig-zag encoded 64-bit signed integer as bigint. */
   readLong(): bigint;
+  /**
+   * Reads a zig-zag encoded long that must be a safe integer, such as a length
+   * prefix or block count, as a number. Throws a RangeError naming `context`
+   * when the value is outside the safe integer range.
+   */
+  readLength(context: string): number;
   /** Skips a zig-zag encoded 32-bit integer. */
   skipInt(): void;
   /** Skips a zig-zag encoded 64-bit integer. */
@@ -344,26 +350,57 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
 
   /** Reads a length-prefixed byte sequence. */
   readBytes(): Readonly<Uint8Array> {
-    const length = bigIntToSafeNumber(this.readLong(), "readBytes length");
+    const length = this.readLength("readBytes length");
     return this.readFixed(length);
   }
 
   /** Skips a length-prefixed byte sequence. */
   skipBytes(): void {
-    const len = bigIntToSafeNumber(this.readLong(), "skipBytes length");
+    const len = this.readLength("skipBytes length");
     this.pos += len;
   }
 
-  /** Reads a length-prefixed UTF-8 string. */
+  /**
+   * Reads a length prefix as a number. Avro encodes lengths as longs; the
+   * 32-bit fast path covers varints up to 4 payload bytes (lengths below
+   * 2^27), and wider varints fall back to a full long read from the
+   * unchanged cursor position so valid long lengths decode the same as in
+   * the async path.
+   */
+  readLength(context: string): number {
+    let pos = this.pos;
+    let result = 0;
+    let shift = 0;
+    let byte: number;
+    do {
+      byte = this.getByteAt(pos++);
+      if (shift >= 28) {
+        return bigIntToSafeNumber(this.readLong(), context);
+      }
+      result |= (byte & 0x7f) << shift;
+      shift += 7;
+    } while ((byte & 0x80) !== 0);
+    this.pos = pos;
+    return (result >>> 1) ^ -(result & 1);
+  }
+
+  /**
+   * Reads a length-prefixed UTF-8 string.
+   */
   readString(): string {
-    const len = bigIntToSafeNumber(this.readLong(), "readString length");
-    const bytes = this.readFixed(len);
-    return decode(bytes);
+    const len = this.readLength("readString length");
+    if (len < 0) {
+      throw new RangeError(`Invalid negative string length: ${len}`);
+    }
+    if (len === 0) {
+      return "";
+    }
+    return decodeWithFastPath(this.readFixed(len));
   }
 
   /** Skips a length-prefixed UTF-8 string. */
   skipString(): void {
-    const len = bigIntToSafeNumber(this.readLong(), "skipString length");
+    const len = this.readLength("skipString length");
     this.pos += len;
   }
 
@@ -432,15 +469,9 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
 
   /** Compares length-prefixed strings from this tap and another. */
   matchString(tap: SyncReadableTapLike): number {
-    const l1 = bigIntToSafeNumber(
-      this.readLong(),
-      "matchString length this",
-    );
+    const l1 = this.readLength("matchString length this");
     const b1 = this.readFixed(l1);
-    const l2 = bigIntToSafeNumber(
-      tap.readLong(),
-      "matchString length tap",
-    );
+    const l2 = tap.readLength("matchString length tap");
     const b2 = tap.readFixed(l2);
     return compareUint8Arrays(b1, b2);
   }
