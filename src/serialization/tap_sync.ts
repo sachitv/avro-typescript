@@ -56,6 +56,12 @@ export interface SyncReadableTapLike {
   readInt(): number;
   /** Reads a variable-length zig-zag encoded 64-bit signed integer as bigint. */
   readLong(): bigint;
+  /**
+   * Reads a zig-zag encoded long that must be a safe integer, such as a length
+   * prefix or block count, as a number. Throws a RangeError naming `context`
+   * when the value is outside the safe integer range.
+   */
+  readLength(context: string): number;
   /** Skips a zig-zag encoded 32-bit integer. */
   skipInt(): void;
   /** Skips a zig-zag encoded 64-bit integer. */
@@ -361,7 +367,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
    * unchanged cursor position so valid long lengths decode the same as in
    * the async path.
    */
-  private readLength(context: string): number {
+  readLength(context: string): number {
     let pos = this.pos;
     let result = 0;
     let shift = 0;

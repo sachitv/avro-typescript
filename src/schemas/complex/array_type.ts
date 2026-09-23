@@ -17,6 +17,17 @@ import {
   compiledSyncRecordBlockReader,
   type CompiledSyncRecordBlockReaderProvider,
 } from "./record_reader_strategy.ts";
+import { BooleanType } from "../primitive/boolean_type.ts";
+import { DoubleType } from "../primitive/double_type.ts";
+import { FloatType } from "../primitive/float_type.ts";
+import { IntType } from "../primitive/int_type.ts";
+import { LongType } from "../primitive/long_type.ts";
+import { StringType } from "../primitive/string_type.ts";
+
+/**
+ * Item types whose arrays a direct sync tap can fill in bulk.
+ */
+type BulkArrayKind = "int" | "long" | "float" | "double" | "boolean" | "string";
 
 /**
  * Helper function to read an array from a tap.
@@ -48,33 +59,22 @@ export async function readArrayInto<T>(
 }
 
 /**
- * Synchronous helper function to read an array from a tap.
- * @param tap The tap to read from.
- * @param readElement Function to read a single element.
- * @param collect Function to collect each read element.
+ * Reads a sync array block header and returns its element count.
+ *
+ * Block counts are Avro longs, so this accepts every count the async
+ * {@link readArrayInto} does; an int-only read would reject valid counts whose
+ * varint is wider than int32 allows. `readLength` still decodes the common
+ * short varint without allocating a bigint, which matters because small
+ * nested arrays read two block headers per value. A negative count announces
+ * a size-prefixed block, whose byte size is skipped here.
  */
-export function readArrayIntoSync<T>(
-  tap: SyncReadableTapLike,
-  readElement: (tap: SyncReadableTapLike) => T,
-  collect: (value: T) => void,
-): void {
-  /**
-   * Reads repeated blocks from the tap synchronously and collects decoded elements.
-   */
-  while (true) {
-    const rawCount = tap.readLong();
-    if (rawCount === 0n) {
-      break;
-    }
-    let count = bigIntToSafeNumber(rawCount, "Array block length");
-    if (count < 0) {
-      count = -count;
-      tap.skipLong();
-    }
-    for (let i = 0; i < count; i++) {
-      collect(readElement(tap));
-    }
+function readBlockCountSync(tap: SyncReadableTapLike): number {
+  const count = tap.readLength("Array block length");
+  if (count < 0) {
+    tap.skipLong();
+    return -count;
   }
+  return count;
 }
 
 /**
@@ -92,7 +92,7 @@ export interface ArrayTypeParams<T> {
  */
 export class ArrayType<T = unknown> extends BaseType<T[]> {
   readonly #itemsType: Type<T>;
-  #primitiveKind: string | null | undefined = undefined;
+  #bulkKind: BulkArrayKind | null | undefined = undefined;
   #recordBlockReader: CompiledSyncRecordBlockReader | null | undefined =
     undefined;
 
@@ -108,27 +108,42 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     this.#itemsType = params.items;
   }
 
-  #getPrimitiveKind(): string | null {
-    if (this.#primitiveKind === undefined) {
-      // Resolve record capabilities before asking for JSON. Recursive record
-      // schemas cannot be expanded to JSON without recursing indefinitely.
-      if (this.#getRecordBlockReader()) {
-        this.#primitiveKind = null;
-        return this.#primitiveKind;
-      }
-
-      const json = this.#itemsType.toJSON();
-      if (
-        typeof json === "string" &&
-        (json === "int" || json === "long" || json === "float" ||
-          json === "double" || json === "boolean" || json === "string")
-      ) {
-        this.#primitiveKind = json;
+  /**
+   * Resolves the bulk-read kind for this array's item type, or null when the
+   * item type has none and elements must be read one at a time.
+   *
+   * Detection is structural rather than JSON-based: `toJSON()` fully expands
+   * the item schema, which recurses forever on recursive named types, and a
+   * named enum or fixed referenced a second time serializes to a bare string
+   * that could collide with a primitive name. Logical types wrap their
+   * underlying type instead of extending it, so they correctly miss every
+   * branch here and keep their own read path.
+   *
+   * The kind is dispatched with a switch in the block loop rather than
+   * resolved to a per-type closure: a closure call site shared by every array
+   * type goes polymorphic, which measured about 18% slower on small nested
+   * int and string arrays.
+   */
+  #getBulkKind(): BulkArrayKind | null {
+    if (this.#bulkKind === undefined) {
+      const itemsType = this.#itemsType;
+      if (itemsType instanceof IntType) {
+        this.#bulkKind = "int";
+      } else if (itemsType instanceof LongType) {
+        this.#bulkKind = "long";
+      } else if (itemsType instanceof FloatType) {
+        this.#bulkKind = "float";
+      } else if (itemsType instanceof DoubleType) {
+        this.#bulkKind = "double";
+      } else if (itemsType instanceof BooleanType) {
+        this.#bulkKind = "boolean";
+      } else if (itemsType instanceof StringType) {
+        this.#bulkKind = "string";
       } else {
-        this.#primitiveKind = null;
+        this.#bulkKind = null;
       }
     }
-    return this.#primitiveKind;
+    return this.#bulkKind;
   }
 
   /**
@@ -303,12 +318,12 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
    * @returns The deserialized array.
    */
   public override readSync(tap: SyncReadableTapLike): T[] {
-    const primitiveKind = this.#getPrimitiveKind();
+    const bulkKind = this.#getBulkKind();
     if (
-      primitiveKind !== null &&
+      bulkKind !== null &&
       typeof (tap as DirectSyncReadableTap).readIntArrayInto === "function"
     ) {
-      return this.#readSyncBulk(tap as DirectSyncReadableTap, primitiveKind);
+      return this.#readSyncBulk(tap as DirectSyncReadableTap, bulkKind);
     }
 
     const recordBlockReader = this.#getRecordBlockReader();
@@ -320,11 +335,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     // Allocate the first (and almost always only) block exactly with
     // new Array(count): growing an empty array via `.length =` measured about
     // 45 ns of overhead per small array, which dominated nested-array reads.
-    let count = tap.readInt();
-    if (count < 0) {
-      count = -count;
-      tap.skipLong();
-    }
+    let count = readBlockCountSync(tap);
     const result: T[] = new Array(count);
     let startIdx = 0;
     while (count !== 0) {
@@ -332,11 +343,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
         result[startIdx + i] = itemsType.readSync(tap);
       }
       startIdx += count;
-      count = tap.readInt();
-      if (count < 0) {
-        count = -count;
-        tap.skipLong();
-      }
+      count = readBlockCountSync(tap);
       if (count !== 0) {
         result.length = startIdx + count;
       }
@@ -361,21 +368,13 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     tap: SyncReadableTapLike,
     readBlock: CompiledSyncRecordBlockReader,
   ): T[] {
-    let count = tap.readInt();
-    if (count < 0) {
-      count = -count;
-      tap.skipLong();
-    }
+    let count = readBlockCountSync(tap);
     const result: Record<string, unknown>[] = new Array(count);
     let startIndex = 0;
     while (count !== 0) {
       readBlock(tap, result, startIndex, count);
       startIndex += count;
-      count = tap.readInt();
-      if (count < 0) {
-        count = -count;
-        tap.skipLong();
-      }
+      count = readBlockCountSync(tap);
       if (count !== 0) {
         result.length = startIndex + count;
       }
@@ -383,12 +382,8 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
     return result as T[];
   }
 
-  #readSyncBulk(tap: DirectSyncReadableTap, kind: string): T[] {
-    let count = tap.readInt();
-    if (count < 0) {
-      count = -count;
-      tap.skipLong();
-    }
+  #readSyncBulk(tap: DirectSyncReadableTap, kind: BulkArrayKind): T[] {
+    let count = readBlockCountSync(tap);
     const result: unknown[] = new Array(count);
     let startIdx = 0;
     while (count !== 0) {
@@ -413,11 +408,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
           break;
       }
       startIdx += count;
-      count = tap.readInt();
-      if (count < 0) {
-        count = -count;
-        tap.skipLong();
-      }
+      count = readBlockCountSync(tap);
       if (count !== 0) {
         result.length = startIdx + count;
       }
@@ -623,11 +614,7 @@ class ArrayResolver<T> extends Resolver<T[]> {
 
   public override readSync(tap: SyncReadableTapLike): T[] {
     const itemResolver = this.#itemResolver;
-    let count = tap.readInt();
-    if (count < 0) {
-      count = -count;
-      tap.skipLong();
-    }
+    let count = readBlockCountSync(tap);
     const result: T[] = new Array(count);
     let startIdx = 0;
     while (count !== 0) {
@@ -635,11 +622,7 @@ class ArrayResolver<T> extends Resolver<T[]> {
         result[startIdx + i] = itemResolver.readSync(tap);
       }
       startIdx += count;
-      count = tap.readInt();
-      if (count < 0) {
-        count = -count;
-        tap.skipLong();
-      }
+      count = readBlockCountSync(tap);
       if (count !== 0) {
         result.length = startIdx + count;
       }

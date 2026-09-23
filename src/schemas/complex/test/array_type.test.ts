@@ -4,11 +4,10 @@ import { describe, it } from "@std/testing/bdd";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import {
   SyncReadableTap,
-  type SyncReadableTapLike,
   SyncWritableTap,
 } from "../../../serialization/tap_sync.ts";
 import { DirectSyncReadableTap } from "../../../serialization/direct_tap_sync.ts";
-import { ArrayType, readArrayInto, readArrayIntoSync } from "../array_type.ts";
+import { ArrayType, readArrayInto } from "../array_type.ts";
 import { IntType } from "../../primitive/int_type.ts";
 import { LongType } from "../../primitive/long_type.ts";
 import { FloatType } from "../../primitive/float_type.ts";
@@ -1037,46 +1036,54 @@ describe("readArrayInto", () => {
   });
 });
 
-describe("readArrayIntoSync", () => {
-  it("reads positive block count", async () => {
+describe("ArrayType generic sync block reads", () => {
+  // Bytes items take neither the primitive bulk path nor the record block
+  // path, so these cover the general element-at-a-time block loop.
+  const bytesArray = new ArrayType({ items: new BytesType() });
+
+  it("reads a positive block count", async () => {
     const buffer = new ArrayBuffer(20);
     const writeTap = new Tap(buffer);
     await writeTap.writeLong(2n);
-    await writeTap.writeLong(10n);
-    await writeTap.writeLong(20n);
+    await writeTap.writeBytes(new Uint8Array([1, 2]));
+    await writeTap.writeBytes(new Uint8Array([3]));
     await writeTap.writeLong(0n);
 
     const encoded = buffer.slice(0, writeTap.getPos());
-    const tap = new SyncReadableTap(encoded);
-    const results: bigint[] = [];
-    readArrayIntoSync(
-      tap,
-      (t: SyncReadableTapLike) => t.readLong(),
-      (value: bigint) => results.push(value),
-    );
+    const result = bytesArray.readSync(new SyncReadableTap(encoded));
 
-    assertEquals(results, [10n, 20n]);
+    assertEquals(result.map((bytes) => Array.from(bytes)), [[1, 2], [3]]);
   });
 
-  it("reads negative block count (size-prefixed)", async () => {
+  it("reads a negative (size-prefixed) block count", async () => {
     const buffer = new ArrayBuffer(30);
     const writeTap = new Tap(buffer);
     await writeTap.writeLong(-2n);
     await writeTap.writeLong(100n);
-    await writeTap.writeLong(30n);
-    await writeTap.writeLong(40n);
+    await writeTap.writeBytes(new Uint8Array([30]));
+    await writeTap.writeBytes(new Uint8Array([40]));
     await writeTap.writeLong(0n);
 
     const encoded = buffer.slice(0, writeTap.getPos());
-    const tap = new SyncReadableTap(encoded);
-    const results: bigint[] = [];
-    readArrayIntoSync(
-      tap,
-      (t: SyncReadableTapLike) => t.readLong(),
-      (value: bigint) => results.push(value),
-    );
+    const result = bytesArray.readSync(new SyncReadableTap(encoded));
 
-    assertEquals(results, [30n, 40n]);
+    assertEquals(result.map((bytes) => Array.from(bytes)), [[30], [40]]);
+  });
+
+  it("reads multiple blocks and grows the result across them", async () => {
+    const buffer = new ArrayBuffer(40);
+    const writeTap = new Tap(buffer);
+    await writeTap.writeLong(1n);
+    await writeTap.writeBytes(new Uint8Array([7]));
+    await writeTap.writeLong(2n);
+    await writeTap.writeBytes(new Uint8Array([8]));
+    await writeTap.writeBytes(new Uint8Array([9]));
+    await writeTap.writeLong(0n);
+
+    const encoded = buffer.slice(0, writeTap.getPos());
+    const result = bytesArray.readSync(new SyncReadableTap(encoded));
+
+    assertEquals(result.map((bytes) => Array.from(bytes)), [[7], [8], [9]]);
   });
 });
 
@@ -1155,4 +1162,162 @@ describe("ArrayType large array writeLong fallback", () => {
     assertEquals(calls[1].method, "writeInt");
     assertEquals(calls[1].value, 0);
   });
+});
+
+describe("ArrayType recursive schemas", () => {
+  // Regression: classifying the items type by expanding it to JSON recursed
+  // forever whenever the recursion reached the array through anything other
+  // than a bare record reference, so the first readSync blew the stack.
+  const recursiveShapes: Array<{ name: string; items: unknown }> = [
+    { name: "array of nullable self-reference", items: ["null", "Node"] },
+    { name: "array of record self-reference", items: "Node" },
+    {
+      name: "array of map of self-reference",
+      items: { type: "map", values: "Node" },
+    },
+    {
+      name: "array of array of self-reference",
+      items: { type: "array", items: "Node" },
+    },
+  ];
+
+  for (const { name, items } of recursiveShapes) {
+    it(`round-trips a ${name} synchronously`, () => {
+      const type = createType({
+        type: "record",
+        name: "Node",
+        fields: [
+          { name: "label", type: "string" },
+          { name: "children", type: { type: "array", items } },
+        ],
+      } as never);
+
+      const value = { label: "root", children: [] };
+      const buffer = type.toSyncBuffer(value as never);
+      assertEquals(type.fromSyncBuffer(buffer), value);
+    });
+  }
+
+  it("reads a populated recursive tree synchronously", () => {
+    const type = createType({
+      type: "record",
+      name: "Node",
+      fields: [
+        { name: "label", type: "string" },
+        {
+          name: "children",
+          type: { type: "array", items: ["null", "Node"] },
+        },
+      ],
+    } as never);
+
+    const value = {
+      label: "root",
+      children: [null, { Node: { label: "leaf", children: [] } }],
+    };
+    const buffer = type.toSyncBuffer(value as never);
+    assertEquals(type.fromSyncBuffer(buffer), value);
+  });
+});
+
+describe("ArrayType items classification", () => {
+  it("does not take the bulk path for a logical type over a primitive", () => {
+    // Logical types wrap their underlying type rather than extending it, so
+    // they must keep their own read path. Taking the bulk long path here would
+    // yield raw bigints instead of the logical Date values.
+    const type = createType({
+      type: "array",
+      items: { type: "long", logicalType: "timestamp-millis" },
+    } as never);
+
+    const value = [new Date(Date.UTC(2020, 0, 2, 3, 4, 5))];
+    const buffer = type.toSyncBuffer(value as never);
+    const decoded = type.fromSyncBuffer(buffer) as Date[];
+    assertEquals(decoded.length, 1);
+    assert(decoded[0] instanceof Date);
+    assertEquals(decoded[0].getTime(), value[0]!.getTime());
+  });
+
+  it("reads a fixed-size items array without the bulk path", () => {
+    const type = createType({
+      type: "array",
+      items: { type: "fixed", name: "F3", size: 3 },
+    } as never);
+
+    const value = [new Uint8Array([1, 2, 3])];
+    const buffer = type.toSyncBuffer(value as never);
+    const decoded = type.fromSyncBuffer(buffer) as Uint8Array[];
+    assertEquals(Array.from(decoded[0]!), [1, 2, 3]);
+  });
+});
+
+describe("ArrayType sync block counts beyond the int32 fast path", () => {
+  // Avro block counts are longs. A count whose varint is wider than an int32
+  // allows (here a padded six-byte encoding) is valid Avro that the async path
+  // accepts, so every sync read path must decode it as a long too rather than
+  // rejecting it with readInt's int32 RangeError.
+  const paddedCount = (count: number, trailing: number[] = []) => [
+    (count << 1) | 0x80,
+    0x80,
+    0x80,
+    0x80,
+    0x80,
+    0x00,
+    ...trailing,
+  ];
+
+  const syncTaps = [
+    {
+      name: "SyncReadableTap",
+      open: (bytes: number[]) =>
+        new SyncReadableTap(new Uint8Array(bytes).buffer),
+    },
+    {
+      name: "DirectSyncReadableTap",
+      open: (bytes: number[]) =>
+        new DirectSyncReadableTap(new Uint8Array(bytes)),
+    },
+  ];
+
+  for (const { name, open } of syncTaps) {
+    it(`reads primitive arrays via ${name}`, async () => {
+      const intArray = createArray(new IntType());
+      const bytes = [...paddedCount(2), 2, 4, 0];
+
+      assertEquals(intArray.readSync(open(bytes)), [1, 2]);
+      assertEquals(
+        await intArray.read(new Tap(new Uint8Array(bytes).buffer)),
+        [1, 2],
+      );
+    });
+
+    it(`reads generic arrays via ${name}`, () => {
+      const bytesArray = createArray(new BytesType());
+      const bytes = [...paddedCount(1), 4, 7, 8, ...paddedCount(1), 0, 0];
+
+      const result = bytesArray.readSync(open(bytes));
+      assertEquals(result.map((value) => Array.from(value)), [[7, 8], []]);
+    });
+
+    it(`reads record arrays via ${name}`, () => {
+      const recordArray = createArray(createRecord({
+        name: "WideCountItem",
+        fields: [{ name: "id", type: new IntType() }],
+      }));
+      // A padded count of -1 (zig-zag 1) announces a size-prefixed block, so
+      // the one-byte block size precedes the record's single int field.
+      const bytes = [0x81, 0x80, 0x80, 0x80, 0x80, 0x00, 2, 6, 0];
+
+      assertEquals(recordArray.readSync(open(bytes)), [{ id: 3 }]);
+    });
+
+    it(`reads resolved arrays via ${name}`, () => {
+      const resolver = createArray(new LongType()).createResolver(
+        createArray(new IntType()),
+      );
+      const bytes = [...paddedCount(2), 2, 4, 0];
+
+      assertEquals(resolver.readSync(open(bytes)), [1n, 2n]);
+    });
+  }
 });
