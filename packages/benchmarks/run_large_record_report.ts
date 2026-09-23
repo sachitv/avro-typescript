@@ -35,10 +35,10 @@ const REQUIRED_CONFIGURATIONS = [
 ] as const;
 const DEFAULT_PROCESS_REPEATS = 3;
 
-const benchmarkFile = new URL(
-  "./deserialize_large_records_bench.ts",
-  import.meta.url,
-).pathname;
+// A URL pathname stays percent-encoded (and has a leading slash before the
+// drive letter on Windows), so build the path from the module's directory.
+const benchmarkFile =
+  `${import.meta.dirname}/deserialize_large_records_bench.ts`;
 
 function parseBenchOutput(output: string): BenchOutput {
   const jsonStart = output.indexOf("{");

@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-env --allow-run
+#!/usr/bin/env -S deno run --no-config --allow-read --allow-env --allow-run
 
 /**
  * Isolated cross-library read sweep.
@@ -11,17 +11,22 @@
  * generate per-schema readers with `new Function`, which are immune to this.
  * One (workload, variant) pair per process keeps every measurement clean.
  *
+ * This is a script rather than a `*_bench.ts` file so `deno bench` discovery
+ * does not load it: without arguments it spawns the full sweep, which needs
+ * `--allow-run`.
+ *
  * Usage:
- *   deno run --allow-read --allow-env --allow-run isolated_sweep_bench.ts
+ *   deno run --allow-read --allow-env --allow-run isolated_read_sweep.ts
  *     Runs the full sweep (every workload x variant in its own subprocess)
  *     and prints one TSV line per combination:
  *     workload variant median_ns best_ns rep_list
  *
- *   deno run --allow-read --allow-env isolated_sweep_bench.ts <workload> <variant>
+ *   deno run --allow-read --allow-env isolated_read_sweep.ts <workload> <variant>
  *     Runs a single combination in this process.
  *
- * Workloads: depth1 | depth2 | depth3 | depth4 | nested-record | union-null |
- *   union-primitives | union-records
+ * Workloads: depth1 | depth2 | depth3 | depth4 | nested-record | array-wide8 |
+ *   array-wide16 | heterogeneous | record-with-array | int-arrays-shallow |
+ *   int-arrays-deep | union-null | union-primitives | union-records
  * Variants:  avsc | avro-js | avrots-fsb | avrots-reused | avrots-direct
  */
 

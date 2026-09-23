@@ -33,7 +33,15 @@ function consumeDecoded(value: unknown, expectedLength: number): void {
   decodedLengthSink = (decodedLengthSink + value.length) | 0;
 }
 
-const selectedWorkload = Deno.env.get("AVRO_LARGE_WORKLOAD");
+// Read the workload filter only when env access was granted, so a plain
+// `deno bench --allow-read` discovery run measures every workload instead of
+// failing on the permission check.
+const selectedWorkload = Deno.permissions.querySync({
+    name: "env",
+    variable: "AVRO_LARGE_WORKLOAD",
+  }).state === "granted"
+  ? Deno.env.get("AVRO_LARGE_WORKLOAD")
+  : undefined;
 const definitions = selectedWorkload
   ? largeRecordWorkloadDefinitions.filter(({ id }) => id === selectedWorkload)
   : largeRecordWorkloadDefinitions;

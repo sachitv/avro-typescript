@@ -2,6 +2,10 @@
 
 import { Buffer } from "node:buffer";
 
+// Every measured result is stored here so V8 cannot dead-code-eliminate an
+// inlined read whose value the benchmark body would otherwise discard.
+let resultSink: unknown;
+
 const DOUBLE_VALUE = 3.141592653589793;
 
 const arrayBuffer = new ArrayBuffer(8);
@@ -19,7 +23,7 @@ Deno.bench({
   baseline: true,
   n: BENCH_ITERATIONS,
 }, () => {
-  nodeBuffer.readDoubleLE(0);
+  resultSink = nodeBuffer.readDoubleLE(0);
 });
 
 Deno.bench({
@@ -27,7 +31,7 @@ Deno.bench({
   group: "double-read-methods",
   n: BENCH_ITERATIONS,
 }, () => {
-  dataView.getFloat64(0, true);
+  resultSink = dataView.getFloat64(0, true);
 });
 
 Deno.bench({
@@ -40,7 +44,7 @@ Deno.bench({
     uint8Array.byteOffset,
     uint8Array.byteLength,
   );
-  view.getFloat64(0, true);
+  resultSink = view.getFloat64(0, true);
 });
 
 Deno.bench({
@@ -122,7 +126,7 @@ Deno.bench({
   baseline: true,
   n: BENCH_ITERATIONS,
 }, () => {
-  floatNodeBuffer.readFloatLE(0);
+  resultSink = floatNodeBuffer.readFloatLE(0);
 });
 
 Deno.bench({
@@ -130,5 +134,9 @@ Deno.bench({
   group: "float-read-methods",
   n: BENCH_ITERATIONS,
 }, () => {
-  floatDataView.getFloat32(0, true);
+  resultSink = floatDataView.getFloat32(0, true);
 });
+
+if (resultSink === Symbol.iterator) {
+  console.log(resultSink);
+}

@@ -13,6 +13,10 @@
 
 import { Buffer } from "node:buffer";
 
+// Every measured result is stored here so V8 cannot dead-code-eliminate an
+// inlined read whose value the benchmark body would otherwise discard.
+let resultSink: unknown;
+
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
@@ -105,7 +109,7 @@ for (const size of sizes) {
     baseline: true,
     n: BENCH_ITERATIONS,
   }, () => {
-    buffer.toString("utf8");
+    resultSink = buffer.toString("utf8");
   });
 
   Deno.bench({
@@ -113,7 +117,7 @@ for (const size of sizes) {
     group: `size-${size}`,
     n: BENCH_ITERATIONS,
   }, () => {
-    fromCharCodeDecode(bytes, 0, size);
+    resultSink = fromCharCodeDecode(bytes, 0, size);
   });
 
   Deno.bench({
@@ -121,6 +125,10 @@ for (const size of sizes) {
     group: `size-${size}`,
     n: BENCH_ITERATIONS,
   }, () => {
-    textDecoder.decode(bytes);
+    resultSink = textDecoder.decode(bytes);
   });
+}
+
+if (resultSink === Symbol.iterator) {
+  console.log(resultSink);
 }
