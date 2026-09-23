@@ -1100,6 +1100,27 @@ describe("MapType sync block counts beyond the int32 fast path", () => {
       );
     });
 
+    it(`reads multiple blocks, mixing plain and size-prefixed, via ${name}`, () => {
+      // Exercises the trailing block-count read returning a non-zero count,
+      // which the single-block cases never reach.
+      const intMap = createMap(new IntType());
+      const bytes = [
+        0x02, // count 1
+        ...entry(1),
+        0x01, // count -1: size-prefixed
+        0x06, // block size 3
+        0x02,
+        0x62, // key "b"
+        0x04, // value 2
+        0x00,
+      ];
+
+      assertEquals(
+        intMap.readSync(open(bytes)),
+        new Map([["a", 1], ["b", 2]]),
+      );
+    });
+
     it(`reads resolved maps via ${name}`, () => {
       const resolver = createMap(new LongType()).createResolver(
         createMap(new IntType()),

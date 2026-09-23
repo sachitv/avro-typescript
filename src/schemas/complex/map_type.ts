@@ -66,9 +66,6 @@ export function readMapIntoSync<T>(
   readValue: (tap: SyncReadableTapLike) => T,
   collect: (key: string, value: T) => void,
 ): void {
-  /**
-   * Synchronously reads map blocks from the tap and populates the provided map.
-   */
   let count = readBlockCountSync(tap, "Map block length");
   while (count !== 0) {
     for (let i = 0; i < count; i++) {

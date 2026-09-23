@@ -1335,6 +1335,31 @@ describe("ArrayType sync block counts beyond the int32 fast path", () => {
       );
     });
 
+    it(`reports a negative oversized count like the async reader via ${name}`, async () => {
+      // The signed count is range-checked before it is negated, so sync and
+      // async name the same (negative) value for a corrupt size-prefixed count.
+      const buffer = new ArrayBuffer(16);
+      const writeTap = new SyncWritableTap(buffer);
+      writeTap.writeLong(-(BigInt(Number.MAX_SAFE_INTEGER) + 1n));
+      const bytes = Array.from(new Uint8Array(buffer, 0, writeTap.getPos()));
+      const expected =
+        "Array block length value -9007199254740992 is outside the safe integer range.";
+
+      assertThrows(
+        () => createArray(new IntType()).readSync(open(bytes)),
+        RangeError,
+        expected,
+      );
+      await assertRejects(
+        () =>
+          createArray(new IntType()).read(
+            new Tap(new Uint8Array(bytes).buffer),
+          ),
+        RangeError,
+        expected,
+      );
+    });
+
     it(`reads resolved arrays via ${name}`, () => {
       const resolver = createArray(new LongType()).createResolver(
         createArray(new IntType()),
