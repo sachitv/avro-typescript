@@ -350,13 +350,13 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
 
   /** Reads a length-prefixed byte sequence. */
   readBytes(): Readonly<Uint8Array> {
-    const length = bigIntToSafeNumber(this.readLong(), "readBytes length");
+    const length = this.readLength("readBytes length");
     return this.readFixed(length);
   }
 
   /** Skips a length-prefixed byte sequence. */
   skipBytes(): void {
-    const len = bigIntToSafeNumber(this.readLong(), "skipBytes length");
+    const len = this.readLength("skipBytes length");
     this.pos += len;
   }
 
@@ -400,7 +400,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
 
   /** Skips a length-prefixed UTF-8 string. */
   skipString(): void {
-    const len = bigIntToSafeNumber(this.readLong(), "skipString length");
+    const len = this.readLength("skipString length");
     this.pos += len;
   }
 
@@ -469,15 +469,9 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
 
   /** Compares length-prefixed strings from this tap and another. */
   matchString(tap: SyncReadableTapLike): number {
-    const l1 = bigIntToSafeNumber(
-      this.readLong(),
-      "matchString length this",
-    );
+    const l1 = this.readLength("matchString length this");
     const b1 = this.readFixed(l1);
-    const l2 = bigIntToSafeNumber(
-      tap.readLong(),
-      "matchString length tap",
-    );
+    const l2 = tap.readLength("matchString length tap");
     const b2 = tap.readFixed(l2);
     return compareUint8Arrays(b1, b2);
   }

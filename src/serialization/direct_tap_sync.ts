@@ -405,7 +405,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
   matchString(tap: SyncReadableTapLike): number {
     const l1 = this.readLength("matchString length this");
     const b1 = this.readFixed(l1);
-    const l2 = bigIntToSafeNumber(tap.readLong(), "matchString length other");
+    const l2 = tap.readLength("matchString length other");
     const b2 = tap.readFixed(l2);
     return compareUint8Arrays(b1, b2);
   }
@@ -593,134 +593,6 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
       const end = pos + len;
       result[startIdx + i] = decodeUtf8Range(buf, pos, end);
       pos = end;
-    }
-
-    this.#pos = pos;
-  }
-
-  // ==========================================================================
-  // BULK MAP READ METHODS (for map optimization)
-  // ==========================================================================
-  // These methods read map blocks with primitive values directly, avoiding
-  // virtual dispatch through valuesType.readSync() for each entry.
-
-  /**
-   * Reads a map block with int values directly into a Map.
-   * @param result Map to populate.
-   * @param count Number of entries to read.
-   */
-  readMapIntBlockInto(result: Map<string, number>, count: number): void {
-    const buf = this.#buf;
-    let pos = this.#pos;
-
-    for (let i = 0; i < count; i++) {
-      // Read key (inline varint decode for length + string decode)
-      let keyLen = 0;
-      let keyShift = 0;
-      let keyByte: number;
-      do {
-        keyByte = buf[pos++]!;
-        if (keyShift >= 28) {
-          if (keyShift >= 35) {
-            throwVarintTooLong();
-          }
-          if ((keyByte & 0x70) !== 0) {
-            throwVarintFifthByte();
-          }
-        }
-        keyLen |= (keyByte & 0x7f) << keyShift;
-        keyShift += 7;
-      } while ((keyByte & 0x80) !== 0);
-      keyLen = (keyLen >>> 1) ^ -(keyLen & 1);
-      if (keyLen < 0) {
-        throw new RangeError(`Invalid negative string length: ${keyLen}`);
-      }
-      const key = decodeUtf8Range(buf, pos, pos + keyLen);
-      pos += keyLen;
-
-      // Read value (inline varint decode + zig-zag)
-      let value = 0;
-      let valShift = 0;
-      let valByte: number;
-      do {
-        valByte = buf[pos++]!;
-        if (valShift >= 28) {
-          if (valShift >= 35) {
-            throwVarintTooLong();
-          }
-          if ((valByte & 0x70) !== 0) {
-            throwVarintFifthByte();
-          }
-        }
-        value |= (valByte & 0x7f) << valShift;
-        valShift += 7;
-      } while ((valByte & 0x80) !== 0);
-
-      result.set(key, (value >>> 1) ^ -(value & 1));
-    }
-
-    this.#pos = pos;
-  }
-
-  /**
-   * Reads a map block with string values directly into a Map.
-   * @param result Map to populate.
-   * @param count Number of entries to read.
-   */
-  readMapStringBlockInto(result: Map<string, string>, count: number): void {
-    const buf = this.#buf;
-    let pos = this.#pos;
-
-    for (let i = 0; i < count; i++) {
-      // Read key (inline varint decode for length + string decode)
-      let keyLen = 0;
-      let keyShift = 0;
-      let keyByte: number;
-      do {
-        keyByte = buf[pos++]!;
-        if (keyShift >= 28) {
-          if (keyShift >= 35) {
-            throwVarintTooLong();
-          }
-          if ((keyByte & 0x70) !== 0) {
-            throwVarintFifthByte();
-          }
-        }
-        keyLen |= (keyByte & 0x7f) << keyShift;
-        keyShift += 7;
-      } while ((keyByte & 0x80) !== 0);
-      keyLen = (keyLen >>> 1) ^ -(keyLen & 1);
-      if (keyLen < 0) {
-        throw new RangeError(`Invalid negative string length: ${keyLen}`);
-      }
-      const key = decodeUtf8Range(buf, pos, pos + keyLen);
-      pos += keyLen;
-
-      // Read value (inline varint decode for length + string decode)
-      let valLen = 0;
-      let valShift = 0;
-      let valByte: number;
-      do {
-        valByte = buf[pos++]!;
-        if (valShift >= 28) {
-          if (valShift >= 35) {
-            throwVarintTooLong();
-          }
-          if ((valByte & 0x70) !== 0) {
-            throwVarintFifthByte();
-          }
-        }
-        valLen |= (valByte & 0x7f) << valShift;
-        valShift += 7;
-      } while ((valByte & 0x80) !== 0);
-      valLen = (valLen >>> 1) ^ -(valLen & 1);
-      if (valLen < 0) {
-        throw new RangeError(`Invalid negative string length: ${valLen}`);
-      }
-      const value = decodeUtf8Range(buf, pos, pos + valLen);
-      pos += valLen;
-
-      result.set(key, value);
     }
 
     this.#pos = pos;
