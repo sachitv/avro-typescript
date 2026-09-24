@@ -475,4 +475,23 @@ describe("FixedSizeStreamReadableBufferAdapter", () => {
       // But the implementation should handle it correctly
     });
   });
+
+  it("returns bytes that stay intact after the window slides", async () => {
+    const chunks = [
+      new Uint8Array([1, 2, 3, 4]),
+      new Uint8Array([5, 6, 7, 8]),
+      new Uint8Array([9, 10, 11, 12]),
+    ];
+    let index = 0;
+    const adapter = new FixedSizeStreamReadableBufferAdapter({
+      // deno-lint-ignore require-await
+      readNext: async () => chunks[index++],
+      close: async () => {},
+    }, 4);
+
+    const first = await adapter.read(0, 4);
+    await adapter.read(8, 4);
+
+    assertEquals([...first], [1, 2, 3, 4]);
+  });
 });

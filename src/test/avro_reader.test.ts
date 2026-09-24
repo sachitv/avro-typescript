@@ -1,6 +1,8 @@
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { AvroReader } from "../avro_reader.ts";
+import { SyncAvroWriter } from "../avro_writer_sync.ts";
+import { SyncInMemoryWritableBuffer } from "../serialization/buffers/in_memory_buffer_sync.ts";
 import { InMemoryReadableBuffer } from "../serialization/buffers/in_memory_buffer.ts";
 import type {
   AvroReaderInstance,
@@ -239,6 +241,39 @@ describe("AvroReader", () => {
     // Verify header (limited buffering may not support reading all records)
     const header = await reader.getHeader();
     assertWeatherHeader(header);
+  });
+
+  it("should read every block of a multi-block file with a cache size", async () => {
+    const out = new SyncInMemoryWritableBuffer(new ArrayBuffer(1 << 16));
+    const writer = SyncAvroWriter.toBuffer(out, {
+      schema: {
+        type: "record",
+        name: "Item",
+        fields: [{ name: "id", type: "int" }, { name: "s", type: "string" }],
+      },
+      blockSize: 512,
+    });
+    for (let i = 0; i < 2000; i++) {
+      writer.append({ id: i, s: `value-${i}` });
+    }
+    writer.close();
+    const bytes = new Uint8Array(out.getBufferCopy());
+
+    // Small chunks and a window far smaller than the file force the window to
+    // slide many times while earlier reads are still held.
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let i = 0; i < bytes.length; i += 256) {
+          controller.enqueue(bytes.slice(i, i + 256));
+        }
+        controller.close();
+      },
+    });
+    const reader = AvroReader.fromStream(stream, { cacheSize: 4096 });
+
+    const records = await readAllRecords(reader);
+    assertEquals(records.length, 2000);
+    assertEquals(records[1999], { id: 1999, s: "value-1999" });
   });
 
   it("should reject invalid URL", async () => {
