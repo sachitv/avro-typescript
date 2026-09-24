@@ -788,3 +788,21 @@ it("should cache header on concurrent calls", async () => {
   assertEquals(header1.magic.length, 4);
   assertEquals(header1.sync.length, 16);
 });
+
+it("should reject a block whose sync marker does not match the header", async () => {
+  const fileData = (await loadWeatherAvroFile()).slice();
+  fileData[fileData.length - 1] ^= 0xff;
+  const parser = new AvroFileParser(
+    new InMemoryReadableBuffer(fileData.buffer as ArrayBuffer),
+  );
+
+  await assertRejects(
+    async () => {
+      for await (const _record of parser.iterRecords()) {
+        // Records before the corrupted marker may be yielded.
+      }
+    },
+    Error,
+    "sync marker mismatch",
+  );
+});

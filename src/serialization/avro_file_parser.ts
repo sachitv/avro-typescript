@@ -7,6 +7,7 @@ import type { Decoder, DecoderRegistry } from "./decoders/decoder.ts";
 import { DeflateDecoder } from "./decoders/deflate_decoder.ts";
 import { NullDecoder } from "./decoders/null_decoder.ts";
 import { BLOCK_TYPE, HEADER_TYPE, MAGIC_BYTES } from "./avro_constants.ts";
+import { assertSyncMarker } from "./sync_marker.ts";
 
 // Re-export types for backward compatibility
 export type { Decoder, DecoderRegistry };
@@ -155,11 +156,13 @@ export class AvroFileParser {
     const tap = this.#headerTap!;
 
     while (await tap.canReadMore()) {
+      const blockOffset = tap.getPos();
       const block = await BLOCK_TYPE.read(tap) as {
         count: bigint;
         data: Uint8Array;
         sync: Uint8Array;
       };
+      assertSyncMarker(block.sync, header.sync, blockOffset);
 
       // Decompress block data if needed
       const decompressedData = await decoder.decode(block.data);
