@@ -13,6 +13,12 @@ import { ReadBufferError } from "../buffers/buffer_error.ts";
 import { WritableTap } from "../tap.ts";
 import { createType } from "../../type/create_type.ts";
 import type { ParsedAvroHeader } from "../avro_file_parser.ts";
+import { SyncAvroFileParser } from "../avro_file_parser_sync.ts";
+import { SyncAvroFileWriter } from "../avro_file_writer_sync.ts";
+import {
+  SyncInMemoryReadableBuffer,
+  SyncInMemoryWritableBuffer,
+} from "../buffers/in_memory_buffer_sync.ts";
 
 /**
  * Expected weather records from the weather.avro test file.
@@ -787,4 +793,72 @@ it("should cache header on concurrent calls", async () => {
   assertEquals(typeof header1, "object");
   assertEquals(header1.magic.length, 4);
   assertEquals(header1.sync.length, 16);
+});
+
+it("should reject a block whose sync marker does not match the header", async () => {
+  const fileData = (await loadWeatherAvroFile()).slice();
+  fileData[fileData.length - 1] ^= 0xff;
+  const parser = new AvroFileParser(
+    new InMemoryReadableBuffer(fileData.buffer as ArrayBuffer),
+  );
+
+  await assertRejects(
+    async () => {
+      for await (const _record of parser.iterRecords()) {
+        // Records before the corrupted marker may be yielded.
+      }
+    },
+    Error,
+    "sync marker mismatch",
+  );
+});
+
+it("should match the sync parser across multiple blocks with a resolver", async () => {
+  const writerSchema = {
+    type: "record",
+    name: "Item",
+    fields: [
+      { name: "id", type: "int" },
+      { name: "name", type: "string" },
+      { name: "tags", type: { type: "array", items: "string" } },
+    ],
+  };
+  const readerSchema = {
+    type: "record",
+    name: "Item",
+    fields: [
+      { name: "id", type: "long" },
+      { name: "name", type: "string" },
+      { name: "score", type: "double", default: 0.5 },
+    ],
+  };
+
+  const out = new SyncInMemoryWritableBuffer(new ArrayBuffer(64 * 1024));
+  const writer = new SyncAvroFileWriter(out, {
+    schema: writerSchema,
+    blockSize: 256,
+  });
+  for (let i = 0; i < 200; i++) {
+    writer.append({ id: i, name: `item-${i}`, tags: ["a", `t${i}`] });
+  }
+  writer.close();
+  const bytes = out.getBufferCopy();
+
+  const asyncRecords: unknown[] = [];
+  const asyncParser = new AvroFileParser(new InMemoryReadableBuffer(bytes), {
+    readerSchema,
+  });
+  for await (const record of asyncParser.iterRecords()) {
+    asyncRecords.push(record);
+  }
+
+  const syncParser = new SyncAvroFileParser(
+    new SyncInMemoryReadableBuffer(bytes),
+    { readerSchema },
+  );
+  const syncRecords = [...syncParser.iterRecords()];
+
+  assertEquals(asyncRecords.length, 200);
+  assertEquals(asyncRecords, syncRecords);
+  assertEquals(asyncRecords[199], { id: 199n, name: "item-199", score: 0.5 });
 });

@@ -2,6 +2,7 @@ import { createType, type SchemaLike } from "../type/create_type.ts";
 import type { Resolver } from "../schemas/resolver.ts";
 import { Type } from "../schemas/type.ts";
 import { BLOCK_TYPE, HEADER_TYPE, MAGIC_BYTES } from "./avro_constants.ts";
+import { assertSyncMarker } from "./sync_marker.ts";
 import type { AvroHeader, ParsedAvroHeader } from "./avro_file_parser.ts";
 import type { ISyncReadable } from "./buffers/buffer_sync.ts";
 import type {
@@ -90,11 +91,13 @@ export class SyncAvroFileParser {
 
     const tap = this.#headerTap!;
     while (tap.canReadMore()) {
+      const blockOffset = tap.getPos();
       const block = BLOCK_TYPE.readSync(tap) as {
         count: bigint;
         data: Uint8Array;
         sync: Uint8Array;
       };
+      assertSyncMarker(block.sync, header.sync, blockOffset);
 
       const decompressed = decoder.decode(block.data);
       const arrayBuffer = new ArrayBuffer(decompressed.length);

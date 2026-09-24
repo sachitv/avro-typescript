@@ -364,4 +364,22 @@ describe("SyncAvroFileParser", () => {
       "Cannot override built-in decoder",
     );
   });
+
+  it("rejects a block whose sync marker does not match the header", async () => {
+    const fileData = (await Deno.readFile("test-data/weather.avro")).slice();
+    fileData[fileData.length - 1] ^= 0xff;
+    const parser = new SyncAvroFileParser(
+      new SyncInMemoryReadableBuffer(toArrayBuffer(fileData)),
+    );
+
+    assertThrows(
+      () => {
+        for (const _record of parser.iterRecords()) {
+          // Records before the corrupted marker may be yielded.
+        }
+      },
+      Error,
+      "sync marker mismatch",
+    );
+  });
 });
