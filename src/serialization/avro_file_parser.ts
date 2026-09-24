@@ -2,6 +2,7 @@ import { createType, type SchemaLike } from "../type/create_type.ts";
 import type { Resolver } from "../schemas/resolver.ts";
 import { Type } from "../schemas/type.ts";
 import { ReadableTap } from "./tap.ts";
+import { SyncReadableTap } from "./tap_sync.ts";
 import type { IReadableBuffer } from "./buffers/buffer.ts";
 import type { Decoder, DecoderRegistry } from "./decoders/decoder.ts";
 import { DeflateDecoder } from "./decoders/deflate_decoder.ts";
@@ -133,6 +134,12 @@ export class AvroFileParser {
   /**
    * Asynchronously iterates over all records in the Avro file.
    *
+   * Blocks are read and decompressed asynchronously; records within a block
+   * are decoded synchronously. As with the synchronous reader, decoding
+   * recurses once per level of nesting, so values nested thousands of levels
+   * deep (e.g. very long recursive linked lists) can exceed the JavaScript
+   * call stack and throw a `RangeError`.
+   *
    * @returns AsyncIterableIterator that yields each record.
    * @throws Error if the file contains invalid data or is corrupted.
    */
@@ -168,13 +175,15 @@ export class AvroFileParser {
       const decompressedData = await decoder.decode(block.data);
       const arrayBuffer = new ArrayBuffer(decompressedData.length);
       new Uint8Array(arrayBuffer).set(decompressedData);
-      const recordTap = new ReadableTap(arrayBuffer);
+      // The whole block is in memory, so decode it synchronously; awaiting
+      // per byte here would only add microtask overhead.
+      const recordTap = new SyncReadableTap(arrayBuffer);
 
       // Yield each record in the block
       for (let i = 0n; i < block.count; i += 1n) {
         const record = resolver
-          ? await resolver.read(recordTap)
-          : await schemaType.read(recordTap);
+          ? resolver.readSync(recordTap)
+          : schemaType.readSync(recordTap);
         yield record;
       }
     }
