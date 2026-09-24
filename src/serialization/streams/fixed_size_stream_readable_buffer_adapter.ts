@@ -140,10 +140,15 @@ export class FixedSizeStreamReadableBufferAdapter implements IReadableBuffer {
   }
 
   /**
-   * Extracts a contiguous range of bytes from the circular buffer.
+   * Copies a contiguous range of bytes out of the circular buffer.
+   *
+   * A copy is required: the circular buffer overwrites its storage as the
+   * window slides, so a view returned here would change under callers that
+   * hold it across later reads (e.g. a header's sync marker, or a block's
+   * data while its trailing sync marker is being read).
    */
   #extractFromBuffer(offset: number, size: number): Uint8Array {
-    return this.#circularBuffer.get(offset, size);
+    return this.#circularBuffer.get(offset, size).slice();
   }
 
   /**
