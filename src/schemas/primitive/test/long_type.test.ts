@@ -534,3 +534,56 @@ describe("LongType", () => {
     });
   });
 });
+
+describe("LongType defaults", () => {
+  const type = new LongType();
+  const unsafe = [
+    BigInt(Number.MAX_SAFE_INTEGER) + 1n,
+    -BigInt(Number.MAX_SAFE_INTEGER) - 1n,
+    9223372036854775807n,
+    -9223372036854775808n,
+  ];
+
+  it("writes a safe long as a JSON number", () => {
+    assertEquals(type.defaultToJSON(0n), 0);
+    assertEquals(type.defaultToJSON(-5n), -5);
+    assertEquals(
+      type.defaultToJSON(BigInt(Number.MAX_SAFE_INTEGER)),
+      Number.MAX_SAFE_INTEGER,
+    );
+    assertEquals(
+      type.defaultToJSON(-BigInt(Number.MAX_SAFE_INTEGER)),
+      -Number.MAX_SAFE_INTEGER,
+    );
+  });
+
+  it("writes an unsafe long as a JSON number with all its digits", () => {
+    for (const value of unsafe) {
+      assertEquals(JSON.stringify(type.defaultToJSON(value)), `${value}`);
+    }
+  });
+
+  it("refuses an unsafe long when the runtime has no JSON.rawJSON", () => {
+    const json = JSON as { rawJSON?: unknown };
+    const rawJSON = json.rawJSON;
+    json.rawJSON = undefined;
+    try {
+      for (const value of unsafe) {
+        assertThrows(
+          () => type.defaultToJSON(value),
+          Error,
+          `long ${value} is outside the safe integer range and this runtime ` +
+            "has no JSON.rawJSON",
+        );
+      }
+      assertEquals(type.defaultToJSON(5n), 5);
+    } finally {
+      json.rawJSON = rawJSON;
+    }
+  });
+
+  it("reads a JSON number default as it is", () => {
+    assertEquals(type.defaultFromJSON(5), 5);
+    assertEquals(type.cloneFromValue(type.defaultFromJSON(5)), 5n);
+  });
+});

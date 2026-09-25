@@ -94,6 +94,20 @@ export class DoubleType extends FixedSizeBaseType<number> {
   }
 
   /**
+   * Encodes a double as a JSON number.
+   * @throws Error when the value is NaN or infinite, which JSON cannot
+   * represent.
+   */
+  public override defaultToJSON(value: number): JSONType {
+    if (!Number.isFinite(value)) {
+      throw new Error(
+        `double ${value} is not finite, and JSON has no representation for it.`,
+      );
+    }
+    return value;
+  }
+
+  /**
    * Compares two double values.
    */
   public override compare(val1: number, val2: number): number {

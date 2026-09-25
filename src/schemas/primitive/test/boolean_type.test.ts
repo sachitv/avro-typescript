@@ -328,3 +328,11 @@ describe("BooleanType", () => {
     });
   });
 });
+
+describe("BooleanType defaults", () => {
+  it("writes and reads a default as the JSON value it already is", () => {
+    const type = new BooleanType();
+    assertEquals(type.defaultToJSON(true), true);
+    assertEquals(type.defaultFromJSON(true), true);
+  });
+});

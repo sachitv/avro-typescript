@@ -1175,3 +1175,49 @@ describe("MapType.schemaJSON", () => {
     assertEquals(type.toJSON(), expected);
   });
 });
+
+describe("MapType defaults", () => {
+  const decimal = {
+    type: "bytes",
+    logicalType: "decimal",
+    precision: 6,
+    scale: 2,
+  };
+
+  it("writes a Map as a JSON object, each value by its type", () => {
+    const type = createType({ type: "map", values: "long" });
+    assertEquals(type.defaultToJSON(new Map([["a", 1n], ["b", -2n]])), {
+      a: 1,
+      b: -2,
+    });
+    assertEquals(type.defaultToJSON(new Map()), {});
+  });
+
+  it("keeps a __proto__ key as a key", () => {
+    const json = createType({ type: "map", values: "int" }).defaultToJSON(
+      new Map([["__proto__", 1]]),
+    ) as Record<string, unknown>;
+    assertEquals(Object.getPrototypeOf(json), Object.prototype);
+    assertEquals(JSON.stringify(json), '{"__proto__":1}');
+  });
+
+  it("reads each value of a JSON object or a Map by its type", () => {
+    const type = createType({ type: "map", values: decimal });
+    assertEquals(type.defaultFromJSON({ a: "\u0001\u00e2" }), { a: 482n });
+    assertEquals(
+      type.defaultFromJSON(new Map([["a", "\u0001\u00e2"]])),
+      new Map([["a", 482n]]),
+    );
+    const proto = type.defaultFromJSON(
+      JSON.parse('{"__proto__":"\\u0001"}'),
+    ) as Record<string, unknown>;
+    assertEquals(Object.keys(proto), ["__proto__"]);
+  });
+
+  it("leaves a default that is not an object for cloneFromValue", () => {
+    assertEquals(
+      createType({ type: "map", values: "int" }).defaultFromJSON(3),
+      3,
+    );
+  });
+});

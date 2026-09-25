@@ -1301,3 +1301,51 @@ describe("UnionType.schemaJSON", () => {
     assertEquals(type.toJSON(), expected);
   });
 });
+
+describe("UnionType defaults", () => {
+  const timestamp = { type: "long", logicalType: "timestamp-millis" };
+
+  it("writes null, and other values wrapped in their branch", () => {
+    assertEquals(createType(["null", "long"]).defaultToJSON(null), null);
+    assertEquals(createType(["long", "null"]).defaultToJSON({ long: 5n }), {
+      long: 5,
+    });
+    assertEquals(
+      createType(["null", { type: "map", values: "long" }]).defaultToJSON({
+        map: new Map([["k", 1n]]),
+      }),
+      { map: { k: 1 } },
+    );
+    assertEquals(
+      createType([
+        "null",
+        {
+          type: "record",
+          name: "In",
+          namespace: "a.b",
+          fields: [{ name: "n", type: "long" }],
+        },
+      ]).defaultToJSON({ "a.b.In": { n: 2n } }),
+      { "a.b.In": { n: 2 } },
+    );
+    assertEquals(
+      createType(["null", timestamp]).defaultToJSON({ long: new Date(7) }),
+      { long: 7 },
+    );
+  });
+
+  it("reads a wrapped default by its branch type", () => {
+    assertEquals(
+      createType(["null", timestamp]).defaultFromJSON({ long: 1000 }),
+      { long: new Date(1000) },
+    );
+  });
+
+  it("leaves a default that is not branch-wrapped for cloneFromValue", () => {
+    const type = createType(["null", timestamp]);
+    assertEquals(type.defaultFromJSON(null), null);
+    assertEquals(type.defaultFromJSON(5), 5);
+    assertEquals(type.defaultFromJSON({ int: 1 }), { int: 1 });
+    assertEquals(type.defaultFromJSON({ a: 1, b: 2 }), { a: 1, b: 2 });
+  });
+});

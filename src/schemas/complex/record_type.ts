@@ -4,7 +4,6 @@ import type {
 } from "../../serialization/tap.ts";
 import { NamedType } from "./named_type.ts";
 import { namedTypeJSON, SchemaJSONScope } from "../schema_json_scope.ts";
-import { defaultToJSON } from "../default_json.ts";
 import type { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
 import type { ErrorHook } from "../error.ts";
@@ -410,6 +409,39 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   }
 
   /**
+   * Encodes a record value as a JSON object, field by field in field order.
+   */
+  public override defaultToJSON(value: Record<string, unknown>): JSONType {
+    this.#ensureFields();
+    // fromEntries defines own properties, so a "__proto__" field stays a key.
+    return Object.fromEntries(
+      this.#fields.map((field) => [
+        field.getName(),
+        field.getType().defaultToJSON(value[field.getName()]),
+      ]),
+    );
+  }
+
+  /**
+   * Reads a record default field by field. Fields it does not give are left
+   * for {@link cloneFromValue} to fill in or reject.
+   */
+  public override defaultFromJSON(value: unknown): unknown {
+    this.#ensureFields();
+    if (!this.#isRecord(value)) {
+      return value;
+    }
+    const record: Record<string, unknown> = { ...value };
+    for (const field of this.#fields) {
+      const name = field.getName();
+      if (Object.hasOwn(record, name)) {
+        record[name] = field.getType().defaultFromJSON(record[name]);
+      }
+    }
+    return record;
+  }
+
+  /**
    * Compares two record values for ordering.
    * @param val1 The first record value.
    * @param val2 The second record value.
@@ -488,17 +520,26 @@ export class RecordType extends NamedType<Record<string, unknown>> {
     });
   }
 
+  #fieldDefaultJSON(field: RecordField): JSONType {
+    try {
+      return field.getType().defaultToJSON(field.getDefault());
+    } catch (error) {
+      throw new Error(
+        `Cannot write the default of field '${this.getFullName()}.${field.getName()}' to schema JSON: ${
+          (error as Error).message
+        }`,
+        { cause: error },
+      );
+    }
+  }
+
   #fieldJSON(field: RecordField, scope: SchemaJSONScope): JSONType {
     const fieldJson: { [key: string]: JSONType } = {
       name: field.getName(),
       type: field.getType().schemaJSON(scope),
     };
     if (field.hasDefault()) {
-      fieldJson.default = defaultToJSON(
-        field.getType(),
-        field.getDefault(),
-        `${this.getFullName()}.${field.getName()}`,
-      );
+      fieldJson.default = this.#fieldDefaultJSON(field);
     }
     const aliases = field.getAliases();
     if (aliases.length > 0) {

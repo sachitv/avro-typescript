@@ -678,3 +678,34 @@ describe("logicalTypeSchemaJSON", () => {
     );
   });
 });
+
+describe("LogicalType defaults", () => {
+  const timestamp = createType({
+    type: "long",
+    logicalType: "timestamp-millis",
+  });
+
+  it("writes a logical value as its underlying value's JSON", () => {
+    assertEquals(timestamp.defaultToJSON(new Date(1000)), 1000);
+    assertEquals(
+      JSON.stringify(
+        createType({ type: "long", logicalType: "timestamp-micros" })
+          .defaultToJSON(9007199254740993n),
+      ),
+      "9007199254740993",
+    );
+  });
+
+  it("keeps a default given as the logical value", () => {
+    const date = new Date(1000);
+    assertEquals(timestamp.defaultFromJSON(date), date);
+  });
+
+  it("reads a default given as the underlying value's JSON", () => {
+    assertEquals(timestamp.defaultFromJSON(1000), new Date(1000));
+  });
+
+  it("refuses a default that is neither form", () => {
+    assertThrows(() => timestamp.defaultFromJSON("soon"));
+  });
+});

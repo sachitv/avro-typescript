@@ -780,3 +780,11 @@ describe("EnumType.schemaJSON", () => {
     assertEquals(type.toJSON(), { name: "a.N", type: "enum", symbols: ["X"] });
   });
 });
+
+describe("EnumType defaults", () => {
+  it("writes and reads a default as its symbol", () => {
+    const type = createType({ type: "enum", name: "E", symbols: ["A", "B"] });
+    assertEquals(type.defaultToJSON("B"), "B");
+    assertEquals(type.defaultFromJSON("B"), "B");
+  });
+});

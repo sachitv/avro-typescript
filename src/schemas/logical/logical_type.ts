@@ -64,14 +64,6 @@ export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
   }
 
   /**
-   * Converts a logical type value to its underlying type value.
-   * @param value The logical value.
-   */
-  public convertToUnderlying(value: TValue): TUnderlying {
-    return this.toUnderlying(value);
-  }
-
-  /**
    * Determines if this logical type is compatible with the writer logical type for reading.
    */
   protected canReadFromLogical(
@@ -150,6 +142,26 @@ export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
       this.toUnderlying(typedValue),
     );
     return this.fromUnderlying(cloned);
+  }
+
+  /**
+   * Encodes a logical value as the JSON of its underlying value.
+   */
+  public override defaultToJSON(value: TValue): JSONType {
+    return this.underlyingType.defaultToJSON(this.toUnderlying(value));
+  }
+
+  /**
+   * Reads a logical default. The Avro specification gives it in the
+   * underlying type's JSON encoding (`timestamp-millis` as a number, a
+   * decimal as a bytes string); schemas built in code may instead give the
+   * logical value (a `Date`, a `bigint`), which is kept as it is.
+   */
+  public override defaultFromJSON(value: unknown): unknown {
+    if (this.isValid(value)) {
+      return value;
+    }
+    return this.fromUnderlying(this.underlyingType.cloneFromValue(value));
   }
 
   /**

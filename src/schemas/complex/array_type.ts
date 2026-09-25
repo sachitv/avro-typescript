@@ -412,6 +412,23 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
   }
 
   /**
+   * Encodes an array value as a JSON array, item by item.
+   */
+  public override defaultToJSON(value: T[]): JSONType {
+    return value.map((item) => this.#itemsType.defaultToJSON(item));
+  }
+
+  /**
+   * Reads an array default item by item.
+   */
+  public override defaultFromJSON(value: unknown): unknown {
+    if (!Array.isArray(value)) {
+      return value;
+    }
+    return value.map((item) => this.#itemsType.defaultFromJSON(item));
+  }
+
+  /**
    * Overrides the base compare method to compare two arrays.
    * @param val1 The first array.
    * @param val2 The second array.

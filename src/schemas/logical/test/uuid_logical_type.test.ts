@@ -237,3 +237,27 @@ describe("UuidLogicalType.schemaJSON", () => {
     });
   });
 });
+
+describe("UuidLogicalType defaults", () => {
+  const uuid = "00ff0000-0000-4000-8000-000000000080";
+
+  it("writes and reads a default over string as the UUID string", () => {
+    const type = createType({ type: "string", logicalType: "uuid" });
+    assertEquals(type.defaultToJSON(uuid), uuid);
+    assertEquals(type.defaultFromJSON(uuid), uuid);
+  });
+
+  it("writes and reads a default over fixed as its 16 bytes", () => {
+    const type = createType({
+      type: "fixed",
+      name: "Id",
+      size: 16,
+      logicalType: "uuid",
+    });
+    const json = "\u0000\u00ff" + "\u0000".repeat(4) + "\u0040\u0000" +
+      "\u0080" + "\u0000".repeat(6) + "\u0080";
+    assertEquals(type.defaultToJSON(uuid), json);
+    assertEquals(type.defaultFromJSON(json), uuid);
+    assertEquals(type.defaultFromJSON(uuid), uuid);
+  });
+});

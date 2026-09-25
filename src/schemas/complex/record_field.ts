@@ -1,6 +1,5 @@
 import { isValidName } from "./resolve_names.ts";
 import { Type } from "../type.ts";
-import { defaultFromJSON } from "../default_json.ts";
 
 /**
  * Returns the internalized (string-table) copy of a string.
@@ -86,7 +85,7 @@ export class RecordField {
     this.#hasDefault = Object.prototype.hasOwnProperty.call(params, "default");
     if (this.#hasDefault) {
       this.#defaultValue = this.#type.cloneFromValue(
-        defaultFromJSON(this.#type, params.default),
+        this.#type.defaultFromJSON(params.default),
       );
     }
   }

@@ -378,3 +378,26 @@ describe("FloatType", () => {
     });
   });
 });
+
+describe("FloatType defaults", () => {
+  const type = new FloatType();
+
+  it("writes a finite value as a JSON number", () => {
+    assertEquals(type.defaultToJSON(1.5), 1.5);
+    assertEquals(type.defaultToJSON(-0.25), -0.25);
+  });
+
+  it("refuses NaN and infinities, which JSON cannot represent", () => {
+    for (const value of [NaN, Infinity, -Infinity]) {
+      assertThrows(
+        () => type.defaultToJSON(value),
+        Error,
+        `float ${value} is not finite, and JSON has no representation for it.`,
+      );
+    }
+  });
+
+  it("reads a JSON number default as it is", () => {
+    assertEquals(type.defaultFromJSON(0.5), 0.5);
+  });
+});
