@@ -12,7 +12,7 @@ import {
   toArrayBuffer,
 } from "../protocol/protocol_helpers.ts";
 import { createType } from "../../type/create_type.ts";
-import { parseJSON } from "../../schemas/json.ts";
+import { parseJSON } from "../../internal/json.ts";
 import type {
   BinaryDuplexLike,
   BinaryWritable,

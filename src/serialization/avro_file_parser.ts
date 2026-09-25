@@ -1,7 +1,7 @@
 import { createType, type SchemaLike } from "../type/create_type.ts";
 import type { Resolver } from "../schemas/resolver.ts";
 import { Type } from "../schemas/type.ts";
-import { parseJSON } from "../schemas/json.ts";
+import { parseJSON } from "../internal/json.ts";
 import { ReadableTap } from "./tap.ts";
 import { SyncReadableTap } from "./tap_sync.ts";
 import type { IReadableBuffer } from "./buffers/buffer.ts";

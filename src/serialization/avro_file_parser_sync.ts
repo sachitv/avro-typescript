@@ -1,7 +1,7 @@
 import { createType, type SchemaLike } from "../type/create_type.ts";
 import type { Resolver } from "../schemas/resolver.ts";
 import { Type } from "../schemas/type.ts";
-import { parseJSON } from "../schemas/json.ts";
+import { parseJSON } from "../internal/json.ts";
 import { BLOCK_TYPE, HEADER_TYPE, MAGIC_BYTES } from "./avro_constants.ts";
 import { assertSyncMarker } from "./sync_marker.ts";
 import type { AvroHeader, ParsedAvroHeader } from "./avro_file_parser.ts";

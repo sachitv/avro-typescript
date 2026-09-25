@@ -15,7 +15,7 @@ import { SyncAvroFileParser } from "../avro_file_parser_sync.ts";
 import { AvroFileWriter } from "../avro_file_writer.ts";
 import { SyncReadableTap } from "../tap_sync.ts";
 import { createType } from "../../type/create_type.ts";
-import { parseJSON } from "../../schemas/json.ts";
+import { parseJSON } from "../../internal/json.ts";
 import { parseHeader } from "../container/parse_header.ts";
 import { isNeedMore } from "../container/need_more.ts";
 import { FixedType } from "../../schemas/complex/fixed_type.ts";

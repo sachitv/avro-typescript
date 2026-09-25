@@ -17,7 +17,7 @@
  */
 
 import { MAGIC_BYTES } from "../../avro_constants.ts";
-import { parseJSON } from "../../../schemas/json.ts";
+import { parseJSON } from "../../../internal/json.ts";
 import { InvalidHeaderError, InvalidMagicError } from "../errors.ts";
 import { isNeedMore, type NeedMore, needMore } from "../need_more.ts";
 import { readSafeLong } from "./varint.ts";

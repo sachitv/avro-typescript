@@ -4,7 +4,7 @@ import { createType } from "../../../type/create_type.ts";
 import { createRecord } from "./record_test_utils.ts";
 import type { RecordType } from "../record_type.ts";
 import type { Type } from "../../type.ts";
-import { parseJSON } from "../../json.ts";
+import { parseJSON } from "../../../internal/json.ts";
 
 /** Runs `fn` as on a runtime without `JSON.rawJSON`. */
 function withoutRawJSON(fn: () => void): void {

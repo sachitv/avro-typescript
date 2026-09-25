@@ -14,7 +14,7 @@ import type {
 } from "./definitions/protocol_definitions.ts";
 import { Protocol } from "./protocol_core.ts";
 import { createType } from "../type/create_type.ts";
-import { parseJSON } from "../schemas/json.ts";
+import { parseJSON } from "../internal/json.ts";
 
 /**
  * Discovers the protocol from a remote server by sending a handshake request.

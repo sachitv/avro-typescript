@@ -19,7 +19,7 @@ import type {
   ProtocolLike,
 } from "../definitions/protocol_definitions.ts";
 import { MessageEndpoint } from "./base.ts";
-import { parseJSON } from "../../schemas/json.ts";
+import { parseJSON } from "../../internal/json.ts";
 import type { Message } from "../definitions/message_definition.ts";
 import type { BinaryDuplexLike } from "../protocol/transports/transport_helpers.ts";
 import { toBinaryDuplex } from "../protocol/transports/transport_helpers.ts";
