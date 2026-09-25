@@ -3,6 +3,7 @@ import { NamedType } from "./named_type.ts";
 import { internString } from "./record_field.ts";
 import { Resolver } from "../resolver.ts";
 import { type JSONType, Type } from "../type.ts";
+import { SchemaJSONScope } from "../schema_json_scope.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
 import type {
   ReadableTapLike,
@@ -408,7 +409,16 @@ export class UnionType extends BaseType<UnionValue> {
    * @returns The JSON type array.
    */
   public override toJSON(): JSONType {
-    return this.#types.map((type) => type.toJSON());
+    return this.schemaJSON(new SchemaJSONScope());
+  }
+
+  /**
+   * Returns the union's JSON schema within an enclosing schema, passing
+   * `scope` on to each branch type.
+   * @internal Called by types on their children; use `toJSON()` instead.
+   */
+  public override schemaJSON(scope: SchemaJSONScope): JSONType {
+    return this.#types.map((type) => type.schemaJSON(scope));
   }
 
   /**

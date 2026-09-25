@@ -1,11 +1,14 @@
 import {
   assert,
   assertEquals,
+  assertInstanceOf,
   assertMatch,
   assertRejects,
   assertThrows,
 } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { createType } from "../../../type/create_type.ts";
+import { SchemaJSONScope } from "../../schema_json_scope.ts";
 import { UuidLogicalType } from "../uuid_logical_type.ts";
 import { StringType } from "../../primitive/string_type.ts";
 import { FixedType } from "../../complex/fixed_type.ts";
@@ -177,5 +180,60 @@ describe("UuidLogicalType", () => {
     assertEquals(typeof namespace, "string");
     assertEquals(Array.isArray(aliases), true);
     assertEquals(aliases.length, 0);
+  });
+});
+
+describe("UuidLogicalType.schemaJSON", () => {
+  const overFixed = {
+    type: "fixed",
+    name: "N",
+    size: 16,
+    logicalType: "uuid",
+  } as const;
+
+  it("passes the scope to the underlying fixed", () => {
+    const type = createType(overFixed);
+    assertInstanceOf(type, UuidLogicalType);
+    const scope = new SchemaJSONScope();
+
+    assertEquals(type.schemaJSON(scope), {
+      name: "N",
+      type: "fixed",
+      size: 16,
+      logicalType: "uuid",
+    });
+    assertEquals([...scope.defined.keys()], ["N"]);
+  });
+
+  it("writes the fixed's name once the scope defines it", () => {
+    const type = createType(overFixed);
+    const scope = new SchemaJSONScope();
+    type.schemaJSON(scope);
+
+    assertEquals(type.schemaJSON(scope), "N");
+  });
+
+  it("annotates an underlying string whatever the scope", () => {
+    const type = createType({ type: "string", logicalType: "uuid" });
+    assertEquals(type.schemaJSON(new SchemaJSONScope()), {
+      type: "string",
+      logicalType: "uuid",
+    });
+  });
+
+  it("starts a new scope on each toJSON call", () => {
+    const type = createType(overFixed);
+    assertEquals(type.toJSON(), {
+      name: "N",
+      type: "fixed",
+      size: 16,
+      logicalType: "uuid",
+    });
+    assertEquals(type.toJSON(), {
+      name: "N",
+      type: "fixed",
+      size: 16,
+      logicalType: "uuid",
+    });
   });
 });

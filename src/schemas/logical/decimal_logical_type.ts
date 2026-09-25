@@ -1,8 +1,9 @@
 import { BytesType } from "../primitive/bytes_type.ts";
 import { FixedType } from "../complex/fixed_type.ts";
-import { withLogicalTypeJSON } from "./logical_type.ts";
+import { logicalTypeSchemaJSON } from "./logical_type.ts";
 import { LogicalType } from "./logical_type.ts";
 import type { JSONType } from "../type.ts";
+import { SchemaJSONScope } from "../schema_json_scope.ts";
 
 interface DecimalParams {
   precision: number;
@@ -124,16 +125,27 @@ export class DecimalLogicalType extends LogicalType<bigint, Uint8Array> {
    * Returns the JSON representation of this decimal logical type.
    */
   public override toJSON(): JSONType {
+    return this.schemaJSON(new SchemaJSONScope());
+  }
+
+  /**
+   * Returns the decimal's JSON schema within an enclosing schema, passing
+   * `scope` on to the underlying bytes or fixed type.
+   * @internal Called by types on their children; use `toJSON()` instead.
+   */
+  public override schemaJSON(scope: SchemaJSONScope): JSONType {
     const extras: Record<string, unknown> = {
       precision: this.#precision,
     };
     if (this.#scale !== 0) {
       extras.scale = this.#scale;
     }
-    return withLogicalTypeJSON(
-      this.getUnderlyingType().toJSON(),
+    return logicalTypeSchemaJSON(
+      this,
+      this.getUnderlyingType(),
       "decimal",
       extras,
+      scope,
     );
   }
 }

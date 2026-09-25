@@ -1,5 +1,12 @@
-import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import {
+  assertEquals,
+  assertInstanceOf,
+  assertRejects,
+  assertThrows,
+} from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { createType } from "../../../type/create_type.ts";
+import { SchemaJSONScope } from "../../schema_json_scope.ts";
 import { UnionType, type UnionValue } from "../union_type.ts";
 import { createRecord } from "./record_test_utils.ts";
 import { StringType } from "../../primitive/string_type.ts";
@@ -1261,5 +1268,36 @@ describe("UnionType", () => {
         );
       });
     });
+  });
+});
+
+describe("UnionType.schemaJSON", () => {
+  const schema = ["null", { type: "fixed", name: "F", size: 1 }];
+
+  it("passes the scope to every branch", () => {
+    const type = createType(schema);
+    assertInstanceOf(type, UnionType);
+    const scope = new SchemaJSONScope();
+    (type as UnionType).getTypes()[1].schemaJSON(scope);
+
+    assertEquals(type.schemaJSON(scope), ["null", "F"]);
+  });
+
+  it("defines a named branch in the scope", () => {
+    const type = createType(schema);
+    const scope = new SchemaJSONScope();
+
+    assertEquals(type.schemaJSON(scope), [
+      "null",
+      { name: "F", type: "fixed", size: 1 },
+    ]);
+    assertEquals([...scope.defined.keys()], ["F"]);
+  });
+
+  it("starts a new scope on each toJSON call", () => {
+    const type = createType(schema);
+    const expected = ["null", { name: "F", type: "fixed", size: 1 }];
+    assertEquals(type.toJSON(), expected);
+    assertEquals(type.toJSON(), expected);
   });
 });

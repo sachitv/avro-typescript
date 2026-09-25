@@ -1,5 +1,12 @@
-import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import {
+  assertEquals,
+  assertInstanceOf,
+  assertRejects,
+  assertThrows,
+} from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { createType } from "../../../type/create_type.ts";
+import { SchemaJSONScope } from "../../schema_json_scope.ts";
 import { FixedType } from "../fixed_type.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import { ReadBufferError } from "../../../serialization/buffers/buffer_error.ts";
@@ -312,6 +319,7 @@ describe("FixedType", () => {
       assertEquals(fixedType.toJSON(), {
         name: "org.example.types.MD5",
         type: "fixed",
+        aliases: ["org.example.types.Hash", "org.example.types.Checksum"],
         size: 16,
       });
     });
@@ -659,5 +667,47 @@ describe("FixedType", () => {
 `,
       );
     });
+  });
+});
+
+describe("FixedType.schemaJSON", () => {
+  it("writes the definition and records the name the first time", () => {
+    const type = createType({ type: "fixed", name: "a.N", size: 2 });
+    assertInstanceOf(type, FixedType);
+    const scope = new SchemaJSONScope();
+
+    assertEquals(type.schemaJSON(scope), {
+      name: "a.N",
+      type: "fixed",
+      size: 2,
+    });
+    assertEquals([...scope.defined.keys()], ["a.N"]);
+  });
+
+  it("writes the full name once the scope defines it", () => {
+    const type = createType({ type: "fixed", name: "a.N", size: 2 });
+    const scope = new SchemaJSONScope();
+    type.schemaJSON(scope);
+
+    assertEquals(type.schemaJSON(scope), "a.N");
+  });
+
+  it("writes an empty namespace under a namespaced scope", () => {
+    const type = createType({ type: "fixed", name: "N", size: 2 });
+    const scope = new SchemaJSONScope();
+    scope.namespace = "x";
+
+    assertEquals(type.schemaJSON(scope), {
+      name: "N",
+      namespace: "",
+      type: "fixed",
+      size: 2,
+    });
+  });
+
+  it("starts a new scope on each toJSON call", () => {
+    const type = createType({ type: "fixed", name: "a.N", size: 2 });
+    assertEquals(type.toJSON(), { name: "a.N", type: "fixed", size: 2 });
+    assertEquals(type.toJSON(), { name: "a.N", type: "fixed", size: 2 });
   });
 });

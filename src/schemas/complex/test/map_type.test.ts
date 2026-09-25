@@ -1,5 +1,12 @@
-import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertInstanceOf,
+  assertRejects,
+  assertThrows,
+} from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { SchemaJSONScope } from "../../schema_json_scope.ts";
 
 import { ReadBufferError } from "../../../serialization/buffers/buffer_error.ts";
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
@@ -1130,4 +1137,41 @@ describe("MapType sync block counts beyond the int32 fast path", () => {
       assertEquals(resolver.readSync(open(bytes)), new Map([["a", 5n]]));
     });
   }
+});
+
+describe("MapType.schemaJSON", () => {
+  const schema = {
+    type: "map",
+    values: { type: "fixed", name: "F", size: 1 },
+  } as const;
+
+  it("passes the scope to the values type", () => {
+    const type = createType(schema);
+    assertInstanceOf(type, MapType);
+    const scope = new SchemaJSONScope();
+    (type as MapType).getValuesType().schemaJSON(scope);
+
+    assertEquals(type.schemaJSON(scope), { type: "map", values: "F" });
+  });
+
+  it("defines a named values type in the scope", () => {
+    const type = createType(schema);
+    const scope = new SchemaJSONScope();
+
+    assertEquals(type.schemaJSON(scope), {
+      type: "map",
+      values: { name: "F", type: "fixed", size: 1 },
+    });
+    assertEquals([...scope.defined.keys()], ["F"]);
+  });
+
+  it("starts a new scope on each toJSON call", () => {
+    const type = createType(schema);
+    const expected = {
+      type: "map",
+      values: { name: "F", type: "fixed", size: 1 },
+    };
+    assertEquals(type.toJSON(), expected);
+    assertEquals(type.toJSON(), expected);
+  });
 });

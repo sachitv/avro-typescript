@@ -7,6 +7,7 @@ import type {
   SyncWritableTapLike,
 } from "../../serialization/tap_sync.ts";
 import { NamedType } from "./named_type.ts";
+import { namedTypeJSON, SchemaJSONScope } from "../schema_json_scope.ts";
 import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
@@ -208,15 +209,21 @@ export class FixedType extends NamedType<Uint8Array> {
   }
 
   /**
-   * Converts the fixed type to its JSON schema representation.
-   * @returns The JSON type object.
+   * Converts the fixed type to its JSON schema representation: its full name
+   * and size, or just its full name when the enclosing schema already defines
+   * it.
+   * @returns The JSON type object or name.
    */
   public override toJSON(): JSONType {
-    return {
-      name: this.getFullName(),
-      type: "fixed",
-      size: this.#size,
-    };
+    return this.schemaJSON(new SchemaJSONScope());
+  }
+
+  /**
+   * Returns the fixed type's JSON schema within an enclosing schema.
+   * @internal Called by types on their children; use `toJSON()` instead.
+   */
+  public override schemaJSON(scope: SchemaJSONScope): JSONType {
+    return namedTypeJSON(this, "fixed", scope, () => ({ size: this.#size }));
   }
 
   /**

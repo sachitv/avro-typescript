@@ -1,5 +1,13 @@
-import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertInstanceOf,
+  assertRejects,
+  assertThrows,
+} from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { createType } from "../../../type/create_type.ts";
+import { SchemaJSONScope } from "../../schema_json_scope.ts";
 import { DecimalLogicalType } from "../decimal_logical_type.ts";
 import { BytesType } from "../../primitive/bytes_type.ts";
 import { FixedType } from "../../complex/fixed_type.ts";
@@ -216,6 +224,74 @@ describe("DecimalLogicalType", () => {
         Error,
         "Decimal value: 128 exceeds declared precision: 2",
       );
+    });
+  });
+});
+
+describe("DecimalLogicalType.schemaJSON", () => {
+  const overFixed = {
+    type: "fixed",
+    name: "N",
+    size: 8,
+    logicalType: "decimal",
+    precision: 10,
+    scale: 2,
+  } as const;
+
+  it("passes the scope to the underlying fixed", () => {
+    const type = createType(overFixed);
+    assertInstanceOf(type, DecimalLogicalType);
+    const scope = new SchemaJSONScope();
+
+    assertEquals(type.schemaJSON(scope), {
+      name: "N",
+      type: "fixed",
+      size: 8,
+      logicalType: "decimal",
+      precision: 10,
+      scale: 2,
+    });
+    assertEquals([...scope.defined.keys()], ["N"]);
+  });
+
+  it("writes the fixed's name once the scope defines it", () => {
+    const type = createType(overFixed);
+    const scope = new SchemaJSONScope();
+    type.schemaJSON(scope);
+
+    assertEquals(type.schemaJSON(scope), "N");
+  });
+
+  it("annotates an underlying bytes type whatever the scope", () => {
+    const type = createType({
+      type: "bytes",
+      logicalType: "decimal",
+      precision: 4,
+    });
+    assertEquals(type.schemaJSON(new SchemaJSONScope()), {
+      type: "bytes",
+      logicalType: "decimal",
+      precision: 4,
+    });
+  });
+
+  it("starts a new scope on each toJSON call", () => {
+    const type = createType(overFixed);
+    assertEquals(type.toJSON(), {
+      name: "N",
+      type: "fixed",
+      size: 8,
+      logicalType: "decimal",
+      precision: 10,
+      scale: 2,
+    });
+    assertEquals(type.toJSON(), {
+      name: "N",
+      type: "fixed",
+      size: 8,
+      logicalType: "decimal",
+      precision: 10,
+      scale: 2,
     });
   });
 });

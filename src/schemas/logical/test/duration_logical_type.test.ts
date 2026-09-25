@@ -1,5 +1,13 @@
-import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertInstanceOf,
+  assertRejects,
+  assertThrows,
+} from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { createType } from "../../../type/create_type.ts";
+import { SchemaJSONScope } from "../../schema_json_scope.ts";
 import {
   DurationLogicalType,
   type DurationValue,
@@ -168,6 +176,53 @@ describe("DurationLogicalType", () => {
       }
       // Should generate multiple different values (very high probability)
       assert(values.size > 1);
+    });
+  });
+});
+
+describe("DurationLogicalType.schemaJSON", () => {
+  const overFixed = {
+    type: "fixed",
+    name: "N",
+    size: 12,
+    logicalType: "duration",
+  } as const;
+
+  it("passes the scope to the underlying fixed", () => {
+    const type = createType(overFixed);
+    assertInstanceOf(type, DurationLogicalType);
+    const scope = new SchemaJSONScope();
+
+    assertEquals(type.schemaJSON(scope), {
+      name: "N",
+      type: "fixed",
+      size: 12,
+      logicalType: "duration",
+    });
+    assertEquals([...scope.defined.keys()], ["N"]);
+  });
+
+  it("writes the fixed's name once the scope defines it", () => {
+    const type = createType(overFixed);
+    const scope = new SchemaJSONScope();
+    type.schemaJSON(scope);
+
+    assertEquals(type.schemaJSON(scope), "N");
+  });
+
+  it("starts a new scope on each toJSON call", () => {
+    const type = createType(overFixed);
+    assertEquals(type.toJSON(), {
+      name: "N",
+      type: "fixed",
+      size: 12,
+      logicalType: "duration",
+    });
+    assertEquals(type.toJSON(), {
+      name: "N",
+      type: "fixed",
+      size: 12,
+      logicalType: "duration",
     });
   });
 });

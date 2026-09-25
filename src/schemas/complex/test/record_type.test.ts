@@ -1,5 +1,12 @@
-import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertInstanceOf,
+  assertRejects,
+  assertThrows,
+} from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { SchemaJSONScope } from "../../schema_json_scope.ts";
 
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import {
@@ -2107,5 +2114,138 @@ describe("RecordType", () => {
       // Throws during serialization due to null, but compilation succeeded
       assertThrows(() => typeA.toSyncBuffer(value), Error);
     });
+  });
+});
+
+describe("RecordType.schemaJSON", () => {
+  it("writes the definition and records the name the first time", () => {
+    const type = createType({
+      type: "record",
+      name: "a.R",
+      fields: [{ name: "v", type: "int" }],
+    });
+    assertInstanceOf(type, RecordType);
+    const scope = new SchemaJSONScope();
+
+    assertEquals(type.schemaJSON(scope), {
+      name: "a.R",
+      type: "record",
+      fields: [{ name: "v", type: "int" }],
+    });
+    assertEquals([...scope.defined.keys()], ["a.R"]);
+  });
+
+  it("writes the full name once the scope defines it", () => {
+    const type = createType({
+      type: "record",
+      name: "a.R",
+      fields: [{ name: "v", type: "int" }],
+    });
+    const scope = new SchemaJSONScope();
+    type.schemaJSON(scope);
+
+    assertEquals(type.schemaJSON(scope), "a.R");
+  });
+
+  it("passes the scope to the field types", () => {
+    const type = createType({
+      type: "record",
+      name: "R",
+      fields: [{ name: "f", type: { type: "fixed", name: "F", size: 1 } }],
+    });
+    const scope = new SchemaJSONScope();
+    (type as RecordType).getField("f")!.getType().schemaJSON(scope);
+
+    assertEquals(type.schemaJSON(scope), {
+      name: "R",
+      type: "record",
+      fields: [{ name: "f", type: "F" }],
+    });
+  });
+
+  it("resolves field types in its own namespace, then restores the scope's", () => {
+    const type = createType({
+      type: "record",
+      name: "R",
+      namespace: "a.b",
+      fields: [{
+        name: "e",
+        type: { type: "enum", name: "E", namespace: "", symbols: ["X"] },
+      }],
+    });
+    const scope = new SchemaJSONScope();
+    scope.namespace = "outer";
+
+    assertEquals(type.schemaJSON(scope), {
+      name: "a.b.R",
+      type: "record",
+      fields: [{
+        name: "e",
+        type: { name: "E", namespace: "", type: "enum", symbols: ["X"] },
+      }],
+    });
+    assertEquals(scope.namespace, "outer");
+  });
+
+  it("restores the scope's namespace when a field type throws", () => {
+    const type = createType({
+      type: "record",
+      name: "a.R",
+      fields: [{ name: "v", type: "int" }],
+    });
+    const field = (type as RecordType).getField("v")!;
+    const fieldType = field.getType();
+    fieldType.schemaJSON = () => {
+      throw new Error("boom");
+    };
+    const scope = new SchemaJSONScope();
+    scope.namespace = "outer";
+
+    assertThrows(() => type.schemaJSON(scope), Error, "boom");
+    assertEquals(scope.namespace, "outer");
+  });
+
+  it("writes type aliases as full names and field aliases as given", () => {
+    const type = createType({
+      type: "record",
+      name: "a.R",
+      aliases: ["Old"],
+      fields: [{ name: "v", aliases: ["w"], type: "int" }],
+    });
+    assertEquals(type.schemaJSON(new SchemaJSONScope()), {
+      name: "a.R",
+      type: "record",
+      aliases: ["a.Old"],
+      fields: [{ name: "v", type: "int", aliases: ["w"] }],
+    });
+  });
+
+  it("writes a field that refers back to the record by name", () => {
+    const type = createType({
+      type: "record",
+      name: "Node",
+      fields: [{ name: "next", type: ["null", "Node"] }],
+    });
+
+    assertEquals(type.schemaJSON(new SchemaJSONScope()), {
+      name: "Node",
+      type: "record",
+      fields: [{ name: "next", type: ["null", "Node"] }],
+    });
+  });
+
+  it("starts a new scope on each toJSON call", () => {
+    const type = createType({
+      type: "record",
+      name: "R",
+      fields: [{ name: "f", type: { type: "fixed", name: "F", size: 1 } }],
+    });
+    const expected = {
+      name: "R",
+      type: "record",
+      fields: [{ name: "f", type: { name: "F", type: "fixed", size: 1 } }],
+    };
+    assertEquals(type.toJSON(), expected);
+    assertEquals(type.toJSON(), expected);
   });
 });

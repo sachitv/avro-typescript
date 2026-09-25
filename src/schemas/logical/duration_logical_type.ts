@@ -1,10 +1,11 @@
 import type { FixedType } from "../complex/fixed_type.ts";
 import {
   type LogicalType,
+  logicalTypeSchemaJSON,
   NamedLogicalType,
-  withLogicalTypeJSON,
 } from "./logical_type.ts";
 import type { JSONType } from "../type.ts";
+import { SchemaJSONScope } from "../schema_json_scope.ts";
 
 /**
  * Represents a duration value with months, days, and milliseconds.
@@ -125,7 +126,22 @@ export class DurationLogicalType
    * @returns The JSON type.
    */
   public override toJSON(): JSONType {
-    return withLogicalTypeJSON(this.getUnderlyingType().toJSON(), "duration");
+    return this.schemaJSON(new SchemaJSONScope());
+  }
+
+  /**
+   * Returns the duration's JSON schema within an enclosing schema, passing
+   * `scope` on to the underlying fixed type.
+   * @internal Called by types on their children; use `toJSON()` instead.
+   */
+  public override schemaJSON(scope: SchemaJSONScope): JSONType {
+    return logicalTypeSchemaJSON(
+      this,
+      this.getUnderlyingType(),
+      "duration",
+      {},
+      scope,
+    );
   }
 }
 

@@ -3,6 +3,7 @@ import type {
   WritableTapLike,
 } from "../../serialization/tap.ts";
 import { NamedType } from "./named_type.ts";
+import { namedTypeJSON, SchemaJSONScope } from "../schema_json_scope.ts";
 import type { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
 import type { ErrorHook } from "../error.ts";
@@ -456,34 +457,52 @@ export class RecordType extends NamedType<Record<string, unknown>> {
   }
 
   /**
-   * Converts this record type to its JSON schema representation.
+   * Converts this record type to its JSON schema representation: its full
+   * name and fields, or just its full name when the enclosing schema already
+   * defines it (as for a field that refers back to the record itself).
    * @returns The JSON representation of the record type.
    */
   public override toJSON(): JSONType {
-    this.#ensureFields();
-    const fieldsJson = this.#fields.map((field) => {
-      const fieldJson: JSONType = {
-        name: field.getName(),
-        type: field.getType().toJSON(),
-      };
-      if (field.hasDefault()) {
-        (fieldJson as Record<string, unknown>).default = field.getDefault();
-      }
-      const aliases = field.getAliases();
-      if (aliases.length > 0) {
-        (fieldJson as Record<string, unknown>).aliases = aliases;
-      }
-      if (field.getOrder() !== "ascending") {
-        (fieldJson as Record<string, unknown>).order = field.getOrder();
-      }
-      return fieldJson;
-    });
+    return this.schemaJSON(new SchemaJSONScope());
+  }
 
-    return {
-      name: this.getFullName(),
-      type: "record",
-      fields: fieldsJson,
+  /**
+   * Returns the record's JSON schema within an enclosing schema, passing
+   * `scope` on to the field types.
+   * @internal Called by types on their children; use `toJSON()` instead.
+   */
+  public override schemaJSON(scope: SchemaJSONScope): JSONType {
+    this.#ensureFields();
+    return namedTypeJSON(this, "record", scope, () => {
+      // Field types resolve names in this record's namespace, as when parsed.
+      const enclosing = scope.namespace;
+      scope.namespace = this.getNamespace();
+      try {
+        return {
+          fields: this.#fields.map((field) => this.#fieldJSON(field, scope)),
+        };
+      } finally {
+        scope.namespace = enclosing;
+      }
+    });
+  }
+
+  #fieldJSON(field: RecordField, scope: SchemaJSONScope): JSONType {
+    const fieldJson: { [key: string]: JSONType } = {
+      name: field.getName(),
+      type: field.getType().schemaJSON(scope),
     };
+    if (field.hasDefault()) {
+      fieldJson.default = field.getDefault() as JSONType;
+    }
+    const aliases = field.getAliases();
+    if (aliases.length > 0) {
+      fieldJson.aliases = aliases;
+    }
+    if (field.getOrder() !== "ascending") {
+      fieldJson.order = field.getOrder();
+    }
+    return fieldJson;
   }
 
   /**

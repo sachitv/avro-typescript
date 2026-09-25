@@ -7,9 +7,15 @@ import type {
   SyncWritableTapLike,
 } from "../../serialization/tap_sync.ts";
 import { Resolver } from "../resolver.ts";
-import type { NamedType } from "../complex/named_type.ts";
+import { NamedType } from "../complex/named_type.ts";
 import { Type } from "../type.ts";
+import { safeStringify } from "../json.ts";
 import type { JSONType } from "../type.ts";
+import {
+  assertReferable,
+  sameSchema,
+  type SchemaJSONScope,
+} from "../schema_json_scope.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
 
 /**
@@ -350,4 +356,69 @@ export function withLogicalTypeJSON(
   throw new Error(
     "Unsupported underlying schema for logical type serialization.",
   );
+}
+
+/**
+ * Writes a logical type's schema within `scope`, passing the scope on to the
+ * underlying type.
+ *
+ * A logical type over a named type (a decimal, uuid, or duration over a fixed)
+ * is written on the fixed's definition, and the parser maps the fixed's name to
+ * the logical type:
+ *
+ * - Not yet defined: the fixed's definition is written with the annotation,
+ *   and the name now stands for the logical type.
+ * - Defined by this logical type (or one with the same schema): the bare name.
+ * - Defined as a plain fixed, or with a different logical type: refused. Avro
+ *   annotates definitions, not references, and this library's parser resolves
+ *   an annotated reference differently depending on when nested records are
+ *   built, so writing one could change the type when the file is read.
+ *
+ * @param logical The logical type being written.
+ * @param underlying Its underlying type.
+ * @param logicalType The `logicalType` value, e.g. `"decimal"`.
+ * @param extras Other attributes of the annotation, e.g. `precision`.
+ * @param scope The scope of the schema being written.
+ * @returns The JSON schema.
+ * @throws Error when the name was defined by a different type, as a plain
+ * type, or with a different logical type, since a reference could not say
+ * which is meant.
+ */
+export function logicalTypeSchemaJSON(
+  logical: Type,
+  underlying: Type,
+  logicalType: string,
+  extras: Record<string, unknown>,
+  scope: SchemaJSONScope,
+): JSONType {
+  if (!(underlying instanceof NamedType)) {
+    return withLogicalTypeJSON(
+      underlying.schemaJSON(scope),
+      logicalType,
+      extras,
+    );
+  }
+
+  const fullName = underlying.getFullName();
+  const defined = scope.defined.get(fullName);
+  if (defined === undefined) {
+    const json = underlying.schemaJSON(scope);
+    scope.defined.get(fullName)!.logical = logical;
+    return withLogicalTypeJSON(json, logicalType, extras);
+  }
+
+  assertReferable(underlying, defined, scope);
+  if (defined.logical === undefined) {
+    throw new Error(
+      `Cannot apply logicalType ${logicalType} to ${fullName}: the schema already defines it without one, and Avro annotates definitions, not references.`,
+    );
+  }
+  if (!sameSchema(defined.logical, logical, scope)) {
+    throw new Error(
+      `Duplicate Avro type name: ${fullName} is already defined as ${
+        safeStringify(defined.logical.toJSON()).trim()
+      }`,
+    );
+  }
+  return fullName;
 }
