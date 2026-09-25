@@ -211,10 +211,20 @@ export class EnumType extends NamedType<string> {
   }
 
   /**
-   * Returns the JSON representation of the enum type.
+   * Returns the JSON schema of the enum type: its full name, symbols, and
+   * default when it has one. Writers embed this in file headers, so it must be
+   * a complete definition that parses back to the same type.
    */
   public override toJSON(): JSONType {
-    return "enum";
+    const json: { [key: string]: JSONType } = {
+      name: this.getFullName(),
+      type: "enum",
+      symbols: this.#symbols.slice(),
+    };
+    if (this.#default !== undefined) {
+      json.default = this.#default;
+    }
+    return json;
   }
 
   /**
