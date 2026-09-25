@@ -70,6 +70,28 @@ function assertRoundTrip(schema: unknown, records: unknown[]): void {
 
 const bytes = (...values: number[]) => Uint8Array.from(values);
 
+/** A schema whose field defaults are not JSON values when parsed. */
+const DEFAULTS_SCHEMA = {
+  type: "record",
+  name: "Settings",
+  fields: [
+    { name: "count", type: "long", default: 5 },
+    {
+      name: "limits",
+      type: { type: "map", values: "long" },
+      default: { max: 9 },
+    },
+    { name: "salt", type: "bytes", default: "\u0000\u00ff" },
+    { name: "maybe", type: ["long", "null"], default: { long: -1 } },
+  ],
+};
+const DEFAULTS_RECORDS = [{
+  count: 1n,
+  limits: new Map([["max", 2n]]),
+  salt: Uint8Array.of(3),
+  maybe: null,
+}];
+
 describe("schema round trip through a container file", () => {
   it("keeps reused named types", () => {
     assertRoundTrip({
@@ -290,6 +312,47 @@ describe("schema round trip through a container file", () => {
       key: bytes(1, 2),
       previous: { "shop.Tier": "BASIC" },
     }]);
+  });
+
+  it("keeps long, map, and bytes field defaults", () => {
+    assertRoundTrip(DEFAULTS_SCHEMA, DEFAULTS_RECORDS);
+    assertEquals(
+      JSON.parse(embeddedSchema(writeFile(DEFAULTS_SCHEMA, []))).fields.map(
+        (field: { default?: unknown }) => field.default,
+      ),
+      DEFAULTS_SCHEMA.fields.map((field) => field.default),
+    );
+  });
+
+  it("writes field defaults through the async writer and parser", async () => {
+    const buffer = new InMemoryWritableBuffer(new ArrayBuffer(64 * 1024));
+    const writer = new AvroFileWriter(buffer, {
+      schema: DEFAULTS_SCHEMA as never,
+      syncMarker: SYNC,
+    });
+    for (const record of DEFAULTS_RECORDS) {
+      await writer.append(record);
+    }
+    await writer.close();
+    const written = new Uint8Array(buffer.getBufferCopy());
+
+    assertEquals(written, writeFile(DEFAULTS_SCHEMA, DEFAULTS_RECORDS));
+    const asyncParser = new AvroFileParser(
+      new InMemoryReadableBuffer(written.slice().buffer),
+    );
+    const header = await asyncParser.getHeader();
+    const schema = JSON.parse(
+      new TextDecoder().decode(header.meta.get("avro.schema")),
+    );
+    assertEquals(
+      schema.fields.map((field: { default?: unknown }) => field.default),
+      DEFAULTS_SCHEMA.fields.map((field) => field.default),
+    );
+    const read: unknown[] = [];
+    for await (const record of asyncParser.iterRecords()) {
+      read.push(record);
+    }
+    assertEquals(read, DEFAULTS_RECORDS);
   });
 
   it("writes the same file through the async writer and parser", async () => {

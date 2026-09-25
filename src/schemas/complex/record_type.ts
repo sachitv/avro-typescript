@@ -4,6 +4,7 @@ import type {
 } from "../../serialization/tap.ts";
 import { NamedType } from "./named_type.ts";
 import { namedTypeJSON, SchemaJSONScope } from "../schema_json_scope.ts";
+import { defaultToJSON } from "../default_json.ts";
 import type { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
 import type { ErrorHook } from "../error.ts";
@@ -493,7 +494,11 @@ export class RecordType extends NamedType<Record<string, unknown>> {
       type: field.getType().schemaJSON(scope),
     };
     if (field.hasDefault()) {
-      fieldJson.default = field.getDefault() as JSONType;
+      fieldJson.default = defaultToJSON(
+        field.getType(),
+        field.getDefault(),
+        `${this.getFullName()}.${field.getName()}`,
+      );
     }
     const aliases = field.getAliases();
     if (aliases.length > 0) {

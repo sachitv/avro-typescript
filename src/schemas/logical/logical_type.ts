@@ -64,6 +64,14 @@ export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
   }
 
   /**
+   * Converts a logical type value to its underlying type value.
+   * @param value The logical value.
+   */
+  public convertToUnderlying(value: TValue): TUnderlying {
+    return this.toUnderlying(value);
+  }
+
+  /**
    * Determines if this logical type is compatible with the writer logical type for reading.
    */
   protected canReadFromLogical(
