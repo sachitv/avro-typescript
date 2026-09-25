@@ -30,6 +30,17 @@ export interface IWritableBuffer {
    * Appends bytes to the buffer, advancing its internal write cursor when the
    * operation succeeds.
    *
+   * Ownership contract:
+   * - The caller keeps ownership of `data`. It must not mutate `data` until the
+   *   returned promise settles; afterwards it may reuse or mutate it freely.
+   * - Implementations must not retain a reference to `data` (or its underlying
+   *   `ArrayBuffer`) beyond the settlement of the returned promise. Anything
+   *   they keep, or hand on to a consumer that may keep it (for example a
+   *   `WritableStream` chunk), must be a copy.
+   *
+   * Concurrent calls on the same buffer are not supported: callers must await
+   * each append before starting the next one.
+   *
    * @throws WriteBufferError when the buffer cannot accept the requested bytes.
    */
   appendBytes(data: Uint8Array): Promise<void>;

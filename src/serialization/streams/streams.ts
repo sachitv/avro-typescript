@@ -22,6 +22,11 @@ export interface IStreamReadableBuffer {
 export interface IStreamWritableBuffer {
   /**
    * Writes bytes to the stream.
+   *
+   * Follows the same ownership contract as `IWritableBuffer.appendBytes`: the
+   * caller must not mutate `data` until the returned promise settles, and
+   * implementations must copy anything they keep (or pass downstream) beyond
+   * that point.
    */
   writeBytes(data: Uint8Array): Promise<void>;
 

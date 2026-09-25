@@ -37,13 +37,17 @@ export class StreamWritableBuffer implements IStreamWritableBuffer {
   /**
    * Writes bytes to the stream.
    *
+   * The stream receives a copy of `data`: a `WritableStream` keeps chunks by
+   * reference, so enqueuing the caller's array would let later mutations of it
+   * (or reuse of its memory) change bytes the sink has already been given.
+   *
    * @param data The bytes to write.
    */
   public async writeBytes(data: Uint8Array): Promise<void> {
     if (data.length === 0) {
       return;
     }
-    await this.#writer.write(data);
+    await this.#writer.write(data.slice());
   }
 
   /**

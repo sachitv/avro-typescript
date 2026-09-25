@@ -4,6 +4,10 @@ import type { IStreamWritableBuffer } from "./streams.ts";
 /**
  * Adapter that wraps an IStreamWritableBuffer to provide IWritableBuffer interface.
  * This collects writes and forwards them to the stream buffer.
+ *
+ * Bytes are forwarded as-is; the wrapped stream buffer is responsible for
+ * copying anything it keeps, per the `IStreamWritableBuffer.writeBytes`
+ * contract (`StreamWritableBuffer` always enqueues a copy).
  */
 export class StreamWritableBufferAdapter implements IWritableBuffer {
   #streamBuffer: IStreamWritableBuffer;
