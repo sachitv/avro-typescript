@@ -687,13 +687,17 @@ describe("a type containing another instance with its own name", () => {
       ],
     });
 
-    assertThrows(() => pair.toJSON(), Error, "Duplicate Avro type name:");
+    // The two Bs are only ever written inside their own A, so the difference
+    // shows up when the As are compared, and the error names A.
+    assertThrows(() => pair.toJSON(), Error, "Duplicate Avro type name: A");
   });
 
-  it("compares many separately built copies in a cycle in bounded time", () => {
+  it("compares separately built copies in a cycle a linear number of times", () => {
     // Each copy refers to the next two, around a ring. Without remembering
-    // pairs found equal, the comparison grows exponentially with the copies.
-    const count = 16;
+    // pairs found equal, each pair is compared again on every path that
+    // reaches it, and the writes grow exponentially (about 290,000 for 8
+    // copies); with it they grow linearly (99 for 8 copies).
+    const count = 8;
     // Record fields are built lazily from the schema, so the copies can be
     // created first and their union branches pointed at each other after.
     const schemas = Array.from({ length: count }, () => ({
@@ -709,8 +713,15 @@ describe("a type containing another instance with its own name", () => {
       schema.fields[0].type[1] = types[(i + 1) % count];
       schema.fields[1].type[1] = types[(i + 2) % count];
     });
+    let writes = 0;
+    for (const type of types) {
+      const write = type.schemaJSON.bind(type);
+      type.schemaJSON = (scope) => {
+        writes++;
+        return write(scope);
+      };
+    }
 
-    const started = performance.now();
     assertEquals(types[0].toJSON(), {
       name: "N",
       type: "record",
@@ -719,6 +730,6 @@ describe("a type containing another instance with its own name", () => {
         { name: "b", type: ["null", "N"] },
       ],
     });
-    assert(performance.now() - started < 2000);
+    assert(writes <= 16 * count, `${writes} writes for ${count} copies`);
   });
 });
