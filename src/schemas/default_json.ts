@@ -125,6 +125,91 @@ export function defaultToJSON(
   return value as JSONType;
 }
 
+/**
+ * Reads a field default given in schema JSON into a value the field type's
+ * `cloneFromValue` accepts: the inverse of {@link defaultToJSON}.
+ *
+ * Primitive and complex types already accept their JSON form (a `long` from a
+ * number, `bytes` from a string), so this only rewrites defaults of logical
+ * types, wherever they are nested. The Avro specification gives a logical
+ * type's default in its underlying type's JSON encoding (`timestamp-millis`
+ * as a number, a decimal as a bytes string), which is what
+ * {@link defaultToJSON} writes; schemas built in code may instead give the
+ * logical runtime value (a `Date`, a `bigint`). A value the logical type
+ * accepts as it is is kept; anything else is read as the underlying type's
+ * JSON and converted.
+ *
+ * @param type The type of the field.
+ * @param value The default as given in the schema.
+ * @returns The default with every logical value in its runtime form.
+ * @internal
+ */
+export function defaultFromJSON(type: Type, value: unknown): unknown {
+  if (type instanceof LogicalType) {
+    if (type.isValid(value)) {
+      return value;
+    }
+    const underlying = type.getUnderlyingType().cloneFromValue(value);
+    return type.convertFromUnderlying(underlying);
+  }
+  if (type instanceof ArrayType && Array.isArray(value)) {
+    const itemsType = type.getItemsType();
+    return value.map((item) => defaultFromJSON(itemsType, item));
+  }
+  if (type instanceof MapType && isPlainObject(value)) {
+    const valuesType = type.getValuesType();
+    // fromEntries defines own properties, so a "__proto__" key stays a key.
+    return Object.fromEntries(
+      Object.entries(value).map((
+        [key, entry],
+      ) => [key, defaultFromJSON(valuesType, entry)]),
+    );
+  }
+  if (type instanceof MapType && value instanceof Map) {
+    const valuesType = type.getValuesType();
+    return new Map(
+      Array.from(
+        value.entries(),
+        ([key, entry]) => [key, defaultFromJSON(valuesType, entry)],
+      ),
+    );
+  }
+  if (type instanceof RecordType && isPlainObject(value)) {
+    const record: Record<string, unknown> = { ...value };
+    for (const field of type.getFields()) {
+      const name = field.getName();
+      if (Object.prototype.hasOwnProperty.call(record, name)) {
+        record[name] = defaultFromJSON(field.getType(), record[name]);
+      }
+    }
+    return record;
+  }
+  if (type instanceof UnionType && isPlainObject(value)) {
+    const entries = Object.entries(value);
+    if (entries.length === 1) {
+      const [[branchName, branchValue]] = entries;
+      const branchType = type.getTypes().find((branch) =>
+        getBranchTypeName(branch) === branchName
+      );
+      if (branchType !== undefined) {
+        return Object.fromEntries([
+          [branchName, defaultFromJSON(branchType, branchValue)],
+        ]);
+      }
+    }
+  }
+  return value;
+}
+
+/** Whether `value` is an object literal (not null, an array, a Map, etc.). */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 /** Encodes bytes as a string with one code point (0-255) per byte. */
 function bytesToJSON(bytes: Uint8Array): string {
   let result = "";

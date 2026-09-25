@@ -324,6 +324,53 @@ describe("schema round trip through a container file", () => {
     );
   });
 
+  it("keeps logical field defaults", () => {
+    const schema = {
+      type: "record",
+      name: "Event",
+      fields: [
+        {
+          name: "at",
+          type: { type: "long", logicalType: "timestamp-millis" },
+          default: 1000,
+        },
+        {
+          name: "amount",
+          type: {
+            type: "bytes",
+            logicalType: "decimal",
+            precision: 6,
+            scale: 2,
+          },
+          default: "\u0001\u00e2",
+        },
+        {
+          name: "term",
+          type: {
+            type: "fixed",
+            name: "Term",
+            size: 12,
+            logicalType: "duration",
+          },
+          default: "\u0001\u0000\u0000\u0000\u0002\u0000\u0000\u0000" +
+            "\u0003\u0000\u0000\u0000",
+        },
+      ],
+    };
+    const records = [{
+      at: new Date(5000),
+      amount: 7n,
+      term: { months: 0, days: 1, millis: 0 },
+    }];
+    assertRoundTrip(schema, records);
+    assertEquals(
+      JSON.parse(embeddedSchema(writeFile(schema, []))).fields.map(
+        (field: { default?: unknown }) => field.default,
+      ),
+      schema.fields.map((field) => field.default),
+    );
+  });
+
   it("writes field defaults through the async writer and parser", async () => {
     const buffer = new InMemoryWritableBuffer(new ArrayBuffer(64 * 1024));
     const writer = new AvroFileWriter(buffer, {

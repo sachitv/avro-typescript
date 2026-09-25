@@ -3,7 +3,7 @@ import { describe, it } from "@std/testing/bdd";
 import { createType } from "../../type/create_type.ts";
 import { createRecord } from "../complex/test/record_test_utils.ts";
 import type { RecordType } from "../complex/record_type.ts";
-import { defaultToJSON } from "../default_json.ts";
+import { defaultFromJSON, defaultToJSON } from "../default_json.ts";
 import type { Type } from "../type.ts";
 
 const FIELD = "R.f";
@@ -298,6 +298,112 @@ describe("defaultToJSON", () => {
   });
 });
 
+/** A valid UUID, and its 16 bytes as a JSON byte string. */
+const UUID = "123e4567-e89b-12d3-a456-426614174000";
+const UUID_JSON = String.fromCharCode(
+  ...(UUID.replaceAll("-", "").match(/../g) ?? []).map((hex) =>
+    parseInt(hex, 16)
+  ),
+);
+/** Duration months 1, days 2, millis 3, and its 12 bytes as a byte string. */
+const DURATION = { months: 1, days: 2, millis: 3 };
+const DURATION_JSON = "\u0001\u0000\u0000\u0000\u0002\u0000\u0000\u0000" +
+  "\u0003\u0000\u0000\u0000";
+
+const TIMESTAMP = { type: "long", logicalType: "timestamp-millis" };
+const DECIMAL_BYTES = {
+  type: "bytes",
+  logicalType: "decimal",
+  precision: 6,
+  scale: 2,
+};
+const DECIMAL_FIXED = {
+  type: "fixed",
+  name: "Money",
+  size: 8,
+  logicalType: "decimal",
+  precision: 6,
+};
+const UUID_FIXED = { type: "fixed", name: "Id", size: 16, logicalType: "uuid" };
+const DURATION_FIXED = {
+  type: "fixed",
+  name: "Term",
+  size: 12,
+  logicalType: "duration",
+};
+
+describe("defaultFromJSON", () => {
+  /** Reads `value` as a default of the type parsed from `schema`. */
+  const decode = (schema: unknown, value: unknown) =>
+    defaultFromJSON(createType(schema as never), value);
+
+  it("keeps a logical runtime value as it is", () => {
+    const date = new Date(1000);
+    assertEquals(decode(TIMESTAMP, date), date);
+    assertEquals(decode(DECIMAL_BYTES, 482n), 482n);
+    assertEquals(decode(UUID_FIXED, UUID), UUID);
+    assertEquals(decode(DURATION_FIXED, DURATION), DURATION);
+  });
+
+  it("reads a logical default given as its underlying JSON", () => {
+    assertEquals(decode(TIMESTAMP, 1000), new Date(1000));
+    assertEquals(decode(DECIMAL_BYTES, "\u0001\u00e2"), 482n);
+    assertEquals(
+      decode(DECIMAL_FIXED, "\u0000".repeat(6) + "\u0001\u00e2"),
+      482n,
+    );
+    assertEquals(decode(UUID_FIXED, UUID_JSON), UUID);
+    assertEquals(decode(DURATION_FIXED, DURATION_JSON), DURATION);
+  });
+
+  it("refuses a value that is neither the logical nor the underlying form", () => {
+    assertThrows(() => decode(TIMESTAMP, "soon"));
+    assertThrows(() => decode(DURATION_FIXED, "too short"));
+  });
+
+  it("reads logical defaults nested in arrays, maps, records, and unions", () => {
+    assertEquals(
+      decode({ type: "array", items: TIMESTAMP }, [1000, new Date(2000)]),
+      [new Date(1000), new Date(2000)],
+    );
+    assertEquals(
+      decode({ type: "map", values: DECIMAL_BYTES }, { a: "\u0001\u00e2" }),
+      { a: 482n },
+    );
+    assertEquals(
+      decode(
+        { type: "map", values: DECIMAL_BYTES },
+        new Map([["a", "\u0001\u00e2"]]),
+      ),
+      new Map([["a", 482n]]),
+    );
+    assertEquals(
+      decode(record("Wrap", [{ name: "term", type: DURATION_FIXED }]), {
+        term: DURATION_JSON,
+        extra: 1,
+      }),
+      { term: DURATION, extra: 1 },
+    );
+    assertEquals(
+      decode(["null", TIMESTAMP], { long: 1000 }),
+      { long: new Date(1000) },
+    );
+  });
+
+  it("passes other values through unchanged", () => {
+    assertEquals(decode("long", 5), 5);
+    assertEquals(decode("string", "x"), "x");
+    assertEquals(decode(["null", TIMESTAMP], null), null);
+    // Not a branch-wrapped value: left for the union to reject or accept.
+    assertEquals(decode(["null", TIMESTAMP], { int: 1 }), { int: 1 });
+    assertEquals(decode(["null", TIMESTAMP], { a: 1, b: 2 }), { a: 1, b: 2 });
+    // A record default that is not an object literal is left as it is.
+    const notPlain = Object.create({ inherited: true });
+    assertEquals(decode(record("Wrap", []), notPlain), notPlain);
+    assertEquals(decode({ type: "array", items: "int" }, "x"), "x");
+  });
+});
+
 describe("record field defaults in schema JSON", () => {
   /** The field `f` of the one-field record `R` with the given type and default. */
   const withDefault = (type: unknown, value: unknown) =>
@@ -477,6 +583,44 @@ describe("record field defaults in schema JSON", () => {
     assertEquals(
       (outer.toJSON() as { fields: Array<{ type: unknown }> }).fields[1].type,
       "Config",
+    );
+  });
+
+  it("round trips logical defaults given as runtime values", () => {
+    assertDefaultRoundTrip(withDefault(TIMESTAMP, new Date(1000)), 1000);
+    assertDefaultRoundTrip(withDefault(DECIMAL_BYTES, 482n), "\u0001\u00e2");
+    assertDefaultRoundTrip(
+      withDefault(DECIMAL_FIXED, 482n),
+      "\u0000".repeat(6) + "\u0001\u00e2",
+    );
+    assertDefaultRoundTrip(withDefault(UUID_FIXED, UUID), UUID_JSON);
+    assertDefaultRoundTrip(
+      withDefault(DURATION_FIXED, DURATION),
+      DURATION_JSON,
+    );
+  });
+
+  it("round trips logical defaults given as their underlying JSON", () => {
+    assertDefaultRoundTrip(withDefault(TIMESTAMP, 1000), 1000);
+    assertDefaultRoundTrip(
+      withDefault(DECIMAL_BYTES, "\u0001\u00e2"),
+      "\u0001\u00e2",
+    );
+    assertDefaultRoundTrip(withDefault(UUID_FIXED, UUID_JSON), UUID_JSON);
+    assertDefaultRoundTrip(
+      withDefault(DURATION_FIXED, DURATION_JSON),
+      DURATION_JSON,
+    );
+  });
+
+  it("round trips logical defaults nested in a union and an array", () => {
+    assertDefaultRoundTrip(
+      withDefault(["null", TIMESTAMP], { long: new Date(1000) }),
+      { long: 1000 },
+    );
+    assertDefaultRoundTrip(
+      withDefault({ type: "array", items: DECIMAL_BYTES }, [482n]),
+      ["\u0001\u00e2"],
     );
   });
 });
