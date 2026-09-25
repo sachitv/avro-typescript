@@ -8,9 +8,13 @@ import { metadataWithId, toArrayBuffer } from "./protocol/protocol_helpers.ts";
 import { readSingleMessage } from "./message_endpoint/helpers.ts";
 import { toBinaryDuplex } from "./protocol/transports/transport_helpers.ts";
 import type { BinaryDuplexLike } from "./protocol/transports/transport_helpers.ts";
-import type { MessageTransportOptions } from "./definitions/protocol_definitions.ts";
+import type {
+  MessageTransportOptions,
+  ProtocolDefinition,
+} from "./definitions/protocol_definitions.ts";
 import { Protocol } from "./protocol_core.ts";
 import { createType } from "../type/create_type.ts";
+import { parseJSON } from "../internal/json.ts";
 
 /**
  * Discovers the protocol from a remote server by sending a handshake request.
@@ -62,7 +66,9 @@ export async function discoverProtocol(
       throw new Error("invalid server protocol: too large or not a string");
     }
     try {
-      const protocolData = JSON.parse(envelope.handshake.serverProtocol);
+      const protocolData = parseJSON<ProtocolDefinition>(
+        envelope.handshake.serverProtocol,
+      );
       return Protocol.create(protocolData);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "unknown error";

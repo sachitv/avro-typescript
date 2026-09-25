@@ -7,7 +7,11 @@ import {
 import { describe, it } from "@std/testing/bdd";
 import { createType } from "../../../type/create_type.ts";
 import { SchemaJSONScope } from "../../schema_json_scope.ts";
-import { UnionType, type UnionValue } from "../union_type.ts";
+import {
+  getBranchTypeName,
+  UnionType,
+  type UnionValue,
+} from "../union_type.ts";
 import { createRecord } from "./record_test_utils.ts";
 import { StringType } from "../../primitive/string_type.ts";
 import { IntType } from "../../primitive/int_type.ts";
@@ -1299,5 +1303,74 @@ describe("UnionType.schemaJSON", () => {
     const expected = ["null", { name: "F", type: "fixed", size: 1 }];
     assertEquals(type.toJSON(), expected);
     assertEquals(type.toJSON(), expected);
+  });
+});
+
+describe("UnionType defaults", () => {
+  const timestamp = { type: "long", logicalType: "timestamp-millis" };
+
+  it("writes null, and other values wrapped in their branch", () => {
+    assertEquals(createType(["null", "long"]).defaultToJSON(null), null);
+    assertEquals(createType(["long", "null"]).defaultToJSON({ long: 5n }), {
+      long: 5,
+    });
+    assertEquals(
+      createType(["null", { type: "map", values: "long" }]).defaultToJSON({
+        map: new Map([["k", 1n]]),
+      }),
+      { map: { k: 1 } },
+    );
+    assertEquals(
+      createType([
+        "null",
+        {
+          type: "record",
+          name: "In",
+          namespace: "a.b",
+          fields: [{ name: "n", type: "long" }],
+        },
+      ]).defaultToJSON({ "a.b.In": { n: 2n } }),
+      { "a.b.In": { n: 2 } },
+    );
+    assertEquals(
+      createType(["null", timestamp]).defaultToJSON({ long: new Date(7) }),
+      { long: 7 },
+    );
+  });
+
+  it("reads a wrapped default by its branch type", () => {
+    assertEquals(
+      createType(["null", timestamp]).defaultFromJSON({ long: 1000 }),
+      { long: new Date(1000) },
+    );
+  });
+
+  it("leaves a default that is not branch-wrapped for cloneFromValue", () => {
+    const type = createType(["null", timestamp]);
+    assertEquals(type.defaultFromJSON(null), null);
+    assertEquals(type.defaultFromJSON(5), 5);
+    assertEquals(type.defaultFromJSON({ int: 1 }), { int: 1 });
+    assertEquals(type.defaultFromJSON({ a: 1, b: 2 }), { a: 1, b: 2 });
+  });
+});
+
+describe("UnionType branches whose schema JSON cannot be written", () => {
+  const record = {
+    type: "record",
+    name: "R",
+    fields: [{ name: "d", type: "double", default: NaN }],
+  };
+
+  it("names array and map branches without writing their children", () => {
+    const union = createType([
+      "null",
+      { type: "array", items: record },
+      { type: "map", values: "R" },
+    ]) as UnionType;
+
+    assertEquals(
+      union.getTypes().map((type) => getBranchTypeName(type)),
+      ["null", "array", "map"],
+    );
   });
 });

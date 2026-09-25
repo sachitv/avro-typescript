@@ -17,6 +17,7 @@
  */
 
 import { MAGIC_BYTES } from "../../avro_constants.ts";
+import { parseJSON } from "../../../internal/json.ts";
 import { InvalidHeaderError, InvalidMagicError } from "../errors.ts";
 import { isNeedMore, type NeedMore, needMore } from "../need_more.ts";
 import { readSafeLong } from "./varint.ts";
@@ -246,7 +247,9 @@ export function readSyncMarker(
  * Parses the writer schema JSON stored under `avro.schema`.
  *
  * @param meta The header's metadata.
- * @returns The parsed JSON. Building a `Type` from it is left to the caller.
+ * @returns The parsed JSON, with integer literals outside the safe integer
+ * range read as `bigint`s (see `parseJSON`). Building a `Type` from it is left
+ * to the caller.
  * @throws InvalidHeaderError when the entry is missing or not valid JSON; the
  * `SyntaxError` is kept as the `cause`.
  */
@@ -256,7 +259,7 @@ export function parseSchema(meta: ReadonlyMap<string, Uint8Array>): unknown {
     throw new InvalidHeaderError("AVRO schema not found in metadata");
   }
   try {
-    return JSON.parse(utf8.decode(schemaBytes));
+    return parseJSON(utf8.decode(schemaBytes));
   } catch (cause) {
     throw new InvalidHeaderError(
       "Invalid AVRO file header: avro.schema is not valid JSON",

@@ -1,5 +1,7 @@
 import { BaseType } from "../base_type.ts";
 import { NamedType } from "./named_type.ts";
+import { ArrayType } from "./array_type.ts";
+import { MapType } from "./map_type.ts";
 import { internString } from "./record_field.ts";
 import { Resolver } from "../resolver.ts";
 import { type JSONType, Type } from "../type.ts";
@@ -83,6 +85,14 @@ function wrapUnionValue(name: string, value: unknown): UnionWrappedValue {
 export function getBranchTypeName(type: Type): string {
   if (type instanceof NamedType) {
     return type.getFullName();
+  }
+  // Named by their Avro type alone; their JSON would also write their items
+  // or values, which can fail (a NaN field default) and is not needed here.
+  if (type instanceof ArrayType) {
+    return "array";
+  }
+  if (type instanceof MapType) {
+    return "map";
   }
 
   const schema = type.toJSON();
@@ -362,6 +372,43 @@ export class UnionType extends BaseType<UnionValue> {
 
     const cloned = this.#branches[index].type.cloneFromValue(branchValue);
     return wrapUnionValue(this.#branches[index].name, cloned);
+  }
+
+  /**
+   * Reads a branch-wrapped union default, with the branch value read by its
+   * type.
+   */
+  public override defaultFromJSON(value: unknown): unknown {
+    if (!isPlainObject(value)) {
+      return value;
+    }
+    const keys = Object.keys(value);
+    const index = keys.length === 1 ? this.#indices.get(keys[0]) : undefined;
+    if (index === undefined) {
+      // Not a branch-wrapped value: left for cloneFromValue to reject.
+      return value;
+    }
+    const branch = this.#branches[index];
+    return wrapUnionValue(
+      branch.name,
+      branch.type.defaultFromJSON(value[branch.name]),
+    );
+  }
+
+  /**
+   * Encodes a union value in the branch-wrapped form that
+   * {@link cloneFromValue} reads, with the branch value encoded by its type.
+   */
+  public override defaultToJSON(value: UnionValue): JSONType {
+    const { index, branchValue } = this.#resolveBranch(value);
+    if (branchValue === undefined) {
+      return null;
+    }
+    const branch = this.#branches[index];
+    return wrapUnionValue(
+      branch.name,
+      branch.type.defaultToJSON(branchValue),
+    ) as JSONType;
   }
 
   /**

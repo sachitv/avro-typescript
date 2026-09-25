@@ -80,6 +80,29 @@ export class FloatType extends FixedSizeBaseType<number> {
   }
 
   /**
+   * Encodes a float as a JSON number.
+   * @throws Error when the value is NaN or infinite, which JSON cannot
+   * represent.
+   */
+  public override defaultToJSON(value: number): JSONType {
+    if (!Number.isFinite(value)) {
+      throw new Error(
+        `float ${value} is not finite, and JSON has no representation for it.`,
+      );
+    }
+    return value;
+  }
+
+  /**
+   * Reads a default. An integer too large for a safe JS integer, such as
+   * 1e20, is written in JSON as its digits and read by `parseJSON` as a
+   * bigint; it is converted back to the nearest float here.
+   */
+  public override defaultFromJSON(value: unknown): unknown {
+    return typeof value === "bigint" ? Number(value) : value;
+  }
+
+  /**
    * Compares two float values.
    */
   public compare(val1: number, val2: number): number {

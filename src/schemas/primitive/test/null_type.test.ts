@@ -215,3 +215,11 @@ describe("NullType", () => {
     });
   });
 });
+
+describe("NullType defaults", () => {
+  it("writes and reads a default as the JSON value it already is", () => {
+    const type = new NullType();
+    assertEquals(type.defaultToJSON(null), null);
+    assertEquals(type.defaultFromJSON(null), null);
+  });
+});

@@ -226,3 +226,21 @@ describe("DurationLogicalType.schemaJSON", () => {
     });
   });
 });
+
+describe("DurationLogicalType defaults", () => {
+  it("writes and reads a default as its 12 little-endian bytes", () => {
+    const type = createType({
+      type: "fixed",
+      name: "Term",
+      size: 12,
+      logicalType: "duration",
+    });
+    const duration = { months: 1, days: 2, millis: 3 };
+    const json = "\u0001\u0000\u0000\u0000\u0002\u0000\u0000\u0000" +
+      "\u0003\u0000\u0000\u0000";
+    assertEquals(type.defaultToJSON(duration), json);
+    assertEquals(type.defaultFromJSON(json), duration);
+    assertEquals(type.defaultFromJSON(duration), duration);
+    assertThrows(() => type.defaultFromJSON("too short"));
+  });
+});

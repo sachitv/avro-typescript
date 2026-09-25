@@ -84,7 +84,9 @@ export class RecordField {
 
     this.#hasDefault = Object.prototype.hasOwnProperty.call(params, "default");
     if (this.#hasDefault) {
-      this.#defaultValue = this.#type.cloneFromValue(params.default as unknown);
+      this.#defaultValue = this.#type.cloneFromValue(
+        this.#type.defaultFromJSON(params.default),
+      );
     }
   }
 

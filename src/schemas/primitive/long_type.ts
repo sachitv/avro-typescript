@@ -15,6 +15,7 @@ import { calculateVarintSize } from "../../internal/varint.ts";
 
 const MIN_LONG = -(1n << 63n);
 const MAX_LONG = (1n << 63n) - 1n;
+const MAX_SAFE_LONG = BigInt(Number.MAX_SAFE_INTEGER);
 
 /**
  * Long type (64-bit).
@@ -90,6 +91,40 @@ export class LongType extends PrimitiveType<bigint> {
     }
 
     throwInvalidError([], value, this);
+  }
+
+  /**
+   * Encodes a long as a JSON integer. A value outside the safe integer range
+   * is written as a raw JSON number token with all its digits, since a JS
+   * number would round it.
+   * @throws Error when the runtime has no `JSON.rawJSON` to write such a
+   * value exactly.
+   */
+  public override defaultToJSON(value: bigint): JSONType {
+    if (value >= -MAX_SAFE_LONG && value <= MAX_SAFE_LONG) {
+      return Number(value);
+    }
+    const { rawJSON } = JSON as { rawJSON?: (text: string) => unknown };
+    if (typeof rawJSON !== "function") {
+      throw new Error(
+        `long ${value} is outside the safe integer range and this runtime has no JSON.rawJSON to write it exactly.`,
+      );
+    }
+    return rawJSON(value.toString()) as JSONType;
+  }
+
+  /**
+   * Reads a default. Besides a JSON number (or a bigint from `parseJSON`),
+   * this accepts the raw JSON number that {@link defaultToJSON} returns for a
+   * long outside the safe integer range, so `createType(type.toJSON())`
+   * works without a trip through `JSON.stringify`.
+   */
+  public override defaultFromJSON(value: unknown): unknown {
+    const { isRawJSON } = JSON as { isRawJSON?: (value: unknown) => boolean };
+    if (isRawJSON?.(value)) {
+      return BigInt((value as { rawJSON: string }).rawJSON);
+    }
+    return value;
   }
 
   /** Creates a resolver for reading from the writer type. */

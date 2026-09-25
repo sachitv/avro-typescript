@@ -711,3 +711,21 @@ describe("FixedType.schemaJSON", () => {
     assertEquals(type.toJSON(), { name: "a.N", type: "fixed", size: 2 });
   });
 });
+
+describe("FixedType defaults", () => {
+  const type = createType({ type: "fixed", name: "F", size: 256 });
+  const allBytes = Uint8Array.from({ length: 256 }, (_, i) => i);
+  const allBytesJSON = String.fromCharCode(...allBytes);
+
+  it("writes each byte as one code point", () => {
+    assertEquals(type.defaultToJSON(allBytes), allBytesJSON);
+  });
+
+  it("reads the JSON string back to the same bytes", () => {
+    assertEquals(type.defaultFromJSON(allBytesJSON), allBytesJSON);
+    assertEquals(
+      type.cloneFromValue(type.defaultFromJSON(type.defaultToJSON(allBytes))),
+      allBytes,
+    );
+  });
+});

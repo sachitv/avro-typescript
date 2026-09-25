@@ -1414,3 +1414,39 @@ describe("ArrayType.schemaJSON", () => {
     assertEquals(type.toJSON(), expected);
   });
 });
+
+describe("ArrayType defaults", () => {
+  const timestamp = { type: "long", logicalType: "timestamp-millis" };
+
+  it("writes each item by its type", () => {
+    assertEquals(
+      createType({ type: "array", items: "long" }).defaultToJSON([1n, -2n]),
+      [1, -2],
+    );
+    assertEquals(
+      createType({ type: "array", items: "bytes" }).defaultToJSON([
+        Uint8Array.of(0, 255),
+      ]),
+      ["\u0000\u00ff"],
+    );
+    assertEquals(
+      createType({ type: "array", items: "int" }).defaultToJSON([]),
+      [],
+    );
+  });
+
+  it("reads each item by its type", () => {
+    const type = createType({ type: "array", items: timestamp });
+    assertEquals(type.defaultFromJSON([1000, new Date(2000)]), [
+      new Date(1000),
+      new Date(2000),
+    ]);
+  });
+
+  it("leaves a default that is not an array for cloneFromValue", () => {
+    assertEquals(
+      createType({ type: "array", items: "int" }).defaultFromJSON("x"),
+      "x",
+    );
+  });
+});

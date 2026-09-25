@@ -356,3 +356,11 @@ describe("StringType", () => {
     });
   });
 });
+
+describe("StringType defaults", () => {
+  it("writes and reads a default as the JSON value it already is", () => {
+    const type = new StringType();
+    assertEquals(type.defaultToJSON("h\u00e9 \u2603"), "h\u00e9 \u2603");
+    assertEquals(type.defaultFromJSON("h\u00e9 \u2603"), "h\u00e9 \u2603");
+  });
+});

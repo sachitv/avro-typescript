@@ -1,6 +1,7 @@
 import { createType, type SchemaLike } from "../type/create_type.ts";
 import type { Resolver } from "../schemas/resolver.ts";
 import { Type } from "../schemas/type.ts";
+import { parseJSON } from "../internal/json.ts";
 import { BLOCK_TYPE, HEADER_TYPE, MAGIC_BYTES } from "./avro_constants.ts";
 import { assertSyncMarker } from "./sync_marker.ts";
 import type { AvroHeader, ParsedAvroHeader } from "./avro_file_parser.ts";
@@ -141,7 +142,7 @@ export class SyncAvroFileParser {
       throw new Error("AVRO schema not found in metadata");
     }
     const schemaStr = new TextDecoder().decode(schemaJson);
-    const schemaType = createType(JSON.parse(schemaStr));
+    const schemaType = createType(parseJSON<SchemaLike>(schemaStr));
 
     const codec = meta.get("avro.codec");
     if (codec && codec.length > 0) {
@@ -187,7 +188,7 @@ export class SyncAvroFileParser {
     if (typeof schema === "string") {
       const trimmed = schema.trim();
       if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-        const parsed = JSON.parse(trimmed);
+        const parsed = parseJSON<SchemaLike>(trimmed);
         return createType(parsed);
       }
       return createType(schema);

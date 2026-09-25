@@ -92,6 +92,32 @@ export abstract class Type<T = unknown> {
   public abstract cloneFromValue(value: unknown): T;
 
   /**
+   * Encodes a value of this type as a field default in schema JSON, the
+   * inverse of how {@link cloneFromValue} reads a default from JSON. Values
+   * that are already JSON are returned as they are; types whose values are
+   * not (such as `long`, `bytes`, or `map`) override this.
+   * @param value The value to encode.
+   * @returns The value's JSON encoding.
+   * @throws Error when JSON cannot represent the value exactly.
+   */
+  public defaultToJSON(value: T): JSONType {
+    return value as JSONType;
+  }
+
+  /**
+   * Reads a field default given in schema JSON into a value that
+   * {@link cloneFromValue} accepts: the inverse of {@link defaultToJSON}.
+   * Most types accept their JSON form as it is (a `long` from a number,
+   * `bytes` from a string) and return the value unchanged; logical types,
+   * and the types that can contain them, override this.
+   * @param value The default as given in the schema.
+   * @returns The default with every logical value in its runtime form.
+   */
+  public defaultFromJSON(value: unknown): unknown {
+    return value;
+  }
+
+  /**
    * Creates a resolver for schema evolution from a writer type to this reader type.
    * @param writerType The writer schema type.
    * @returns A resolver for reading the writer type as this type.
