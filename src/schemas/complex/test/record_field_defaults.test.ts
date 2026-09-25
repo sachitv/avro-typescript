@@ -341,4 +341,34 @@ describe("record field defaults in schema JSON", () => {
       );
     }
   });
+
+  it("rebuilds a type from its toJSON() output with unsafe long defaults", () => {
+    const first = createType(record("R", [
+      { name: "n", type: "long", default: 9007199254740993n },
+      {
+        name: "u",
+        type: ["long", "null"],
+        default: { long: -9223372036854775808n },
+      },
+      {
+        name: "m",
+        type: { type: "map", values: "long" },
+        default: { k: 9223372036854775807n },
+      },
+      {
+        name: "t",
+        type: { type: "long", logicalType: "timestamp-micros" },
+        default: 9007199254740993n,
+      },
+    ]) as never) as RecordType;
+    const second = createType(first.toJSON() as never) as RecordType;
+
+    assertEquals(JSON.stringify(second), JSON.stringify(first));
+    for (const field of first.getFields()) {
+      assertEquals(
+        second.getField(field.getName())!.getDefault(),
+        field.getDefault(),
+      );
+    }
+  });
 });

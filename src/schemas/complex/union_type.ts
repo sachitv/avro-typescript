@@ -1,5 +1,7 @@
 import { BaseType } from "../base_type.ts";
 import { NamedType } from "./named_type.ts";
+import { ArrayType } from "./array_type.ts";
+import { MapType } from "./map_type.ts";
 import { internString } from "./record_field.ts";
 import { Resolver } from "../resolver.ts";
 import { type JSONType, Type } from "../type.ts";
@@ -83,6 +85,14 @@ function wrapUnionValue(name: string, value: unknown): UnionWrappedValue {
 export function getBranchTypeName(type: Type): string {
   if (type instanceof NamedType) {
     return type.getFullName();
+  }
+  // Named by their Avro type alone; their JSON would also write their items
+  // or values, which can fail (a NaN field default) and is not needed here.
+  if (type instanceof ArrayType) {
+    return "array";
+  }
+  if (type instanceof MapType) {
+    return "map";
   }
 
   const schema = type.toJSON();

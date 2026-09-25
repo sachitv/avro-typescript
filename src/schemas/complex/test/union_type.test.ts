@@ -7,7 +7,11 @@ import {
 import { describe, it } from "@std/testing/bdd";
 import { createType } from "../../../type/create_type.ts";
 import { SchemaJSONScope } from "../../schema_json_scope.ts";
-import { UnionType, type UnionValue } from "../union_type.ts";
+import {
+  getBranchTypeName,
+  UnionType,
+  type UnionValue,
+} from "../union_type.ts";
 import { createRecord } from "./record_test_utils.ts";
 import { StringType } from "../../primitive/string_type.ts";
 import { IntType } from "../../primitive/int_type.ts";
@@ -1347,5 +1351,26 @@ describe("UnionType defaults", () => {
     assertEquals(type.defaultFromJSON(5), 5);
     assertEquals(type.defaultFromJSON({ int: 1 }), { int: 1 });
     assertEquals(type.defaultFromJSON({ a: 1, b: 2 }), { a: 1, b: 2 });
+  });
+});
+
+describe("UnionType branches whose schema JSON cannot be written", () => {
+  const record = {
+    type: "record",
+    name: "R",
+    fields: [{ name: "d", type: "double", default: NaN }],
+  };
+
+  it("names array and map branches without writing their children", () => {
+    const union = createType([
+      "null",
+      { type: "array", items: record },
+      { type: "map", values: "R" },
+    ]) as UnionType;
+
+    assertEquals(
+      union.getTypes().map((type) => getBranchTypeName(type)),
+      ["null", "array", "map"],
+    );
   });
 });

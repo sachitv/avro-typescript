@@ -113,6 +113,20 @@ export class LongType extends PrimitiveType<bigint> {
     return rawJSON(value.toString()) as JSONType;
   }
 
+  /**
+   * Reads a default. Besides a JSON number (or a bigint from `parseJSON`),
+   * this accepts the raw JSON number that {@link defaultToJSON} returns for a
+   * long outside the safe integer range, so `createType(type.toJSON())`
+   * works without a trip through `JSON.stringify`.
+   */
+  public override defaultFromJSON(value: unknown): unknown {
+    const { isRawJSON } = JSON as { isRawJSON?: (value: unknown) => boolean };
+    if (isRawJSON?.(value)) {
+      return BigInt((value as { rawJSON: string }).rawJSON);
+    }
+    return value;
+  }
+
   /** Creates a resolver for reading from the writer type. */
   public override createResolver(writerType: Type): Resolver {
     if (writerType instanceof IntType) {

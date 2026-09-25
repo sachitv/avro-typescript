@@ -161,7 +161,11 @@ export abstract class LogicalType<TValue, TUnderlying> extends Type<TValue> {
     if (this.isValid(value)) {
       return value;
     }
-    return this.fromUnderlying(this.underlyingType.cloneFromValue(value));
+    return this.fromUnderlying(
+      this.underlyingType.cloneFromValue(
+        this.underlyingType.defaultFromJSON(value),
+      ),
+    );
   }
 
   /**

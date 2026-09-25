@@ -708,4 +708,31 @@ describe("LogicalType defaults", () => {
   it("refuses a default that is neither form", () => {
     assertThrows(() => timestamp.defaultFromJSON("soon"));
   });
+
+  it("reads back the raw JSON its underlying long writes", () => {
+    const micros = createType({
+      type: "long",
+      logicalType: "timestamp-micros",
+    });
+    assertEquals(
+      timestamp.defaultFromJSON(timestamp.defaultToJSON(new Date(7))),
+      new Date(7),
+    );
+    assertEquals(
+      micros.defaultFromJSON(micros.defaultToJSON(9007199254740993n)),
+      9007199254740993n,
+    );
+    const millis = createType({
+      type: "long",
+      logicalType: "local-timestamp-millis",
+    });
+    assertEquals(
+      millis.defaultFromJSON(
+        (JSON as unknown as { rawJSON: (text: string) => unknown }).rawJSON(
+          "1000",
+        ),
+      ),
+      1000,
+    );
+  });
 });

@@ -1,5 +1,6 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { createType } from "../../type/create_type.ts";
 import {
   renderPathAsTree,
   throwInvalidError,
@@ -89,6 +90,30 @@ describe("renderPathAsTree", () => {
 root
   child
     leaf`,
+    );
+  });
+});
+
+describe("ValidationError for a schema that cannot be written as JSON", () => {
+  it("is still raised, describing the type by its class", async () => {
+    const type = createType({
+      type: "record",
+      name: "R",
+      fields: [{ name: "d", type: "double", default: NaN }],
+    });
+
+    const error = await type.toBuffer(5 as never).then(
+      () => undefined,
+      (caught: unknown) => caught,
+    );
+    assertEquals(error instanceof ValidationError, true);
+    assertEquals(
+      (error as Error).message.startsWith(
+        "Invalid value: '5' for type: RecordType (schema JSON unavailable: " +
+          "Cannot write the default of field 'R.d' to schema JSON: double " +
+          "NaN is not finite",
+      ),
+      true,
     );
   });
 });

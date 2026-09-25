@@ -586,4 +586,22 @@ describe("LongType defaults", () => {
     assertEquals(type.defaultFromJSON(5), 5);
     assertEquals(type.cloneFromValue(type.defaultFromJSON(5)), 5n);
   });
+
+  it("reads back the raw JSON number it writes for an unsafe long", () => {
+    for (const value of unsafe) {
+      assertEquals(type.defaultFromJSON(type.defaultToJSON(value)), value);
+    }
+    assertEquals(type.defaultFromJSON(9007199254740993n), 9007199254740993n);
+  });
+
+  it("reads values as they are when the runtime has no JSON.isRawJSON", () => {
+    const json = JSON as { isRawJSON?: unknown };
+    const isRawJSON = json.isRawJSON;
+    json.isRawJSON = undefined;
+    try {
+      assertEquals(type.defaultFromJSON(5), 5);
+    } finally {
+      json.isRawJSON = isRawJSON;
+    }
+  });
 });
