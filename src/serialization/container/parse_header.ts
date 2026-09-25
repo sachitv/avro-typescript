@@ -30,7 +30,11 @@ import { isNeedMore, type NeedMore } from "./need_more.ts";
 export interface ContainerHeader {
   /** Header metadata. Values are copies, independent of the input bytes. */
   meta: Map<string, Uint8Array>;
-  /** The writer schema, parsed from the `avro.schema` metadata JSON. */
+  /**
+   * The writer schema, parsed from the `avro.schema` metadata JSON. Integer
+   * literals outside the safe integer range (such as a large `long` default)
+   * are held as `bigint`s so no digits are lost.
+   */
   schema: unknown;
   /** The codec name; `"null"` when `avro.codec` is missing or empty. */
   codec: string;

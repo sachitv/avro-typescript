@@ -1,6 +1,6 @@
 import { describe, it } from "@std/testing/bdd";
 import { expect } from "@std/expect";
-import { _safeJSONStringify, safeStringify } from "../../json.ts";
+import { _safeJSONStringify, parseJSON, safeStringify } from "../../json.ts";
 
 describe("_safeJSONStringify", () => {
   it("should stringify normal objects", () => {
@@ -81,5 +81,38 @@ describe("safeStringify", () => {
     const func = () => {};
     const result = safeStringify(func);
     expect(result).toBe(String(func));
+  });
+});
+
+describe("parseJSON", () => {
+  it("parses like JSON.parse when every number is safe", () => {
+    const text = '{"a":[1,-2.5,1e3,"9007199254740993"],"b":null,"c":true}';
+    expect(parseJSON(text)).toEqual(JSON.parse(text));
+  });
+
+  it("reads integer literals outside the safe range as exact bigints", () => {
+    expect(parseJSON("9007199254740993")).toBe(9007199254740993n);
+    expect(parseJSON("-9223372036854775808")).toBe(-9223372036854775808n);
+    expect(parseJSON("9007199254740992")).toBe(9007199254740992n);
+    expect(parseJSON('{"d":[9007199254740993,{"e":-9007199254740993}]}'))
+      .toEqual({ d: [9007199254740993n, { e: -9007199254740993n }] });
+  });
+
+  it("keeps safe integers and non-integer literals as numbers", () => {
+    expect(parseJSON("9007199254740991")).toBe(9007199254740991);
+    expect(parseJSON("1e20")).toBe(1e20);
+    expect(parseJSON("9007199254740993.5")).toBe(9007199254740993.5);
+  });
+
+  it("reads numbers as JSON.parse does without the reviver source", () => {
+    const parse = JSON.parse;
+    // A runtime without ES2025 source text access passes no context.
+    JSON.parse = (text: string, reviver?: (k: string, v: unknown) => unknown) =>
+      parse(text, reviver && ((k: string, v: unknown) => reviver(k, v)));
+    try {
+      expect(parseJSON("9007199254740993")).toBe(9007199254740992);
+    } finally {
+      JSON.parse = parse;
+    }
   });
 });

@@ -4,6 +4,7 @@ import { createType } from "../../../type/create_type.ts";
 import { createRecord } from "./record_test_utils.ts";
 import type { RecordType } from "../record_type.ts";
 import type { Type } from "../../type.ts";
+import { parseJSON } from "../../json.ts";
 
 /** Runs `fn` as on a runtime without `JSON.rawJSON`. */
 function withoutRawJSON(fn: () => void): void {
@@ -291,5 +292,53 @@ describe("record field defaults in schema JSON", () => {
       withDefault({ type: "array", items: DECIMAL_BYTES }, [482n]),
       ["\u0001\u00e2"],
     );
+  });
+
+  it("reads back unsafe long defaults exactly through parseJSON", () => {
+    for (
+      const value of [
+        9007199254740993n,
+        -9007199254740993n,
+        9223372036854775807n,
+        -9223372036854775808n,
+      ]
+    ) {
+      const first = createType(withDefault("long", value) as never);
+      const json = JSON.stringify(first);
+      const second = createType(parseJSON(json) as never) as RecordType;
+
+      assertEquals(JSON.stringify(second), json);
+      assertEquals(second.getField("f")!.getDefault(), value);
+    }
+  });
+
+  it("reads back unsafe longs nested in defaults exactly", () => {
+    const value = new Map([["k", [{ long: 9007199254740993n }, null]]]);
+    const first = createType(
+      withDefault(
+        { type: "map", values: { type: "array", items: ["long", "null"] } },
+        value,
+      ) as never,
+    );
+    const second = createType(
+      parseJSON(JSON.stringify(first)) as never,
+    ) as RecordType;
+
+    assertEquals(second.getField("f")!.getDefault(), value);
+  });
+
+  it("reads back an integral double default above 2^53 unchanged", () => {
+    for (const type of ["double", "float"]) {
+      const first = createType(withDefault(type, 1e20) as never);
+      const json = JSON.stringify(first);
+      assertEquals(json.includes('"default":100000000000000000000'), true);
+      const second = createType(parseJSON(json) as never) as RecordType;
+
+      assertEquals(JSON.stringify(second), json);
+      assertEquals(
+        second.getField("f")!.getDefault(),
+        (first as RecordType).getField("f")!.getDefault(),
+      );
+    }
   });
 });

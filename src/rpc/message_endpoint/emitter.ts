@@ -14,10 +14,12 @@ import {
 } from "../protocol/protocol_helpers.ts";
 import type {
   MessageTransportOptions,
+  ProtocolDefinition,
   ProtocolFactory,
   ProtocolLike,
 } from "../definitions/protocol_definitions.ts";
 import { MessageEndpoint } from "./base.ts";
+import { parseJSON } from "../../schemas/json.ts";
 import type { Message } from "../definitions/message_definition.ts";
 import type { BinaryDuplexLike } from "../protocol/transports/transport_helpers.ts";
 import { toBinaryDuplex } from "../protocol/transports/transport_helpers.ts";
@@ -283,7 +285,7 @@ export class StatelessEmitter extends MessageEmitter {
 
       if (handshakeResponse.serverProtocol) {
         const remote = this.#protocolFactory(
-          JSON.parse(handshakeResponse.serverProtocol),
+          parseJSON<ProtocolDefinition>(handshakeResponse.serverProtocol),
         );
         this.protocol.ensureEmitterResolvers(
           bytesToHex(outcome.serverHash),

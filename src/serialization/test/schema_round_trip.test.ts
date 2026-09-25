@@ -15,6 +15,9 @@ import { SyncAvroFileParser } from "../avro_file_parser_sync.ts";
 import { AvroFileWriter } from "../avro_file_writer.ts";
 import { SyncReadableTap } from "../tap_sync.ts";
 import { createType } from "../../type/create_type.ts";
+import { parseJSON } from "../../schemas/json.ts";
+import { parseHeader } from "../container/parse_header.ts";
+import { isNeedMore } from "../container/need_more.ts";
 import { FixedType } from "../../schemas/complex/fixed_type.ts";
 import type { RecordType } from "../../schemas/complex/record_type.ts";
 import { DecimalLogicalType } from "../../schemas/logical/decimal_logical_type.ts";
@@ -61,7 +64,7 @@ function assertRoundTrip(schema: unknown, records: unknown[]): void {
   const first = writeFile(schema, records);
   const firstSchema = embeddedSchema(first);
 
-  const second = writeFile(JSON.parse(firstSchema), records);
+  const second = writeFile(parseJSON(firstSchema), records);
 
   assertEquals(embeddedSchema(second), firstSchema);
   assertEquals(second, first);
@@ -369,6 +372,85 @@ describe("schema round trip through a container file", () => {
       ),
       schema.fields.map((field) => field.default),
     );
+  });
+
+  it("keeps long defaults outside the safe integer range exactly", async () => {
+    const schema = {
+      type: "record",
+      name: "Big",
+      fields: [
+        { name: "id", type: "int" },
+        { name: "big", type: "long", default: 9007199254740993n },
+        { name: "min", type: "long", default: -9223372036854775808n },
+        { name: "ratio", type: "double", default: 1e20 },
+      ],
+    };
+    const records = [{
+      id: 1,
+      big: 2n,
+      min: 3n,
+      ratio: 0.5,
+    }];
+    assertRoundTrip(schema, records);
+
+    const file = writeFile(schema, records);
+    const text = embeddedSchema(file);
+    assertEquals(text.includes('"default":9007199254740993'), true);
+    assertEquals(text.includes('"default":-9223372036854775808'), true);
+    const header = parseHeader(file);
+    if (isNeedMore(header)) {
+      throw new Error("unexpected NeedMore");
+    }
+    // The raw header schema holds every integer literal above 2^53 as a
+    // bigint; the double's type turns its default back into a number.
+    assertEquals(
+      (header.schema as { fields: Array<{ default?: unknown }> }).fields.map(
+        (field) => field.default,
+      ),
+      [
+        undefined,
+        9007199254740993n,
+        -9223372036854775808n,
+        100000000000000000000n,
+      ],
+    );
+    const parsedType = createType(header.schema as never) as RecordType;
+    assertEquals(
+      parsedType.getFields().map((field) =>
+        field.hasDefault() ? field.getDefault() : undefined
+      ),
+      [undefined, 9007199254740993n, -9223372036854775808n, 1e20],
+    );
+
+    // A reader schema given as a JSON string keeps the defaults exactly too,
+    // through both parsers.
+    const reader = JSON.stringify(createType({
+      type: "record",
+      name: "Big",
+      fields: [
+        { name: "id", type: "int" },
+        { name: "extra", type: "long", default: 9223372036854775807n },
+      ],
+    } as never));
+    const expected = [{ id: 1, extra: 9223372036854775807n }];
+    assertEquals(
+      Array.from(
+        new SyncAvroFileParser(
+          new SyncInMemoryReadableBuffer(file.slice().buffer),
+          { readerSchema: reader },
+        ).iterRecords(),
+      ),
+      expected,
+    );
+    const asyncParser = new AvroFileParser(
+      new InMemoryReadableBuffer(file.slice().buffer),
+      { readerSchema: reader },
+    );
+    const read: unknown[] = [];
+    for await (const record of asyncParser.iterRecords()) {
+      read.push(record);
+    }
+    assertEquals(read, expected);
   });
 
   it("writes field defaults through the async writer and parser", async () => {

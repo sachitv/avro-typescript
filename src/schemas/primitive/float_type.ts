@@ -94,6 +94,15 @@ export class FloatType extends FixedSizeBaseType<number> {
   }
 
   /**
+   * Reads a default. An integer too large for a safe JS integer, such as
+   * 1e20, is written in JSON as its digits and read by `parseJSON` as a
+   * bigint; it is converted back to the nearest float here.
+   */
+  public override defaultFromJSON(value: unknown): unknown {
+    return typeof value === "bigint" ? Number(value) : value;
+  }
+
+  /**
    * Compares two float values.
    */
   public compare(val1: number, val2: number): number {

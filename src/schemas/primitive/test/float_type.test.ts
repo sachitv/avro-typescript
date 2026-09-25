@@ -400,4 +400,12 @@ describe("FloatType defaults", () => {
   it("reads a JSON number default as it is", () => {
     assertEquals(type.defaultFromJSON(0.5), 0.5);
   });
+
+  it("reads an integer parsed as a bigint as the nearest float", () => {
+    assertEquals(type.defaultFromJSON(100000000000000000000n), 1e20);
+    assertEquals(
+      type.defaultFromJSON(-9007199254740993n),
+      Number(-9007199254740993n),
+    );
+  });
 });
