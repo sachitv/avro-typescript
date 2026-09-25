@@ -50,6 +50,39 @@ function collectRecords(
 }
 
 describe("SyncAvroFileWriter", () => {
+  it("writes an enum field's schema so the file reads back", () => {
+    const schema = {
+      type: "record",
+      name: "test.WithEnum",
+      fields: [
+        { name: "id", type: "int" },
+        {
+          name: "kind",
+          type: { type: "enum", name: "Kind", symbols: ["A", "B"] },
+        },
+      ],
+    } as const;
+    const records = [{ id: 1, kind: "B" }, { id: 2, kind: "A" }];
+    const buffer = createWritableBuffer();
+    const writer = new SyncAvroFileWriter(buffer, { schema });
+    for (const record of records) {
+      writer.append(record);
+    }
+    writer.close();
+
+    const parser = new SyncAvroFileParser(toReadableBuffer(buffer));
+    const embedded = JSON.parse(
+      new TextDecoder().decode(parser.getHeader().meta.get("avro.schema")),
+    );
+
+    assertEquals(embedded.fields[1].type, {
+      name: "test.Kind",
+      type: "enum",
+      symbols: ["A", "B"],
+    });
+    assertEquals(Array.from(parser.iterRecords()), records);
+  });
+
   describe("constructor validation", () => {
     it("requires a schema", () => {
       const buffer = createWritableBuffer();

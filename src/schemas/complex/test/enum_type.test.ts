@@ -9,6 +9,7 @@ import {
 import { EnumType } from "../enum_type.ts";
 import { resolveNames } from "../resolve_names.ts";
 import { IntType } from "../../primitive/int_type.ts";
+import { createType } from "../../../type/create_type.ts";
 
 function createEnum(params: {
   name: string;
@@ -90,6 +91,69 @@ describe("EnumType", () => {
         symbols: ["A", "B"],
       });
       assertEquals(type.getDefault(), undefined);
+    });
+  });
+
+  describe("toJSON", () => {
+    it("returns the full definition", () => {
+      const type = createEnum({ name: "Letter", symbols: ["A", "B"] });
+      assertEquals(type.toJSON(), {
+        name: "Letter",
+        type: "enum",
+        symbols: ["A", "B"],
+      });
+    });
+
+    it("includes the default when set", () => {
+      const type = createEnum({
+        name: "Letter",
+        symbols: ["A", "B"],
+        default: "B",
+      });
+      assertEquals(type.toJSON(), {
+        name: "Letter",
+        type: "enum",
+        symbols: ["A", "B"],
+        default: "B",
+      });
+    });
+
+    it("uses the full name", () => {
+      const type = createEnum({
+        name: "Letter",
+        namespace: "org.example",
+        symbols: ["A"],
+      });
+      assertEquals(
+        (type.toJSON() as { name: string }).name,
+        "org.example.Letter",
+      );
+    });
+
+    it("returns symbols that do not alias the type's own", () => {
+      const type = createEnum({ name: "Letter", symbols: ["A", "B"] });
+      (type.toJSON() as { symbols: string[] }).symbols.push("C");
+      assertEquals(type.getSymbols(), ["A", "B"]);
+    });
+
+    it("parses back to an equivalent type", () => {
+      const type = createType({
+        type: "record",
+        name: "org.example.Row",
+        fields: [{
+          name: "letter",
+          type: {
+            type: "enum",
+            name: "Letter",
+            symbols: ["A", "B"],
+            default: "A",
+          },
+        }],
+      });
+      const reparsed = createType(JSON.parse(JSON.stringify(type)));
+      assertEquals(reparsed.toJSON(), type.toJSON());
+      const value = { letter: "B" };
+      assertEquals(reparsed.fromSyncBuffer(type.toSyncBuffer(value)), value);
     });
   });
 
@@ -459,11 +523,13 @@ describe("EnumType", () => {
       });
       const buffer = new ArrayBuffer(1);
       const tap = new Tap(buffer);
-      await assertRejects(
+      const error = await assertRejects(
         async () => await type.write(tap, "B"),
         Error,
-        "Invalid value: 'B' for type: enum",
+        "Invalid value: 'B' for type:",
       );
+      // The message shows the enum's full schema, like other named types.
+      assert(error.message.includes('"symbols": [\n    "A"\n  ]'));
     });
   });
 
