@@ -104,6 +104,11 @@ interface CreateTypeContext {
 export interface CreateTypeOptions {
   /**
    * Default namespace to use for named types.
+   *
+   * Names without a namespace take this one, including those in a schema
+   * produced by `toJSON()`: a type in the null namespace written at the top
+   * level is a bare name, so parsing it with this option moves it into this
+   * namespace.
    */
   namespace?: string;
   /**

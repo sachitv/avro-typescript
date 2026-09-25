@@ -1,5 +1,12 @@
-import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertInstanceOf,
+  assertRejects,
+  assertThrows,
+} from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { SchemaJSONScope } from "../../schema_json_scope.ts";
 
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import {
@@ -714,5 +721,62 @@ describe("EnumType", () => {
         "Invalid value",
       );
     });
+  });
+});
+
+describe("EnumType.schemaJSON", () => {
+  it("writes the definition and records the name the first time", () => {
+    const type = createType({ type: "enum", name: "a.N", symbols: ["X"] });
+    assertInstanceOf(type, EnumType);
+    const scope = new SchemaJSONScope();
+
+    assertEquals(type.schemaJSON(scope), {
+      name: "a.N",
+      type: "enum",
+      symbols: ["X"],
+    });
+    assertEquals([...scope.defined.keys()], ["a.N"]);
+  });
+
+  it("writes the full name once the scope defines it", () => {
+    const type = createType({ type: "enum", name: "a.N", symbols: ["X"] });
+    const scope = new SchemaJSONScope();
+    type.schemaJSON(scope);
+
+    assertEquals(type.schemaJSON(scope), "a.N");
+  });
+
+  it("writes an empty namespace under a namespaced scope", () => {
+    const type = createType({ type: "enum", name: "N", symbols: ["X"] });
+    const scope = new SchemaJSONScope();
+    scope.namespace = "x";
+
+    assertEquals(type.schemaJSON(scope), {
+      name: "N",
+      namespace: "",
+      type: "enum",
+      symbols: ["X"],
+    });
+  });
+
+  it("writes aliases as full names", () => {
+    const type = createType({
+      type: "enum",
+      name: "a.N",
+      aliases: ["Old"],
+      symbols: ["X"],
+    });
+    assertEquals(type.schemaJSON(new SchemaJSONScope()), {
+      name: "a.N",
+      type: "enum",
+      aliases: ["a.Old"],
+      symbols: ["X"],
+    });
+  });
+
+  it("starts a new scope on each toJSON call", () => {
+    const type = createType({ type: "enum", name: "a.N", symbols: ["X"] });
+    assertEquals(type.toJSON(), { name: "a.N", type: "enum", symbols: ["X"] });
+    assertEquals(type.toJSON(), { name: "a.N", type: "enum", symbols: ["X"] });
   });
 });

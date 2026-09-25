@@ -2,9 +2,12 @@ import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import {
   LogicalType,
+  logicalTypeSchemaJSON,
   NamedLogicalType,
   withLogicalTypeJSON,
 } from "../logical_type.ts";
+import { createType } from "../../../type/create_type.ts";
+import { SchemaJSONScope } from "../../schema_json_scope.ts";
 import { StringType } from "../../primitive/string_type.ts";
 import { FixedType } from "../../complex/fixed_type.ts";
 import { resolveNames } from "../../complex/resolve_names.ts";
@@ -579,5 +582,99 @@ describe("withLogicalTypeJSON", () => {
       type.writeSyncUnchecked(tap, "unchecked");
       assertEquals(tap.getPos() > 0, true);
     });
+  });
+});
+
+describe("logicalTypeSchemaJSON", () => {
+  const decimal = (precision: number, name = "F") =>
+    createType({
+      type: "fixed",
+      name,
+      size: 8,
+      logicalType: "decimal",
+      precision,
+    }) as LogicalType<unknown, unknown>;
+
+  it("annotates an underlying type that is not named", () => {
+    const type = createType({
+      type: "string",
+      logicalType: "uuid",
+    }) as LogicalType<unknown, unknown>;
+    assertEquals(
+      logicalTypeSchemaJSON(
+        type,
+        type.getUnderlyingType(),
+        "uuid",
+        {},
+        new SchemaJSONScope(),
+      ),
+      { type: "string", logicalType: "uuid" },
+    );
+  });
+
+  it("defines the named type with the annotation, for the logical type", () => {
+    const type = decimal(4);
+    const scope = new SchemaJSONScope();
+
+    const json = logicalTypeSchemaJSON(
+      type,
+      type.getUnderlyingType(),
+      "decimal",
+      { precision: 4 },
+      scope,
+    );
+
+    assertEquals(json, {
+      name: "F",
+      type: "fixed",
+      size: 8,
+      logicalType: "decimal",
+      precision: 4,
+    });
+    assertEquals(scope.defined.get("F")?.logical, type);
+  });
+
+  it("writes the bare name once it defined the name", () => {
+    const type = decimal(4);
+    const scope = new SchemaJSONScope();
+    type.schemaJSON(scope);
+
+    assertEquals(type.schemaJSON(scope), "F");
+    // A separate but identical logical type may share the name too.
+    assertEquals(decimal(4).schemaJSON(scope), "F");
+  });
+
+  it("refuses a name defined as a plain fixed", () => {
+    const type = decimal(4);
+    const scope = new SchemaJSONScope();
+    type.getUnderlyingType().schemaJSON(scope);
+
+    assertThrows(
+      () => type.schemaJSON(scope),
+      Error,
+      "Cannot apply logicalType decimal to F: the schema already defines it without one",
+    );
+  });
+
+  it("refuses a name defined with a different logical type", () => {
+    const scope = new SchemaJSONScope();
+    decimal(4).schemaJSON(scope);
+
+    assertThrows(
+      () => decimal(6).schemaJSON(scope),
+      Error,
+      "Duplicate Avro type name: F is already defined as",
+    );
+  });
+
+  it("refuses a name defined by a different named type", () => {
+    const scope = new SchemaJSONScope();
+    createType({ type: "fixed", name: "F", size: 2 }).schemaJSON(scope);
+
+    assertThrows(
+      () => decimal(4).schemaJSON(scope),
+      Error,
+      "Duplicate Avro type name: F",
+    );
   });
 });

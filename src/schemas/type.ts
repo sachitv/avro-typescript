@@ -11,6 +11,7 @@ import {
 import { CountingWritableTap } from "../serialization/counting_writable_tap.ts";
 import { SyncCountingWritableTap } from "../serialization/counting_writable_tap_sync.ts";
 import type { Resolver } from "./resolver.ts";
+import type { SchemaJSONScope } from "./schema_json_scope.ts";
 import { type ErrorHook, throwInvalidError } from "./error.ts";
 
 /**
@@ -166,6 +167,28 @@ export abstract class Type<T = unknown> {
    * @returns The JSON representation as JSONType.
    */
   public abstract toJSON(): JSONType;
+
+  /**
+   * Returns the JSON schema of this type as part of an enclosing schema.
+   *
+   * Types with children override this and pass `scope` to their children, so
+   * named types are defined once and then referred to by name (see
+   * `schema_json_scope.ts`); their `toJSON()` starts a new scope. Types
+   * without children keep this default, which is their `toJSON()`.
+   *
+   * This is library-internal: the built-in types with children override it,
+   * and `SchemaJSONScope` is not exported. A custom subclass with child types
+   * can only override `toJSON()`, which gives its children a fresh scope: a
+   * named type used both inside and outside it is written in full twice, and
+   * a record that contains it and is contained by it recurses without end.
+   *
+   * @internal Called by types on their children; use `toJSON()` instead.
+   * @param _scope The scope of the schema being written.
+   * @returns The JSON representation as JSONType.
+   */
+  public schemaJSON(_scope: SchemaJSONScope): JSONType {
+    return this.toJSON();
+  }
 
   /**
    * Compares two encoded buffers. Must be implemented by subclasses.

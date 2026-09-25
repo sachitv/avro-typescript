@@ -50,6 +50,57 @@ function collectRecords(
 }
 
 describe("SyncAvroFileWriter", () => {
+  it("writes reused and recursive named types so the file reads back", () => {
+    const schema = {
+      type: "record",
+      name: "test.Shipment",
+      fields: [
+        { name: "origin", type: { type: "fixed", name: "Code", size: 3 } },
+        { name: "destination", type: "Code" },
+        {
+          name: "route",
+          type: {
+            type: "record",
+            name: "Stop",
+            fields: [
+              { name: "code", type: "Code" },
+              { name: "next", type: ["null", "Stop"] },
+            ],
+          },
+        },
+      ],
+    } as const;
+    const code = (text: string) => new TextEncoder().encode(text);
+    const records = [{
+      origin: code("SFO"),
+      destination: code("JFK"),
+      route: {
+        code: code("SFO"),
+        next: {
+          "test.Stop": {
+            code: code("ORD"),
+            next: { "test.Stop": { code: code("JFK"), next: null } },
+          },
+        },
+      },
+    }];
+    const buffer = createWritableBuffer();
+    const writer = new SyncAvroFileWriter(buffer, { schema });
+    for (const record of records) {
+      writer.append(record);
+    }
+    writer.close();
+
+    const parser = new SyncAvroFileParser(toReadableBuffer(buffer));
+    const embedded = JSON.parse(
+      new TextDecoder().decode(parser.getHeader().meta.get("avro.schema")),
+    );
+
+    assertEquals(embedded.fields[1].type, "test.Code");
+    assertEquals(embedded.fields[2].type.fields[1].type, ["null", "test.Stop"]);
+    assertEquals(Array.from(parser.iterRecords()), records);
+  });
+
   it("writes an enum field's schema so the file reads back", () => {
     const schema = {
       type: "record",

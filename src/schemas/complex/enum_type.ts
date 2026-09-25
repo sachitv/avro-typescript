@@ -9,6 +9,7 @@ import type {
 import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
 import { NamedType } from "./named_type.ts";
+import { namedTypeJSON, SchemaJSONScope } from "../schema_json_scope.ts";
 import { isValidName, type ResolvedNames } from "./resolve_names.ts";
 import { calculateVarintSize } from "../../internal/varint.ts";
 import { type ErrorHook, throwInvalidError } from "../error.ts";
@@ -212,19 +213,28 @@ export class EnumType extends NamedType<string> {
 
   /**
    * Returns the JSON schema of the enum type: its full name, symbols, and
-   * default when it has one. Writers embed this in file headers, so it must be
-   * a complete definition that parses back to the same type.
+   * default when it has one, or just its full name when the enclosing schema
+   * already defines it. Writers embed this in file headers, so it must parse
+   * back to the same type.
    */
   public override toJSON(): JSONType {
-    const json: { [key: string]: JSONType } = {
-      name: this.getFullName(),
-      type: "enum",
-      symbols: this.#symbols.slice(),
-    };
-    if (this.#default !== undefined) {
-      json.default = this.#default;
-    }
-    return json;
+    return this.schemaJSON(new SchemaJSONScope());
+  }
+
+  /**
+   * Returns the enum's JSON schema within an enclosing schema.
+   * @internal Called by types on their children; use `toJSON()` instead.
+   */
+  public override schemaJSON(scope: SchemaJSONScope): JSONType {
+    return namedTypeJSON(this, "enum", scope, () => {
+      const json: { [key: string]: JSONType } = {
+        symbols: this.#symbols.slice(),
+      };
+      if (this.#default !== undefined) {
+        json.default = this.#default;
+      }
+      return json;
+    });
   }
 
   /**

@@ -1,9 +1,10 @@
 import { FixedType } from "../complex/fixed_type.ts";
 import { StringType } from "../primitive/string_type.ts";
 import type { NamedType } from "../complex/named_type.ts";
-import { withLogicalTypeJSON } from "./logical_type.ts";
+import { logicalTypeSchemaJSON } from "./logical_type.ts";
 import { LogicalType } from "./logical_type.ts";
 import type { JSONType, Type } from "../type.ts";
+import { SchemaJSONScope } from "../schema_json_scope.ts";
 
 const UUID_REGEX =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
@@ -97,7 +98,16 @@ export class UuidLogicalType extends LogicalType<string, string | Uint8Array> {
    * Returns the JSON schema representation of this logical type.
    */
   public override toJSON(): JSONType {
-    return withLogicalTypeJSON(this.#underlying.toJSON(), "uuid");
+    return this.schemaJSON(new SchemaJSONScope());
+  }
+
+  /**
+   * Returns the UUID's JSON schema within an enclosing schema, passing
+   * `scope` on to the underlying string or fixed type.
+   * @internal Called by types on their children; use `toJSON()` instead.
+   */
+  public override schemaJSON(scope: SchemaJSONScope): JSONType {
+    return logicalTypeSchemaJSON(this, this.#underlying, "uuid", {}, scope);
   }
 
   /**

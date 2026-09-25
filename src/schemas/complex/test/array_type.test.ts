@@ -1,5 +1,12 @@
-import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertInstanceOf,
+  assertRejects,
+  assertThrows,
+} from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { SchemaJSONScope } from "../../schema_json_scope.ts";
 
 import { TestTap as Tap } from "../../../serialization/test/test_tap.ts";
 import {
@@ -1369,4 +1376,41 @@ describe("ArrayType sync block counts beyond the int32 fast path", () => {
       assertEquals(resolver.readSync(open(bytes)), [1n, 2n]);
     });
   }
+});
+
+describe("ArrayType.schemaJSON", () => {
+  const schema = {
+    type: "array",
+    items: { type: "fixed", name: "F", size: 1 },
+  } as const;
+
+  it("passes the scope to the items type", () => {
+    const type = createType(schema);
+    assertInstanceOf(type, ArrayType);
+    const scope = new SchemaJSONScope();
+    (type as ArrayType).getItemsType().schemaJSON(scope);
+
+    assertEquals(type.schemaJSON(scope), { type: "array", items: "F" });
+  });
+
+  it("defines a named items type in the scope", () => {
+    const type = createType(schema);
+    const scope = new SchemaJSONScope();
+
+    assertEquals(type.schemaJSON(scope), {
+      type: "array",
+      items: { name: "F", type: "fixed", size: 1 },
+    });
+    assertEquals([...scope.defined.keys()], ["F"]);
+  });
+
+  it("starts a new scope on each toJSON call", () => {
+    const type = createType(schema);
+    const expected = {
+      type: "array",
+      items: { name: "F", type: "fixed", size: 1 },
+    };
+    assertEquals(type.toJSON(), expected);
+    assertEquals(type.toJSON(), expected);
+  });
 });

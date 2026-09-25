@@ -11,6 +11,7 @@ import { readBlockCountSync } from "../../serialization/block_count_sync.ts";
 import { BaseType } from "../base_type.ts";
 import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
+import { SchemaJSONScope } from "../schema_json_scope.ts";
 import type { ErrorHook } from "../error.ts";
 
 /**
@@ -342,9 +343,18 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
    * @returns The JSON representation as JSONType.
    */
   public override toJSON(): JSONType {
+    return this.schemaJSON(new SchemaJSONScope());
+  }
+
+  /**
+   * Returns the map's JSON schema within an enclosing schema, passing `scope`
+   * on to the values type.
+   * @internal Called by types on their children; use `toJSON()` instead.
+   */
+  public override schemaJSON(scope: SchemaJSONScope): JSONType {
     return {
       type: "map",
-      values: this.#valuesType.toJSON(),
+      values: this.#valuesType.schemaJSON(scope),
     };
   }
 

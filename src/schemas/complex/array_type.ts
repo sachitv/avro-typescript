@@ -6,6 +6,7 @@ import { bigIntToSafeNumber } from "../../serialization/conversion.ts";
 import { BaseType } from "../base_type.ts";
 import { Resolver } from "../resolver.ts";
 import type { JSONType, Type } from "../type.ts";
+import { SchemaJSONScope } from "../schema_json_scope.ts";
 import type { ErrorHook } from "../error.ts";
 import type {
   SyncReadableTapLike,
@@ -448,9 +449,18 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
    * Returns the JSON schema representation of this array type.
    */
   public override toJSON(): JSONType {
+    return this.schemaJSON(new SchemaJSONScope());
+  }
+
+  /**
+   * Returns the array's JSON schema within an enclosing schema, passing
+   * `scope` on to the items type.
+   * @internal Called by types on their children; use `toJSON()` instead.
+   */
+  public override schemaJSON(scope: SchemaJSONScope): JSONType {
     return {
       type: "array",
-      items: this.#itemsType.toJSON(),
+      items: this.#itemsType.schemaJSON(scope),
     };
   }
 
