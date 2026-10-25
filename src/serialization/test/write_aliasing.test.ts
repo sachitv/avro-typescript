@@ -8,6 +8,7 @@ import { concatUint8Arrays } from "../../internal/collections/array_utils.ts";
 import { ReadableTap, WritableTap } from "../tap.ts";
 import { SyncReadableTap, SyncWritableTap } from "../tap_sync.ts";
 import type { ISyncWritable } from "../buffers/buffer_sync.ts";
+import type { IWritableBuffer } from "../buffers/buffer.ts";
 import { StreamWritableBuffer } from "../streams/stream_writable_buffer.ts";
 import { StreamWritableBufferAdapter } from "../streams/stream_writable_buffer_adapter.ts";
 import { SyncStreamWritableBufferAdapter } from "../streams/stream_writable_buffer_adapter_sync.ts";
@@ -240,14 +241,34 @@ describe("write path buffer aliasing", () => {
       }
     });
 
-    it("gives each instance its own scratch memory", async () => {
-      const bufA = new ArrayBuffer(16);
-      const bufB = new ArrayBuffer(16);
-      const tapA = new WritableTap(bufA);
-      const tapB = new WritableTap(bufB);
+    it("keeps separate taps independent while async appends are pending", async () => {
+      const delayedCopyBuffer = (buffer: ArrayBuffer): IWritableBuffer => {
+        const bytes = new Uint8Array(buffer);
+        let offset = 0;
+        return {
+          async appendBytes(data) {
+            // Copy only after yielding, but always before the promise settles.
+            await Promise.resolve();
+            bytes.set(data, offset);
+            offset += data.length;
+          },
+          isValid: () => Promise.resolve(true),
+          canAppendMore: (size) =>
+            Promise.resolve(offset + size <= bytes.length),
+        };
+      };
+      const bufA = new ArrayBuffer(64);
+      const bufB = new ArrayBuffer(64);
+      const tapA = new WritableTap(delayedCopyBuffer(bufA));
+      const tapB = new WritableTap(delayedCopyBuffer(bufB));
       await Promise.all([tapA.writeDouble(1.5), tapB.writeDouble(2.5)]);
       await Promise.all([tapA.writeBoolean(true), tapB.writeBoolean(false)]);
       await Promise.all([tapA.writeFloat(0.25), tapB.writeFloat(0.75)]);
+      await Promise.all([tapA.writeInt(123456), tapB.writeInt(-654321)]);
+      await Promise.all([
+        tapA.writeLong(9007199254740993n),
+        tapB.writeLong(-9007199254740993n),
+      ]);
 
       const readerA = new ReadableTap(bufA);
       const readerB = new ReadableTap(bufB);
@@ -256,16 +277,20 @@ describe("write path buffer aliasing", () => {
           await readerA.readDouble(),
           await readerA.readBoolean(),
           await readerA.readFloat(),
+          await readerA.readInt(),
+          await readerA.readLong(),
         ],
-        [1.5, true, 0.25],
+        [1.5, true, 0.25, 123456, 9007199254740993n],
       );
       assertEquals(
         [
           await readerB.readDouble(),
           await readerB.readBoolean(),
           await readerB.readFloat(),
+          await readerB.readInt(),
+          await readerB.readLong(),
         ],
-        [2.5, false, 0.75],
+        [2.5, false, 0.75, -654321, -9007199254740993n],
       );
     });
   });
