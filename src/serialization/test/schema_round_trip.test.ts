@@ -14,6 +14,7 @@ import { AvroFileParser } from "../avro_file_parser.ts";
 import { SyncAvroFileParser } from "../avro_file_parser_sync.ts";
 import { AvroFileWriter } from "../avro_file_writer.ts";
 import { SyncReadableTap } from "../tap_sync.ts";
+import { HEADER_TYPE } from "../avro_constants.ts";
 import { createType } from "../../type/create_type.ts";
 import { parseJSON } from "../../internal/json.ts";
 import { parseHeader } from "../container/parse_header.ts";
@@ -374,29 +375,39 @@ describe("schema round trip through a container file", () => {
     );
   });
 
-  it("keeps long defaults outside the safe integer range exactly", async () => {
+  it("reads external files with unsafe defaults without rounding", async () => {
     const schema = {
       type: "record",
       name: "Big",
       fields: [
         { name: "id", type: "int" },
-        { name: "big", type: "long", default: 9007199254740993n },
-        { name: "min", type: "long", default: -9223372036854775808n },
-        { name: "ratio", type: "double", default: 1e20 },
+        { name: "big", type: "long" },
+        { name: "min", type: "long" },
+        { name: "ratio", type: "double" },
       ],
     };
-    const records = [{
-      id: 1,
-      big: 2n,
-      min: 3n,
-      ratio: 0.5,
-    }];
-    assertRoundTrip(schema, records);
+    const records = [{ id: 1, big: 2n, min: 3n, ratio: 0.5 }];
+    const original = writeFile(schema, records);
+    const tap = new SyncReadableTap(original.slice().buffer);
+    const rawHeader = HEADER_TYPE.readSync(tap) as {
+      magic: Uint8Array;
+      meta: Map<string, Uint8Array>;
+      sync: Uint8Array;
+    };
+    // Model an external writer's schema JSON. Our writers refuse unsafe defaults.
+    const text = '{"type":"record","name":"Big","fields":[' +
+      '{"name":"id","type":"int"},' +
+      '{"name":"big","type":"long","default":9007199254740993},' +
+      '{"name":"min","type":"long","default":-9223372036854775808},' +
+      '{"name":"ratio","type":"double","default":100000000000000000000}]}';
+    rawHeader.meta.set("avro.schema", new TextEncoder().encode(text));
+    const encodedHeader = new Uint8Array(HEADER_TYPE.toSyncBuffer(rawHeader));
+    const body = original.subarray(tap.getPos());
+    const file = new Uint8Array(encodedHeader.length + body.length);
+    file.set(encodedHeader);
+    file.set(body, encodedHeader.length);
+    assertEquals(Array.from(parser(file).iterRecords()), records);
 
-    const file = writeFile(schema, records);
-    const text = embeddedSchema(file);
-    assertEquals(text.includes('"default":9007199254740993'), true);
-    assertEquals(text.includes('"default":-9223372036854775808'), true);
     const header = parseHeader(file);
     if (isNeedMore(header)) {
       throw new Error("unexpected NeedMore");
@@ -424,14 +435,9 @@ describe("schema round trip through a container file", () => {
 
     // A reader schema given as a JSON string keeps the defaults exactly too,
     // through both parsers.
-    const reader = JSON.stringify(createType({
-      type: "record",
-      name: "Big",
-      fields: [
-        { name: "id", type: "int" },
-        { name: "extra", type: "long", default: 9223372036854775807n },
-      ],
-    } as never));
+    const reader = '{"type":"record","name":"Big","fields":[' +
+      '{"name":"id","type":"int"},' +
+      '{"name":"extra","type":"long","default":9223372036854775807}]}';
     const expected = [{ id: 1, extra: 9223372036854775807n }];
     assertEquals(
       Array.from(
@@ -522,6 +528,28 @@ describe("schema round trip through a container file", () => {
 });
 
 describe("schemas that cannot be written", () => {
+  it("rejects unsafe long defaults in both file writers before writing", () => {
+    const schema = {
+      type: "record",
+      name: "Big",
+      fields: [{ name: "n", type: "long", default: 9007199254740993n }],
+    };
+    const message =
+      "Cannot write the default of field 'Big.n' to schema JSON: long " +
+      "9007199254740993 is outside the safe integer range";
+    assertThrows(() => writeFile(schema, []), Error, message);
+    const buffer = new InMemoryWritableBuffer(new ArrayBuffer(1024));
+    assertThrows(
+      () =>
+        new AvroFileWriter(buffer, {
+          schema: schema as never,
+          syncMarker: SYNC,
+        }),
+      Error,
+      message,
+    );
+  });
+
   // The parser accepts both schemas; only writing them is refused.
   const flat = {
     type: "record",

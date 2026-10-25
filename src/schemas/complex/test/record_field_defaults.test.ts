@@ -6,18 +6,6 @@ import type { RecordType } from "../record_type.ts";
 import type { Type } from "../../type.ts";
 import { parseJSON } from "../../../internal/json.ts";
 
-/** Runs `fn` as on a runtime without `JSON.rawJSON`. */
-function withoutRawJSON(fn: () => void): void {
-  const json = JSON as { rawJSON?: unknown };
-  const rawJSON = json.rawJSON;
-  json.rawJSON = undefined;
-  try {
-    fn();
-  } finally {
-    json.rawJSON = rawJSON;
-  }
-}
-
 /** Bytes 0x00-0xff as a JSON byte string. */
 const ALL_BYTES_JSON = String.fromCharCode(
   ...Array.from({ length: 256 }, (_, i) => i),
@@ -167,13 +155,16 @@ describe("record field defaults in schema JSON", () => {
     );
   });
 
-  it("writes a long default outside the safe range with all its digits", () => {
-    const type = createType(withDefault("long", 9007199254740993n) as never);
-
-    assertEquals(
-      JSON.stringify(type),
-      '{"name":"R","type":"record","fields":[{"name":"f","type":"long","default":9007199254740993}]}',
-    );
+  it("rejects unsafe defaults before the public JSON round trip can round them", () => {
+    for (const value of [9007199254740993n, -9007199254740993n]) {
+      const type = createType(withDefault("long", value) as never);
+      assertThrows(
+        () => createType(JSON.parse(JSON.stringify(type))),
+        Error,
+        "Cannot write the default of field 'R.f' to schema JSON: long " +
+          `${value} is outside the safe integer range`,
+      );
+    }
   });
 
   it("names the field when a long default cannot be written exactly", () => {
@@ -188,14 +179,12 @@ describe("record field defaults in schema JSON", () => {
       }],
     } as never);
 
-    withoutRawJSON(() => {
-      assertThrows(
-        () => JSON.stringify(type),
-        Error,
-        "Cannot write the default of field 'a.b.R.big' to schema JSON: long " +
-          "9007199254740993 is outside the safe integer range",
-      );
-    });
+    assertThrows(
+      () => JSON.stringify(type),
+      Error,
+      "Cannot write the default of field 'a.b.R.big' to schema JSON: long " +
+        "9007199254740993 is outside the safe integer range",
+    );
   });
 
   it("names the field when a double default is not finite", () => {
@@ -294,7 +283,7 @@ describe("record field defaults in schema JSON", () => {
     );
   });
 
-  it("reads back unsafe long defaults exactly through parseJSON", () => {
+  it("reads unsafe defaults from external schema JSON without rounding", () => {
     for (
       const value of [
         9007199254740993n,
@@ -303,28 +292,27 @@ describe("record field defaults in schema JSON", () => {
         -9223372036854775808n,
       ]
     ) {
-      const first = createType(withDefault("long", value) as never);
-      const json = JSON.stringify(first);
-      const second = createType(parseJSON(json) as never) as RecordType;
-
-      assertEquals(JSON.stringify(second), json);
-      assertEquals(second.getField("f")!.getDefault(), value);
+      const json = '{"type":"record","name":"R","fields":[' +
+        `{"name":"f","type":"long","default":${value}}]}`;
+      const type = createType(parseJSON(json) as never) as RecordType;
+      assertEquals(type.getField("f")!.getDefault(), value);
+      assertThrows(
+        () => JSON.stringify(type),
+        Error,
+        "outside the safe integer range",
+      );
     }
   });
 
-  it("reads back unsafe longs nested in defaults exactly", () => {
-    const value = new Map([["k", [{ long: 9007199254740993n }, null]]]);
-    const first = createType(
-      withDefault(
-        { type: "map", values: { type: "array", items: ["long", "null"] } },
-        value,
-      ) as never,
+  it("reads unsafe defaults nested in external schema JSON without rounding", () => {
+    const json = '{"type":"record","name":"R","fields":[{"name":"f",' +
+      '"type":{"type":"map","values":{"type":"array","items":["long","null"]}},' +
+      '"default":{"k":[{"long":9007199254740993},null]}}]}';
+    const type = createType(parseJSON(json) as never) as RecordType;
+    assertEquals(
+      type.getField("f")!.getDefault(),
+      new Map([["k", [{ long: 9007199254740993n }, null]]]),
     );
-    const second = createType(
-      parseJSON(JSON.stringify(first)) as never,
-    ) as RecordType;
-
-    assertEquals(second.getField("f")!.getDefault(), value);
   });
 
   it("reads back an integral double default above 2^53 unchanged", () => {
@@ -342,32 +330,22 @@ describe("record field defaults in schema JSON", () => {
     }
   });
 
-  it("rebuilds a type from its toJSON() output with unsafe long defaults", () => {
-    const first = createType(record("R", [
-      { name: "n", type: "long", default: 9007199254740993n },
-      {
-        name: "u",
-        type: ["long", "null"],
-        default: { long: -9223372036854775808n },
-      },
-      {
-        name: "m",
-        type: { type: "map", values: "long" },
-        default: { k: 9223372036854775807n },
-      },
-      {
-        name: "t",
-        type: { type: "long", logicalType: "timestamp-micros" },
-        default: 9007199254740993n,
-      },
-    ]) as never) as RecordType;
-    const second = createType(first.toJSON() as never) as RecordType;
-
-    assertEquals(JSON.stringify(second), JSON.stringify(first));
-    for (const field of first.getFields()) {
-      assertEquals(
-        second.getField(field.getName())!.getDefault(),
-        field.getDefault(),
+  it("rejects unsafe defaults nested in arrays, maps, records, unions and logical types", () => {
+    const value = 9007199254740993n;
+    const cases: Array<[unknown, unknown]> = [
+      [{ type: "array", items: "long" }, [value]],
+      [{ type: "map", values: "long" }, { k: value }],
+      [record("In", [{ name: "n", type: "long" }]), { n: value }],
+      [["long", "null"], { long: value }],
+      [{ type: "long", logicalType: "timestamp-micros" }, value],
+    ];
+    for (const [type, defaultValue] of cases) {
+      const schema = createType(withDefault(type, defaultValue) as never);
+      assertThrows(
+        () => schema.toJSON(),
+        Error,
+        "Cannot write the default of field 'R.f' to schema JSON: long " +
+          `${value} is outside the safe integer range`,
       );
     }
   });

@@ -557,28 +557,13 @@ describe("LongType defaults", () => {
     );
   });
 
-  it("writes an unsafe long as a JSON number with all its digits", () => {
+  it("refuses unsafe defaults even when JSON.rawJSON is available", () => {
     for (const value of unsafe) {
-      assertEquals(JSON.stringify(type.defaultToJSON(value)), `${value}`);
-    }
-  });
-
-  it("refuses an unsafe long when the runtime has no JSON.rawJSON", () => {
-    const json = JSON as { rawJSON?: unknown };
-    const rawJSON = json.rawJSON;
-    json.rawJSON = undefined;
-    try {
-      for (const value of unsafe) {
-        assertThrows(
-          () => type.defaultToJSON(value),
-          Error,
-          `long ${value} is outside the safe integer range and this runtime ` +
-            "has no JSON.rawJSON",
-        );
-      }
-      assertEquals(type.defaultToJSON(5n), 5);
-    } finally {
-      json.rawJSON = rawJSON;
+      assertThrows(
+        () => type.defaultToJSON(value),
+        Error,
+        `long ${value} is outside the safe integer range`,
+      );
     }
   });
 
@@ -587,21 +572,9 @@ describe("LongType defaults", () => {
     assertEquals(type.cloneFromValue(type.defaultFromJSON(5)), 5n);
   });
 
-  it("reads back the raw JSON number it writes for an unsafe long", () => {
+  it("keeps bigint defaults read from external schemas exact", () => {
     for (const value of unsafe) {
-      assertEquals(type.defaultFromJSON(type.defaultToJSON(value)), value);
-    }
-    assertEquals(type.defaultFromJSON(9007199254740993n), 9007199254740993n);
-  });
-
-  it("reads values as they are when the runtime has no JSON.isRawJSON", () => {
-    const json = JSON as { isRawJSON?: unknown };
-    const isRawJSON = json.isRawJSON;
-    json.isRawJSON = undefined;
-    try {
-      assertEquals(type.defaultFromJSON(5), 5);
-    } finally {
-      json.isRawJSON = isRawJSON;
+      assertEquals(type.cloneFromValue(type.defaultFromJSON(value)), value);
     }
   });
 });

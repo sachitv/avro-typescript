@@ -10,8 +10,8 @@ const INTEGER_LITERAL = /^-?\d+$/;
 /**
  * Parses JSON like `JSON.parse`, except that an integer literal outside the
  * safe integer range is read as a `bigint` with all its digits instead of a
- * rounded number. Schemas write `long` defaults that large as JSON numbers
- * (see `LongType.defaultToJSON`), and this keeps them exact.
+ * rounded number. Schemas from external writers can contain `long` defaults
+ * that large as JSON numbers, and this keeps them exact.
  *
  * Needs the reviver's `context.source` (ES2025); on a runtime without it,
  * such literals are read as numbers, as `JSON.parse` does.

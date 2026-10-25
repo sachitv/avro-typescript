@@ -94,37 +94,17 @@ export class LongType extends PrimitiveType<bigint> {
   }
 
   /**
-   * Encodes a long as a JSON integer. A value outside the safe integer range
-   * is written as a raw JSON number token with all its digits, since a JS
-   * number would round it.
-   * @throws Error when the runtime has no `JSON.rawJSON` to write such a
-   * value exactly.
+   * Encodes a long as a JSON integer that ordinary `JSON.parse` can read
+   * without losing precision.
+   * @throws Error when the value is outside the safe integer range.
    */
   public override defaultToJSON(value: bigint): JSONType {
     if (value >= -MAX_SAFE_LONG && value <= MAX_SAFE_LONG) {
       return Number(value);
     }
-    const { rawJSON } = JSON as { rawJSON?: (text: string) => unknown };
-    if (typeof rawJSON !== "function") {
-      throw new Error(
-        `long ${value} is outside the safe integer range and this runtime has no JSON.rawJSON to write it exactly.`,
-      );
-    }
-    return rawJSON(value.toString()) as JSONType;
-  }
-
-  /**
-   * Reads a default. Besides a JSON number (or a bigint from `parseJSON`),
-   * this accepts the raw JSON number that {@link defaultToJSON} returns for a
-   * long outside the safe integer range, so `createType(type.toJSON())`
-   * works without a trip through `JSON.stringify`.
-   */
-  public override defaultFromJSON(value: unknown): unknown {
-    const { isRawJSON } = JSON as { isRawJSON?: (value: unknown) => boolean };
-    if (isRawJSON?.(value)) {
-      return BigInt((value as { rawJSON: string }).rawJSON);
-    }
-    return value;
+    throw new Error(
+      `long ${value} is outside the safe integer range and cannot be written as a JSON number without risking precision loss when parsed.`,
+    );
   }
 
   /** Creates a resolver for reading from the writer type. */
