@@ -221,6 +221,20 @@ function isIWritable(value: unknown): value is IWritableBuffer {
     typeof (value as IWritableBuffer).isValid === "function";
 }
 
+/** Scratch memory owned by a single {@link WritableTap}. */
+interface WriteScratch {
+  /** DataView over the whole scratch buffer, for float encoding. */
+  view: DataView;
+  /** The whole scratch buffer, for varint encoding. */
+  bytes: Uint8Array;
+  /** First byte of the scratch buffer, for booleans. */
+  oneByte: Uint8Array;
+  /** First four bytes of the scratch buffer, for floats. */
+  float32Bytes: Uint8Array;
+  /** First eight bytes of the scratch buffer, for doubles. */
+  float64Bytes: Uint8Array;
+}
+
 /** Abstract base class for tap implementations that manage buffer position. */
 export abstract class TapBase {
   /** The current position in the buffer. */
@@ -621,62 +635,48 @@ export class ReadableTap extends TapBase implements ReadableTapLike {
 /**
  * Binary tap that exposes Avro-compatible write helpers on top of a writable buffer.
  *
- * **IMPORTANT - Concurrency Constraints:**
+ * **Concurrency:**
  *
- * WritableTap uses static shared buffers for optimal performance. As a result:
+ * WritableTap keeps no static or module-level state. Each instance encodes
+ * numbers and booleans into its own scratch memory and reuses that memory
+ * only after the previous {@link IWritableBuffer.appendBytes} call has
+ * settled, which the `appendBytes` ownership contract makes safe. Separate
+ * WritableTap instances can therefore be written in parallel, including over
+ * stream-backed buffers whose sinks keep chunks by reference.
  *
- * 1. **Do NOT call write methods concurrently** across different WritableTap instances
- * 2. **Do NOT call write methods concurrently** on the same WritableTap instance
+ * Concurrent writes to the *same* tap (or to the same underlying buffer from
+ * several taps) remain unsupported: the cursor and the order of the appended
+ * bytes are only defined when each write is awaited before the next begins.
  *
- * Concurrent writes will result in data corruption due to shared buffer state.
- *
- * **Safe usage patterns:**
  * ```typescript
- * // ✅ SAFE: Sequential async writes
+ * // ✅ SAFE: Sequential writes to one tap
  * await tap1.writeInt(42);
- * await tap2.writeInt(43);
+ * await tap1.writeInt(43);
  *
- * // ❌ UNSAFE: Concurrent async writes
- * await Promise.all([
- *   tap1.writeInt(42),
- *   tap2.writeInt(43)
- * ]); // Data corruption!
+ * // ✅ SAFE: Parallel writes to separate taps over separate buffers
+ * await Promise.all([tap1.writeInt(42), tap2.writeInt(43)]);
  *
- * // ❌ UNSAFE: Interleaved calls (even if not concurrent)
- * const promise1 = tap1.writeInt(42);  // Starts, may yield
- * const promise2 = tap2.writeInt(43);  // Corrupts tap1's buffer!
- * await Promise.all([promise1, promise2]);
+ * // ❌ UNSUPPORTED: Overlapping writes to the same tap
+ * await Promise.all([tap1.writeInt(42), tap1.writeInt(43)]);
  * ```
  *
- * **Why this matters:**
- * The async write methods may yield control (via `await`) between setting up the
- * shared buffer and actually writing it. If another write starts during this window,
- * it will overwrite the shared buffer, corrupting the first write's data.
+ * Byte arrays supplied by callers (to `writeFixed` or `writeBytes`) are passed
+ * to the buffer as-is; callers must not mutate them until the returned promise
+ * resolves. After that, the buffer contract guarantees the written bytes no
+ * longer depend on the caller's array.
  */
 export class WritableTap extends TapBase implements WritableTapLike {
   /** The writable buffer backing this tap. */
   private readonly buffer: IWritableBuffer;
 
-  // Buffer pool optimization: Static shared buffers to avoid per-operation allocations
-  // Reduces GC pressure and improves performance for hot serialization paths
-  // WARNING: These shared buffers make concurrent writes unsafe - see class documentation
-  private static floatBuffer = new ArrayBuffer(8);
-  private static floatView = new DataView(WritableTap.floatBuffer);
-  private static float32Bytes = new Uint8Array(
-    WritableTap.floatBuffer,
-    0,
-    4,
-  );
-  private static float64Bytes = new Uint8Array(
-    WritableTap.floatBuffer,
-    0,
-    8,
-  );
-  private static trueByte = new Uint8Array([1]);
-  private static falseByte = new Uint8Array([0]);
-
-  private static varintBufferLong = new Uint8Array(11); // Max 11 bytes for 64-bit long (2^70 needs 11 bytes)
-  private static varintBufferInt = new Uint8Array(5); // Max 5 bytes for zigzag-encoded int32
+  /**
+   * Per-instance scratch memory for varints, floats, doubles, and booleans,
+   * created on first use. Allocating a backing store per write is far slower
+   * than reusing one, and a per-instance buffer keeps separate taps from ever
+   * sharing memory. A view of it is only reused after the `appendBytes` call
+   * that received it has settled.
+   */
+  private scratch?: WriteScratch;
 
   /**
    * Creates a new WritableTap instance.
@@ -721,15 +721,15 @@ export class WritableTap extends TapBase implements WritableTapLike {
    * @param value Boolean value to write.
    */
   async writeBoolean(value: boolean): Promise<void> {
-    await this.appendRawBytes(
-      value ? WritableTap.trueByte : WritableTap.falseByte,
-    );
+    const scratch = this.getScratch();
+    scratch.bytes[0] = value ? 1 : 0;
+    await this.appendRawBytes(scratch.oneByte);
   }
 
   /**
    * Writes a zig-zag encoded 32-bit signed integer.
    * Uses a 32-bit zig-zag + varint path to avoid BigInt casts for performance.
-   * Uses pre-allocated buffer to avoid allocations.
+   * Encodes into this tap's scratch memory to avoid allocations.
    *
    * In local benchmarks, this approach is approximately 27% faster than using BigInt operations.
    *
@@ -749,7 +749,7 @@ export class WritableTap extends TapBase implements WritableTapLike {
     // Zigzag encode to an unsigned 32-bit integer:
     // (n << 1) ^ (n >> 31)
     let value = ((n << 1) ^ (n >> 31)) >>> 0;
-    const buf = WritableTap.varintBufferInt;
+    const buf = this.getScratch().bytes;
     let i = 0;
     while (value > 0x7f) {
       buf[i++] = (value & 0x7f) | 0x80;
@@ -761,7 +761,7 @@ export class WritableTap extends TapBase implements WritableTapLike {
 
   /**
    * Writes a zig-zag encoded 64-bit signed integer.
-   * Uses pre-allocated buffer to avoid allocations.
+   * Encodes into this tap's scratch memory to avoid allocations.
    *
    * Performance optimization: Uses BigInt.asUintN(64, ...) to signal to V8's Turbofan that
    * all operations are on 64-bit values, enabling int64 lowering optimizations.
@@ -796,7 +796,7 @@ export class WritableTap extends TapBase implements WritableTapLike {
     }
 
     let i = 0;
-    const buf = WritableTap.varintBufferLong;
+    const buf = this.getScratch().bytes;
     while (n >= 0x80n) {
       buf[i++] = Number(n & 0x7fn) | 0x80;
       n = BigInt.asUintN(64, n >> 7n);
@@ -807,22 +807,41 @@ export class WritableTap extends TapBase implements WritableTapLike {
 
   /**
    * Writes a 32-bit little-endian floating point number.
-   * Uses pre-allocated buffer to avoid allocations.
+   * Encodes into this tap's scratch memory to avoid allocations.
    * @param value Float to write.
    */
   async writeFloat(value: number): Promise<void> {
-    WritableTap.floatView.setFloat32(0, value, true);
-    await this.appendRawBytes(WritableTap.float32Bytes);
+    const scratch = this.getScratch();
+    scratch.view.setFloat32(0, value, true);
+    await this.appendRawBytes(scratch.float32Bytes);
   }
 
   /**
    * Writes a 64-bit little-endian floating point number.
-   * Uses pre-allocated buffer to avoid allocations.
+   * Encodes into this tap's scratch memory to avoid allocations.
    * @param value Double precision value to write.
    */
   async writeDouble(value: number): Promise<void> {
-    WritableTap.floatView.setFloat64(0, value, true);
-    await this.appendRawBytes(WritableTap.float64Bytes);
+    const scratch = this.getScratch();
+    scratch.view.setFloat64(0, value, true);
+    await this.appendRawBytes(scratch.float64Bytes);
+  }
+
+  /** Returns this tap's scratch memory, creating it on first use. */
+  private getScratch(): WriteScratch {
+    if (this.scratch === undefined) {
+      // Max 11 bytes for a 64-bit varint (2^70 needs 11 bytes); rounded up.
+      const buffer = new ArrayBuffer(16);
+      const bytes = new Uint8Array(buffer);
+      this.scratch = {
+        view: new DataView(buffer),
+        bytes,
+        oneByte: bytes.subarray(0, 1),
+        float32Bytes: bytes.subarray(0, 4),
+        float64Bytes: bytes.subarray(0, 8),
+      };
+    }
+    return this.scratch;
   }
 
   /**

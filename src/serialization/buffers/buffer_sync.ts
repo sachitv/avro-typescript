@@ -34,6 +34,12 @@ export interface ISyncWritable {
    * Appends bytes to the buffer, advancing its internal write cursor when the
    * operation succeeds.
    *
+   * Ownership contract: `data` is only borrowed for the duration of the call.
+   * Implementations must not retain a reference to `data` (or its underlying
+   * `ArrayBuffer`) after returning; anything they keep, or hand on to a
+   * consumer that may keep it, must be a copy. Callers may reuse or mutate
+   * `data` as soon as the call returns.
+   *
    * @throws WriteBufferError when the buffer cannot accept the requested bytes.
    */
   appendBytes(data: Uint8Array): void;
@@ -41,6 +47,11 @@ export interface ISyncWritable {
   /**
    * Appends a slice of bytes to the buffer without requiring callers to create
    * a subarray view.
+   *
+   * Follows the same ownership contract as `appendBytes`. `SyncWritableTap`
+   * passes scratch memory here that is shared by every `SyncWritableTap` in
+   * the process, so implementations must copy the bytes before returning and
+   * must not write through any `SyncWritableTap` before they have done so.
    */
   appendBytesFrom(data: Uint8Array, offset: number, length: number): void;
 

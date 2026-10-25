@@ -489,6 +489,16 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
  * - Varint encoding: Direct buffer writing avoids intermediate allocations
  * - ASCII string optimization: Fast path for ASCII strings, encodeInto() for Unicode
  * - Static primitive buffers: Reuse buffers for booleans, floats, and doubles
+ *
+ * **Shared scratch memory:** the static buffers above are shared by every
+ * SyncWritableTap in the process and are passed straight to
+ * {@link ISyncWritable.appendBytesFrom}. This is safe because synchronous
+ * writes cannot interleave and the {@link ISyncWritable} contract requires
+ * buffers to copy the bytes before returning. A custom buffer that keeps a
+ * reference to the passed array, or that writes through another
+ * SyncWritableTap before copying, would see its bytes overwritten. (The async
+ * `WritableTap` cannot rely on this, because its buffers may await
+ * before consuming the bytes, so it uses per-instance scratch memory.)
  */
 export class SyncWritableTap extends TapBase implements SyncWritableTapLike {
   private readonly buffer: ISyncWritable;

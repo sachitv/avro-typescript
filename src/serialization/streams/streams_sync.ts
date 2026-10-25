@@ -26,11 +26,16 @@ export interface ISyncStreamReadableBuffer {
 export interface ISyncStreamWritableBuffer {
   /**
    * Writes bytes to the stream.
+   *
+   * `data` is only borrowed for the duration of the call: implementations must
+   * copy anything they keep (or pass downstream) before returning, and callers
+   * may reuse or mutate `data` as soon as the call returns.
    */
   writeBytes(data: Uint8Array): void;
 
   /**
    * Writes a slice of bytes to the stream without requiring a subarray view.
+   * Follows the same ownership contract as `writeBytes`.
    */
   writeBytesFrom(data: Uint8Array, offset: number, length: number): void;
 
