@@ -415,11 +415,18 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
   }
 
   /**
+   * Reads a length prefix as a number. Avro encodes lengths as longs.
+   */
+  readLength(context: string): number {
+    return bigIntToSafeNumber(this.readLong(), context);
+  }
+
+  /**
    * Reads a length-prefixed byte sequence.
    * Uses readInt() for lengths (string/bytes lengths are practically always < 2GB).
    */
   readBytes(): Readonly<Uint8Array> {
-    const length = this.readInt();
+    const length = this.readLength("readBytes length");
     if (length < 0) {
       throw new RangeError(`Invalid negative bytes length: ${length}`);
     }
@@ -428,7 +435,7 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
 
   /** Skips a length-prefixed byte sequence. */
   skipBytes(): void {
-    const len = this.readInt();
+    const len = this.readLength("skipBytes length");
     if (len < 0) {
       throw new RangeError(`Invalid negative bytes length: ${len}`);
     }
@@ -437,20 +444,19 @@ export class SyncReadableTap extends TapBase implements SyncReadableTapLike {
 
   /**
    * Reads a length-prefixed UTF-8 string.
-   * Uses readInt() since string lengths are practically always < 2GB.
    */
   readString(): string {
-    const len = this.readInt();
+    const len = this.readLength("readString length");
     if (len < 0) {
       throw new RangeError(`Invalid negative string length: ${len}`);
     }
     const bytes = this.readFixed(len);
-    return decode(bytes);
+    return decodeWithFastPath(bytes);
   }
 
   /** Skips a length-prefixed UTF-8 string. */
   skipString(): void {
-    const len = this.readInt();
+    const len = this.readLength("skipString length");
     if (len < 0) {
       throw new RangeError(`Invalid negative string length: ${len}`);
     }

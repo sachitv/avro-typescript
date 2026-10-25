@@ -7,7 +7,14 @@ import {
   SyncWritableTap,
 } from "../../../serialization/tap_sync.ts";
 import { DirectSyncReadableTap } from "../../../serialization/direct_tap_sync.ts";
-import { ArrayType, readArrayInto, readArrayIntoSync } from "../array_type.ts";
+import { ArrayType, readArrayInto } from "../array_type.ts";
+import { createRecord } from "./record_test_utils.ts";
+import {
+  CompiledReaderStrategy,
+  type CompiledSyncReader,
+  InterpretedReaderStrategy,
+  type RecordReaderContext,
+} from "../record_reader_strategy.ts";
 import { IntType } from "../../primitive/int_type.ts";
 import { LongType } from "../../primitive/long_type.ts";
 import { FloatType } from "../../primitive/float_type.ts";
@@ -937,14 +944,20 @@ describe("ArrayType", () => {
         await recordArray.toBuffer([value]),
       );
       assert(Object.hasOwn(asyncDecoded, "__proto__"));
-      assertEquals(asyncDecoded["__proto__"], "safe");
+      assertEquals(
+        (asyncDecoded as Record<string, unknown>)["__proto__"],
+        "safe",
+      );
       assertEquals(Object.getPrototypeOf(asyncDecoded), Object.prototype);
 
       const [syncDecoded] = recordArray.fromSyncBuffer(
         recordArray.toSyncBuffer([value]),
       );
       assert(Object.hasOwn(syncDecoded, "__proto__"));
-      assertEquals(syncDecoded["__proto__"], "safe");
+      assertEquals(
+        (syncDecoded as Record<string, unknown>)["__proto__"],
+        "safe",
+      );
       assertEquals(Object.getPrototypeOf(syncDecoded), Object.prototype);
     });
   });

@@ -1,6 +1,6 @@
 {
   "name": "@sachitv/avro-typescript",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "exports": "./src/mod.ts",
   "workspace": [
     "./packages/benchmarks"

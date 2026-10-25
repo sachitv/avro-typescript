@@ -104,7 +104,7 @@ export interface RecordWriterStrategy {
  * Checks if a type is a RecordType without importing it (avoids circular dependency).
  */
 function isRecordType(type: Type): boolean {
-  return type.constructor.name === "RecordType";
+  return "__AVRO_RECORD_TYPE__" in type.constructor;
 }
 
 /**

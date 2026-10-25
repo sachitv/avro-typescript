@@ -21,6 +21,30 @@ export type CompiledReader = (tap: ReadableTapLike) => Promise<unknown>;
 export type CompiledSyncReader = (tap: SyncReadableTapLike) => unknown;
 
 /**
+ * Internal capability for obtaining an assembled asynchronous record reader.
+ */
+export const compiledRecordReader: unique symbol = Symbol.for(
+  "@sachitv/avro-typescript/compiled-record-reader/v1",
+);
+
+/** A type exposing its assembled asynchronous record reader. */
+export interface CompiledRecordReaderProvider {
+  /** Returns this type's assembled asynchronous record reader. */
+  [compiledRecordReader](): CompiledReader;
+}
+
+/** Internal capability for obtaining an assembled synchronous record reader. */
+export const compiledSyncRecordReader: unique symbol = Symbol.for(
+  "@sachitv/avro-typescript/compiled-sync-record-reader/v1",
+);
+
+/** A type exposing its assembled synchronous record reader. */
+export interface CompiledSyncRecordReaderProvider {
+  /** Returns this type's assembled synchronous record reader. */
+  [compiledSyncRecordReader](): CompiledSyncReader;
+}
+
+/**
  * Context passed to strategy methods for assembling record readers.
  */
 export interface RecordReaderContext {

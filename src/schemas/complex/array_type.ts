@@ -13,6 +13,12 @@ import type {
   SyncWritableTapLike,
 } from "../../serialization/tap_sync.ts";
 import type { DirectSyncReadableTap } from "../../serialization/direct_tap_sync.ts";
+import { IntType } from "../primitive/int_type.ts";
+import { LongType } from "../primitive/long_type.ts";
+import { FloatType } from "../primitive/float_type.ts";
+import { DoubleType } from "../primitive/double_type.ts";
+import { BooleanType } from "../primitive/boolean_type.ts";
+import { StringType } from "../primitive/string_type.ts";
 
 /**
  * Helper function to read an array from a tap.
@@ -56,9 +62,12 @@ export interface ArrayTypeParams<T> {
 /**
  * Avro `array` type for homogeneous collections of items described by a schema.
  */
+type BulkArrayKind = "int" | "long" | "float" | "double" | "boolean" | "string";
+
 export class ArrayType<T = unknown> extends BaseType<T[]> {
   readonly #itemsType: Type<T>;
   #primitiveKind: string | null | undefined = undefined;
+  #bulkKind: BulkArrayKind | null | undefined = undefined;
 
   /**
    * Creates a new ArrayType.
@@ -74,16 +83,7 @@ export class ArrayType<T = unknown> extends BaseType<T[]> {
 
   #getPrimitiveKind(): string | null {
     if (this.#primitiveKind === undefined) {
-      const json = this.#itemsType.toJSON();
-      if (
-        typeof json === "string" &&
-        (json === "int" || json === "long" || json === "float" ||
-          json === "double" || json === "boolean" || json === "string")
-      ) {
-        this.#primitiveKind = json;
-      } else {
-        this.#primitiveKind = null;
-      }
+      this.#primitiveKind = this.#getBulkKind();
     }
     return this.#primitiveKind;
   }

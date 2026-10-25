@@ -1,6 +1,7 @@
 import { decode } from "./text_encoding.ts";
 import type { SyncReadableTapLike } from "./tap_sync.ts";
 import { compareUint8Arrays } from "./compare_bytes.ts";
+import { bigIntToSafeNumber } from "./conversion.ts";
 
 /**
  * High-performance synchronous readable tap that works directly on a Uint8Array.
@@ -37,6 +38,11 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
   /** Sets the current position in the buffer. */
   set pos(value: number) {
     this.#pos = value;
+  }
+
+  /** Returns the current cursor position within the buffer. */
+  getPos(): number {
+    return this.#pos;
   }
 
   /** Returns whether the cursor is positioned within the buffer bounds. */
@@ -123,6 +129,11 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
     return BigInt.asIntN(64, shifted ^ sign);
   }
 
+  /** Reads a length prefix as a number. */
+  readLength(context: string): number {
+    return bigIntToSafeNumber(this.readLong(), context);
+  }
+
   /** Skips a zig-zag encoded 32-bit integer. */
   skipInt(): void {
     this.skipLong();
@@ -174,7 +185,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
 
   /** Reads a length-prefixed byte sequence. */
   readBytes(): Readonly<Uint8Array> {
-    const length = this.readInt();
+    const length = this.readLength("readBytes length");
     if (length < 0) {
       throw new RangeError(`Invalid negative bytes length: ${length}`);
     }
@@ -183,7 +194,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
 
   /** Skips a length-prefixed byte sequence. */
   skipBytes(): void {
-    const len = this.readInt();
+    const len = this.readLength("skipBytes length");
     if (len < 0) {
       throw new RangeError(`Invalid negative bytes length: ${len}`);
     }
@@ -192,7 +203,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
 
   /** Reads a length-prefixed UTF-8 string. */
   readString(): string {
-    const len = this.readInt();
+    const len = this.readLength("readString length");
     if (len < 0) {
       throw new RangeError(`Invalid negative string length: ${len}`);
     }
@@ -203,7 +214,7 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
 
   /** Skips a length-prefixed UTF-8 string. */
   skipString(): void {
-    const len = this.readInt();
+    const len = this.readLength("skipString length");
     if (len < 0) {
       throw new RangeError(`Invalid negative string length: ${len}`);
     }
@@ -275,9 +286,9 @@ export class DirectSyncReadableTap implements SyncReadableTapLike {
 
   /** Compares length-prefixed strings from this tap and another. */
   matchString(tap: SyncReadableTapLike): number {
-    const l1 = this.readInt();
+    const l1 = this.readLength("matchString length this");
     const b1 = this.readFixed(l1);
-    const l2 = tap.readInt();
+    const l2 = tap.readLength("matchString length tap");
     const b2 = tap.readFixed(l2);
     return compareUint8Arrays(b1, b2);
   }
