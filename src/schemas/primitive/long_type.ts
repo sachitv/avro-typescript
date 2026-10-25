@@ -107,6 +107,19 @@ export class LongType extends PrimitiveType<bigint> {
     );
   }
 
+  /**
+   * Refuses JSON numbers that may already have lost precision. Programmatic
+   * schemas can supply a bigint instead, preserving its exact value.
+   */
+  public override defaultFromJSON(value: unknown): unknown {
+    if (typeof value === "number" && !Number.isSafeInteger(value)) {
+      throw new Error(
+        `long default ${value} is not a safe integer JSON number; supply an exact bigint in a programmatic schema instead.`,
+      );
+    }
+    return value;
+  }
+
   /** Creates a resolver for reading from the writer type. */
   public override createResolver(writerType: Type): Resolver {
     if (writerType instanceof IntType) {

@@ -572,7 +572,17 @@ describe("LongType defaults", () => {
     assertEquals(type.cloneFromValue(type.defaultFromJSON(5)), 5n);
   });
 
-  it("keeps bigint defaults read from external schemas exact", () => {
+  it("refuses unsafe or fractional numeric defaults before cloning", () => {
+    for (const value of [9007199254740992, -9007199254740992, 1.5, Infinity]) {
+      assertThrows(
+        () => type.defaultFromJSON(value),
+        Error,
+        "not a safe integer JSON number",
+      );
+    }
+  });
+
+  it("keeps exact bigint defaults in programmatic schemas", () => {
     for (const value of unsafe) {
       assertEquals(type.cloneFromValue(type.defaultFromJSON(value)), value);
     }

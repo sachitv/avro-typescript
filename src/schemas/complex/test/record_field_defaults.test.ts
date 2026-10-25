@@ -4,7 +4,6 @@ import { createType } from "../../../type/create_type.ts";
 import { createRecord } from "./record_test_utils.ts";
 import type { RecordType } from "../record_type.ts";
 import type { Type } from "../../type.ts";
-import { parseJSON } from "../../../internal/json.ts";
 
 /** Bytes 0x00-0xff as a JSON byte string. */
 const ALL_BYTES_JSON = String.fromCharCode(
@@ -283,36 +282,107 @@ describe("record field defaults in schema JSON", () => {
     );
   });
 
-  it("reads unsafe defaults from external schema JSON without rounding", () => {
+  it("rejects unsafe JSON long literals in every numeric spelling", () => {
     for (
-      const value of [
-        9007199254740993n,
-        -9007199254740993n,
-        9223372036854775807n,
-        -9223372036854775808n,
+      const literal of [
+        "9007199254740993",
+        "9007199254740993.0",
+        "9007199254740993e0",
+        "-9007199254740993",
       ]
     ) {
       const json = '{"type":"record","name":"R","fields":[' +
-        `{"name":"f","type":"long","default":${value}}]}`;
-      const type = createType(parseJSON(json) as never) as RecordType;
-      assertEquals(type.getField("f")!.getDefault(), value);
+        `{"name":"f","type":"long","default":${literal}}]}`;
       assertThrows(
-        () => JSON.stringify(type),
+        () => createType(JSON.parse(json)).toJSON(),
         Error,
-        "outside the safe integer range",
+        "not a safe integer JSON number",
       );
     }
   });
 
-  it("reads unsafe defaults nested in external schema JSON without rounding", () => {
-    const json = '{"type":"record","name":"R","fields":[{"name":"f",' +
-      '"type":{"type":"map","values":{"type":"array","items":["long","null"]}},' +
-      '"default":{"k":[{"long":9007199254740993},null]}}]}';
-    const type = createType(parseJSON(json) as never) as RecordType;
-    assertEquals(
-      type.getField("f")!.getDefault(),
-      new Map([["k", [{ long: 9007199254740993n }, null]]]),
+  it("preserves __proto__ in nested record defaults, including filled defaults", () => {
+    const inner = record("In", [{
+      name: "__proto__",
+      type: "int",
+      default: 7,
+    }]);
+    assertDefaultRoundTrip(
+      withDefault(inner, JSON.parse('{"__proto__":3}')),
+      JSON.parse('{"__proto__":3}'),
     );
+    assertDefaultRoundTrip(
+      withDefault(inner, {}),
+      JSON.parse('{"__proto__":7}'),
+    );
+  });
+
+  it("compares nested map defaults independently of insertion order", () => {
+    const config = (value: unknown): Type =>
+      createType(record("Config", [{
+        name: "m",
+        type: { type: "map", values: { type: "map", values: "int" } },
+        default: value,
+      }]) as never);
+    const first = config(
+      new Map([["b", new Map([["y", 2], ["x", 1]])], [
+        "a",
+        new Map([["z", 3]]),
+      ]]),
+    );
+    const second = config(
+      new Map([["a", new Map([["z", 3]])], [
+        "b",
+        new Map([["x", 1], ["y", 2]]),
+      ]]),
+    );
+    const outer = createRecord({
+      name: "Outer",
+      fields: [{ name: "a", type: first }, { name: "b", type: second }],
+    });
+    assertEquals(
+      (outer.toJSON() as { fields: Array<{ type: unknown }> }).fields[1].type,
+      "Config",
+    );
+    assertEquals(
+      JSON.stringify(first).includes(
+        '"default":{"b":{"y":2,"x":1},"a":{"z":3}}',
+      ),
+      true,
+    );
+  });
+
+  it("keeps array-default order significant when comparing named types", () => {
+    const config = (value: number[]): Type =>
+      createType(
+        record("Config", [{
+          name: "a",
+          type: { type: "array", items: "int" },
+          default: value,
+        }]) as never,
+      );
+    const outer = createRecord({
+      name: "Outer",
+      fields: [{ name: "a", type: config([1, 2]) }, {
+        name: "b",
+        type: config([2, 1]),
+      }],
+    });
+    assertThrows(
+      () => outer.toJSON(),
+      Error,
+      "Duplicate Avro type name: Config",
+    );
+  });
+
+  it("rejects numeric JSON decimal defaults while accepting runtime bigints", () => {
+    const decimal = { type: "bytes", logicalType: "decimal", precision: 20 };
+    const json = JSON.stringify(withDefault(decimal, 9007199254740992));
+    assertThrows(() => createType(JSON.parse(json)).toJSON());
+    const type = createType(
+      withDefault(decimal, 9007199254740993n) as never,
+    ) as RecordType;
+    assertEquals(type.getField("f")!.getDefault(), 9007199254740993n);
   });
 
   it("reads back an integral double default above 2^53 unchanged", () => {
@@ -320,7 +390,7 @@ describe("record field defaults in schema JSON", () => {
       const first = createType(withDefault(type, 1e20) as never);
       const json = JSON.stringify(first);
       assertEquals(json.includes('"default":100000000000000000000'), true);
-      const second = createType(parseJSON(json) as never) as RecordType;
+      const second = createType(JSON.parse(json)) as RecordType;
 
       assertEquals(JSON.stringify(second), json);
       assertEquals(

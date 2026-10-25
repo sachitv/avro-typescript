@@ -160,7 +160,7 @@ export function sameSchema(a: Type, b: Type, scope: SchemaJSONScope): boolean {
   try {
     const schemaA = a.schemaJSON(new SchemaJSONScope(scope.comparison));
     const schemaB = b.schemaJSON(new SchemaJSONScope(scope.comparison));
-    same = safeStringify(schemaA) === safeStringify(schemaB);
+    same = comparisonJSON(schemaA) === comparisonJSON(schemaB);
   } finally {
     comparing.delete(a, b);
   }
@@ -168,6 +168,21 @@ export function sameSchema(a: Type, b: Type, scope: SchemaJSONScope): boolean {
     equal.add(a, b);
   }
   return same;
+}
+
+/** Compares object properties without changing schema output or array order. */
+function comparisonJSON(schema: JSONType): string {
+  return JSON.stringify(
+    schema,
+    (_key, value) =>
+      value !== null && typeof value === "object" && !Array.isArray(value)
+        ? Object.fromEntries(
+          Object.entries(value).sort(([left], [right]) =>
+            left.localeCompare(right)
+          ),
+        )
+        : value,
+  );
 }
 
 /**

@@ -12,7 +12,6 @@ import {
   toArrayBuffer,
 } from "../protocol/protocol_helpers.ts";
 import { createType } from "../../type/create_type.ts";
-import { parseJSON } from "../../internal/json.ts";
 import type {
   BinaryDuplexLike,
   BinaryWritable,
@@ -24,7 +23,6 @@ import { readRequestPayload } from "./helpers.ts";
 import type {
   CallRequestEnvelopeDecoder,
   MessageTransportOptions,
-  ProtocolDefinition,
   ProtocolFactory,
   ProtocolLike,
 } from "../definitions/protocol_definitions.ts";
@@ -234,9 +232,7 @@ export class StatelessListener extends MessageListener {
         } else {
           try {
             // Basic JSON validation
-            const parsedProtocol = parseJSON<ProtocolDefinition>(
-              handshake.clientProtocol,
-            );
+            const parsedProtocol = JSON.parse(handshake.clientProtocol);
             const emitterProtocol = this.#protocolFactory(parsedProtocol);
             this.protocol.ensureListenerResolvers(
               clientHashKey,

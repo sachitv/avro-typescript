@@ -1,7 +1,6 @@
 import { createType, type SchemaLike } from "../type/create_type.ts";
 import type { Resolver } from "../schemas/resolver.ts";
 import { Type } from "../schemas/type.ts";
-import { parseJSON } from "../internal/json.ts";
 import { ReadableTap } from "./tap.ts";
 import { SyncReadableTap } from "./tap_sync.ts";
 import type { IReadableBuffer } from "./buffers/buffer.ts";
@@ -224,7 +223,7 @@ export class AvroFileParser {
       throw new Error("AVRO schema not found in metadata");
     }
     const schemaStr = new TextDecoder().decode(schemaJson);
-    const schemaType = createType(parseJSON<SchemaLike>(schemaStr));
+    const schemaType = createType(JSON.parse(schemaStr));
 
     // Validate that we have a decoder for the codec
     const codec = meta.get("avro.codec");
@@ -275,7 +274,7 @@ export class AvroFileParser {
     if (typeof schema === "string") {
       const trimmed = schema.trim();
       if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-        const parsed = parseJSON<SchemaLike>(trimmed);
+        const parsed = JSON.parse(trimmed);
         return createType(parsed);
       }
       return createType(schema);

@@ -8,7 +8,12 @@
  * complete, valid description of the data, including named types that are
  * reused, recursive, namespaced, or wrapped in logical types.
  */
-import { assertEquals, assertInstanceOf, assertThrows } from "@std/assert";
+import {
+  assertEquals,
+  assertInstanceOf,
+  assertRejects,
+  assertThrows,
+} from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { AvroFileParser } from "../avro_file_parser.ts";
 import { SyncAvroFileParser } from "../avro_file_parser_sync.ts";
@@ -16,9 +21,6 @@ import { AvroFileWriter } from "../avro_file_writer.ts";
 import { SyncReadableTap } from "../tap_sync.ts";
 import { HEADER_TYPE } from "../avro_constants.ts";
 import { createType } from "../../type/create_type.ts";
-import { parseJSON } from "../../internal/json.ts";
-import { parseHeader } from "../container/parse_header.ts";
-import { isNeedMore } from "../container/need_more.ts";
 import { FixedType } from "../../schemas/complex/fixed_type.ts";
 import type { RecordType } from "../../schemas/complex/record_type.ts";
 import { DecimalLogicalType } from "../../schemas/logical/decimal_logical_type.ts";
@@ -60,12 +62,29 @@ function embeddedSchema(bytes: Uint8Array): string {
   );
 }
 
+/** Models an external writer by replacing only the container schema metadata. */
+function withEmbeddedSchema(original: Uint8Array, text: string): Uint8Array {
+  const tap = new SyncReadableTap(original.slice().buffer);
+  const rawHeader = HEADER_TYPE.readSync(tap) as {
+    magic: Uint8Array;
+    meta: Map<string, Uint8Array>;
+    sync: Uint8Array;
+  };
+  rawHeader.meta.set("avro.schema", new TextEncoder().encode(text));
+  const header = new Uint8Array(HEADER_TYPE.toSyncBuffer(rawHeader));
+  const body = original.subarray(tap.getPos());
+  const file = new Uint8Array(header.length + body.length);
+  file.set(header);
+  file.set(body, header.length);
+  return file;
+}
+
 /** Writes, rewrites with the embedded schema, and checks both files agree. */
 function assertRoundTrip(schema: unknown, records: unknown[]): void {
   const first = writeFile(schema, records);
   const firstSchema = embeddedSchema(first);
 
-  const second = writeFile(parseJSON(firstSchema), records);
+  const second = writeFile(JSON.parse(firstSchema), records);
 
   assertEquals(embeddedSchema(second), firstSchema);
   assertEquals(second, first);
@@ -375,88 +394,76 @@ describe("schema round trip through a container file", () => {
     );
   });
 
-  it("reads external files with unsafe defaults without rounding", async () => {
+  it("refuses unsafe defaults in external headers and reader schemas", async () => {
     const schema = {
       type: "record",
       name: "Big",
-      fields: [
-        { name: "id", type: "int" },
-        { name: "big", type: "long" },
-        { name: "min", type: "long" },
-        { name: "ratio", type: "double" },
-      ],
+      fields: [{ name: "id", type: "long" }],
     };
-    const records = [{ id: 1, big: 2n, min: 3n, ratio: 0.5 }];
-    const original = writeFile(schema, records);
-    const tap = new SyncReadableTap(original.slice().buffer);
-    const rawHeader = HEADER_TYPE.readSync(tap) as {
-      magic: Uint8Array;
-      meta: Map<string, Uint8Array>;
-      sync: Uint8Array;
-    };
-    // Model an external writer's schema JSON. Our writers refuse unsafe defaults.
+    const original = writeFile(schema, [{ id: 1n }]);
     const text = '{"type":"record","name":"Big","fields":[' +
-      '{"name":"id","type":"int"},' +
-      '{"name":"big","type":"long","default":9007199254740993},' +
-      '{"name":"min","type":"long","default":-9223372036854775808},' +
-      '{"name":"ratio","type":"double","default":100000000000000000000}]}';
-    rawHeader.meta.set("avro.schema", new TextEncoder().encode(text));
-    const encodedHeader = new Uint8Array(HEADER_TYPE.toSyncBuffer(rawHeader));
-    const body = original.subarray(tap.getPos());
-    const file = new Uint8Array(encodedHeader.length + body.length);
-    file.set(encodedHeader);
-    file.set(body, encodedHeader.length);
-    assertEquals(Array.from(parser(file).iterRecords()), records);
+      '{"name":"id","type":"long","default":9007199254740993.0}]}';
+    const file = withEmbeddedSchema(original, text);
+    const message = "not a safe integer JSON number";
+    assertThrows(() => Array.from(parser(file).iterRecords()), Error, message);
+    await assertRejects(
+      async () => {
+        const p = new AvroFileParser(
+          new InMemoryReadableBuffer(file.slice().buffer),
+        );
+        for await (const _ of p.iterRecords()) { /* header must be rejected */ }
+      },
+      Error,
+      message,
+    );
+    assertThrows(
+      () =>
+        Array.from(
+          new SyncAvroFileParser(
+            new SyncInMemoryReadableBuffer(original.slice().buffer),
+            { readerSchema: text },
+          ).iterRecords(),
+        ),
+      Error,
+      message,
+    );
+    await assertRejects(
+      async () => {
+        const p = new AvroFileParser(
+          new InMemoryReadableBuffer(original.slice().buffer),
+          { readerSchema: text },
+        );
+        for await (const _ of p.iterRecords()) {
+          /* reader schema must be rejected */
+        }
+      },
+      Error,
+      message,
+    );
+  });
 
-    const header = parseHeader(file);
-    if (isNeedMore(header)) {
-      throw new Error("unexpected NeedMore");
-    }
-    // The raw header schema holds every integer literal above 2^53 as a
-    // bigint; the double's type turns its default back into a number.
-    assertEquals(
-      (header.schema as { fields: Array<{ default?: unknown }> }).fields.map(
-        (field) => field.default,
-      ),
-      [
-        undefined,
-        9007199254740993n,
-        -9223372036854775808n,
-        100000000000000000000n,
-      ],
-    );
-    const parsedType = createType(header.schema as never) as RecordType;
-    assertEquals(
-      parsedType.getFields().map((field) =>
-        field.hasDefault() ? field.getDefault() : undefined
-      ),
-      [undefined, 9007199254740993n, -9223372036854775808n, 1e20],
-    );
-
-    // A reader schema given as a JSON string keeps the defaults exactly too,
-    // through both parsers.
-    const reader = '{"type":"record","name":"Big","fields":[' +
-      '{"name":"id","type":"int"},' +
-      '{"name":"extra","type":"long","default":9223372036854775807}]}';
-    const expected = [{ id: 1, extra: 9223372036854775807n }];
-    assertEquals(
-      Array.from(
-        new SyncAvroFileParser(
-          new SyncInMemoryReadableBuffer(file.slice().buffer),
-          { readerSchema: reader },
-        ).iterRecords(),
-      ),
-      expected,
-    );
-    const asyncParser = new AvroFileParser(
-      new InMemoryReadableBuffer(file.slice().buffer),
-      { readerSchema: reader },
-    );
-    const read: unknown[] = [];
-    for await (const record of asyncParser.iterRecords()) {
-      read.push(record);
-    }
-    assertEquals(read, expected);
+  it("rejects numeric decimal defaults in an external container schema", async () => {
+    const decimal = { type: "bytes", logicalType: "decimal", precision: 20 };
+    const schema = {
+      type: "record",
+      name: "Money",
+      fields: [{ name: "amount", type: decimal }],
+    };
+    const original = writeFile(schema, [{ amount: 1n }]);
+    const text = JSON.stringify({
+      ...schema,
+      fields: [{ ...schema.fields[0], default: 9007199254740992 }],
+    });
+    const file = withEmbeddedSchema(original, text);
+    assertThrows(() => Array.from(parser(file).iterRecords()));
+    await assertRejects(async () => {
+      const p = new AvroFileParser(
+        new InMemoryReadableBuffer(file.slice().buffer),
+      );
+      for await (
+        const _ of p.iterRecords()
+      ) { /* invalid wire default must be rejected */ }
+    });
   });
 
   it("writes field defaults through the async writer and parser", async () => {

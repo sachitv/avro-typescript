@@ -797,10 +797,16 @@ export class RecordType extends NamedType<Record<string, unknown>> {
           `Missing value for record field ${name} with no default.`,
         );
       }
-      result[name] = field.getDefault();
-      return;
     }
-    result[name] = field.getType().cloneFromValue(fieldValue);
+    // Define an own property so __proto__ never invokes the prototype setter.
+    Object.defineProperty(result, name, {
+      value: hasValue
+        ? field.getType().cloneFromValue(fieldValue)
+        : field.getDefault(),
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
   }
 
   #getComparableValue(
