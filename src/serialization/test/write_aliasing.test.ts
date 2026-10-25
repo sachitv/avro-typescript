@@ -1,4 +1,5 @@
 import { assertEquals } from "@std/assert";
+import { Buffer } from "node:buffer";
 import { describe, it } from "@std/testing/bdd";
 import { createType } from "../../type/create_type.ts";
 import { AvroWriter } from "../../avro_writer.ts";
@@ -270,6 +271,19 @@ describe("write path buffer aliasing", () => {
   });
 
   describe("StreamWritableBuffer", () => {
+    it("copies a Node Buffer view before handing it to a retaining sink", async () => {
+      const { stream, chunks } = retainingSink();
+      const buffer = new StreamWritableBuffer(stream);
+      const backing = Buffer.from([0, 1, 2, 3, 4]);
+      const data = backing.subarray(1, 4);
+      await buffer.writeBytes(data);
+      backing.fill(99);
+      await buffer.close();
+
+      assertEquals(chunks.length, 1);
+      assertEquals([...chunks[0]], [1, 2, 3]);
+    });
+
     it("enqueues a copy of the caller's bytes", async () => {
       const { stream, chunks } = retainingSink();
       const buffer = new StreamWritableBuffer(stream);

@@ -47,7 +47,8 @@ export class StreamWritableBuffer implements IStreamWritableBuffer {
     if (data.length === 0) {
       return;
     }
-    await this.#writer.write(data.slice());
+    // Buffer.slice() returns a shared view; the constructor always copies.
+    await this.#writer.write(new Uint8Array(data));
   }
 
   /**
