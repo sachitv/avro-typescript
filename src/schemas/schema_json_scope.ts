@@ -177,9 +177,7 @@ function comparisonJSON(schema: JSONType): string {
     (_key, value) =>
       value !== null && typeof value === "object" && !Array.isArray(value)
         ? Object.fromEntries(
-          Object.entries(value).sort(([left], [right]) =>
-            left.localeCompare(right)
-          ),
+          Object.keys(value).sort().map((key) => [key, value[key]]),
         )
         : value,
   );

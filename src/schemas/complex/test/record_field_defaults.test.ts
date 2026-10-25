@@ -352,6 +352,27 @@ describe("record field defaults in schema JSON", () => {
     );
   });
 
+  it("compares distinct Unicode map keys independently of locale collation", () => {
+    const config = (value: Record<string, number>): Type =>
+      createType(
+        record("Config", [{
+          name: "m",
+          type: { type: "map", values: "int" },
+          default: value,
+        }]) as never,
+      );
+    const first = config({ "é": 1, "e\u0301": 2 });
+    const second = config({ "e\u0301": 2, "é": 1 });
+    const outer = createRecord({
+      name: "Outer",
+      fields: [{ name: "a", type: first }, { name: "b", type: second }],
+    });
+    assertEquals(
+      (outer.toJSON() as { fields: Array<{ type: unknown }> }).fields[1].type,
+      "Config",
+    );
+  });
+
   it("keeps array-default order significant when comparing named types", () => {
     const config = (value: number[]): Type =>
       createType(
