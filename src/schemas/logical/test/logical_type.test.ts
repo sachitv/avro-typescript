@@ -678,3 +678,67 @@ describe("logicalTypeSchemaJSON", () => {
     );
   });
 });
+
+describe("LogicalType defaults", () => {
+  const timestamp = createType({
+    type: "long",
+    logicalType: "timestamp-millis",
+  });
+
+  it("writes a logical value as its underlying value's JSON", () => {
+    assertEquals(timestamp.defaultToJSON(new Date(1000)), 1000);
+    assertEquals(
+      createType({ type: "long", logicalType: "timestamp-micros" })
+        .defaultToJSON(1000n),
+      1000,
+    );
+  });
+
+  it("keeps a default given as the logical value", () => {
+    const date = new Date(1000);
+    assertEquals(timestamp.defaultFromJSON(date), date);
+  });
+
+  it("reads a default given as the underlying value's JSON", () => {
+    assertEquals(timestamp.defaultFromJSON(1000), new Date(1000));
+  });
+
+  it("refuses a default that is neither form", () => {
+    assertThrows(() => timestamp.defaultFromJSON("soon"));
+  });
+
+  it("refuses a logical default whose underlying long is unsafe in JSON", () => {
+    const micros = createType({
+      type: "long",
+      logicalType: "timestamp-micros",
+    });
+    assertThrows(
+      () => micros.defaultToJSON(9007199254740993n),
+      Error,
+      "outside the safe integer range",
+    );
+  });
+
+  it("reads back the safe JSON its underlying long writes", () => {
+    const micros = createType({
+      type: "long",
+      logicalType: "timestamp-micros",
+    });
+    assertEquals(
+      timestamp.defaultFromJSON(timestamp.defaultToJSON(new Date(7))),
+      new Date(7),
+    );
+    assertEquals(
+      micros.defaultFromJSON(micros.defaultToJSON(1000n)),
+      1000n,
+    );
+    const millis = createType({
+      type: "long",
+      logicalType: "local-timestamp-millis",
+    });
+    assertEquals(
+      millis.defaultFromJSON(millis.defaultToJSON(1000)),
+      1000,
+    );
+  });
+});

@@ -2249,3 +2249,51 @@ describe("RecordType.schemaJSON", () => {
     assertEquals(type.toJSON(), expected);
   });
 });
+
+describe("RecordType defaults", () => {
+  const type = createType({
+    type: "record",
+    name: "Outer",
+    fields: [
+      { name: "n", type: "long" },
+      { name: "b", type: "bytes" },
+      {
+        name: "inner",
+        type: {
+          type: "record",
+          name: "Inner",
+          fields: [
+            {
+              name: "at",
+              type: { type: "long", logicalType: "timestamp-millis" },
+            },
+            { name: "m", type: { type: "map", values: "long" } },
+          ],
+        },
+      },
+    ],
+  });
+
+  it("writes each field by its type, in field order", () => {
+    const json = type.defaultToJSON({
+      inner: { m: new Map([["k", 3n]]), at: new Date(5) },
+      b: Uint8Array.of(255),
+      n: 4n,
+    });
+    assertEquals(
+      JSON.stringify(json),
+      '{"n":4,"b":"\u00ff","inner":{"at":5,"m":{"k":3}}}',
+    );
+  });
+
+  it("reads the fields a default gives and keeps the rest as they are", () => {
+    assertEquals(
+      type.defaultFromJSON({ inner: { at: 5 }, extra: 1 }),
+      { inner: { at: new Date(5) }, extra: 1 },
+    );
+  });
+
+  it("leaves a default that is not an object for cloneFromValue", () => {
+    assertEquals(type.defaultFromJSON([1]), [1]);
+  });
+});

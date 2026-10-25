@@ -534,3 +534,57 @@ describe("LongType", () => {
     });
   });
 });
+
+describe("LongType defaults", () => {
+  const type = new LongType();
+  const unsafe = [
+    BigInt(Number.MAX_SAFE_INTEGER) + 1n,
+    -BigInt(Number.MAX_SAFE_INTEGER) - 1n,
+    9223372036854775807n,
+    -9223372036854775808n,
+  ];
+
+  it("writes a safe long as a JSON number", () => {
+    assertEquals(type.defaultToJSON(0n), 0);
+    assertEquals(type.defaultToJSON(-5n), -5);
+    assertEquals(
+      type.defaultToJSON(BigInt(Number.MAX_SAFE_INTEGER)),
+      Number.MAX_SAFE_INTEGER,
+    );
+    assertEquals(
+      type.defaultToJSON(-BigInt(Number.MAX_SAFE_INTEGER)),
+      -Number.MAX_SAFE_INTEGER,
+    );
+  });
+
+  it("refuses unsafe defaults even when JSON.rawJSON is available", () => {
+    for (const value of unsafe) {
+      assertThrows(
+        () => type.defaultToJSON(value),
+        Error,
+        `long ${value} is outside the safe integer range`,
+      );
+    }
+  });
+
+  it("reads a JSON number default as it is", () => {
+    assertEquals(type.defaultFromJSON(5), 5);
+    assertEquals(type.cloneFromValue(type.defaultFromJSON(5)), 5n);
+  });
+
+  it("refuses unsafe or fractional numeric defaults before cloning", () => {
+    for (const value of [9007199254740992, -9007199254740992, 1.5, Infinity]) {
+      assertThrows(
+        () => type.defaultFromJSON(value),
+        Error,
+        "not a safe integer JSON number",
+      );
+    }
+  });
+
+  it("keeps exact bigint defaults in programmatic schemas", () => {
+    for (const value of unsafe) {
+      assertEquals(type.cloneFromValue(type.defaultFromJSON(value)), value);
+    }
+  });
+});

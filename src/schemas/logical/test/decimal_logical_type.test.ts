@@ -295,3 +295,29 @@ describe("DecimalLogicalType.schemaJSON", () => {
     });
   });
 });
+
+describe("DecimalLogicalType defaults", () => {
+  it("writes and reads a default as its two's complement bytes", () => {
+    const overBytes = createType({
+      type: "bytes",
+      logicalType: "decimal",
+      precision: 6,
+      scale: 2,
+    });
+    assertEquals(overBytes.defaultToJSON(482n), "\u0001\u00e2");
+    assertEquals(overBytes.defaultToJSON(-1n), "\u00ff");
+    assertEquals(overBytes.defaultFromJSON("\u0001\u00e2"), 482n);
+    assertEquals(overBytes.defaultFromJSON(482n), 482n);
+
+    const overFixed = createType({
+      type: "fixed",
+      name: "Money",
+      size: 8,
+      logicalType: "decimal",
+      precision: 6,
+    });
+    const json = "\u0000".repeat(6) + "\u0001\u00e2";
+    assertEquals(overFixed.defaultToJSON(482n), json);
+    assertEquals(overFixed.defaultFromJSON(json), 482n);
+  });
+});

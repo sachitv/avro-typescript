@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
+import { createType } from "../../../type/create_type.ts";
 import {
   DateLogicalType,
   LocalTimestampMicrosLogicalType,
@@ -380,5 +381,31 @@ describe("Temporal logical types", () => {
         logicalType: "local-timestamp-nanos",
       });
     });
+  });
+});
+
+describe("temporal logical type defaults", () => {
+  const cases: Array<[unknown, unknown, unknown]> = [
+    [{ type: "int", logicalType: "date" }, 19000, 19000],
+    [{ type: "int", logicalType: "time-millis" }, 1000, 1000],
+    [{ type: "long", logicalType: "time-micros" }, 1000n, 1000],
+    [
+      { type: "long", logicalType: "timestamp-millis" },
+      new Date(1_700_000_000_000),
+      1_700_000_000_000,
+    ],
+    [{ type: "long", logicalType: "timestamp-micros" }, -5n, -5],
+    [{ type: "long", logicalType: "timestamp-nanos" }, 7n, 7],
+    [{ type: "long", logicalType: "local-timestamp-millis" }, 42, 42],
+    [{ type: "long", logicalType: "local-timestamp-micros" }, 43n, 43],
+    [{ type: "long", logicalType: "local-timestamp-nanos" }, 44n, 44],
+  ];
+
+  it("writes and reads a default as its underlying number", () => {
+    for (const [schema, value, json] of cases) {
+      const type = createType(schema as never);
+      assertEquals(type.defaultToJSON(value), json);
+      assertEquals(type.cloneFromValue(type.defaultFromJSON(json)), value);
+    }
   });
 });

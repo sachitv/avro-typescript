@@ -146,6 +146,18 @@ export class BytesType extends PrimitiveType<Uint8Array> {
   }
 
   /**
+   * Encodes bytes as a JSON string with one code point (0-255) per byte, the
+   * inverse of how a default string is read.
+   */
+  public override defaultToJSON(value: Uint8Array): JSONType {
+    let result = "";
+    for (const byte of value) {
+      result += String.fromCharCode(byte);
+    }
+    return result;
+  }
+
+  /**
    * Generates a random byte array.
    */
   public override random(): Uint8Array {

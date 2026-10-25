@@ -15,6 +15,7 @@ import { calculateVarintSize } from "../../internal/varint.ts";
 
 const MIN_LONG = -(1n << 63n);
 const MAX_LONG = (1n << 63n) - 1n;
+const MAX_SAFE_LONG = BigInt(Number.MAX_SAFE_INTEGER);
 
 /**
  * Long type (64-bit).
@@ -90,6 +91,33 @@ export class LongType extends PrimitiveType<bigint> {
     }
 
     throwInvalidError([], value, this);
+  }
+
+  /**
+   * Encodes a long as a JSON integer that ordinary `JSON.parse` can read
+   * without losing precision.
+   * @throws Error when the value is outside the safe integer range.
+   */
+  public override defaultToJSON(value: bigint): JSONType {
+    if (value >= -MAX_SAFE_LONG && value <= MAX_SAFE_LONG) {
+      return Number(value);
+    }
+    throw new Error(
+      `long ${value} is outside the safe integer range and cannot be written as a JSON number without risking precision loss when parsed.`,
+    );
+  }
+
+  /**
+   * Refuses JSON numbers that may already have lost precision. Programmatic
+   * schemas can supply a bigint instead, preserving its exact value.
+   */
+  public override defaultFromJSON(value: unknown): unknown {
+    if (typeof value === "number" && !Number.isSafeInteger(value)) {
+      throw new Error(
+        `long default ${value} is not a safe integer JSON number; supply an exact bigint in a programmatic schema instead.`,
+      );
+    }
+    return value;
   }
 
   /** Creates a resolver for reading from the writer type. */

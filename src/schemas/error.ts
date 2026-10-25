@@ -11,6 +11,21 @@ export type ErrorHook<T = unknown> = (
 ) => void;
 
 /**
+ * Returns a type's JSON schema for an error message. A schema that cannot be
+ * written as JSON (such as one with a NaN field default) is described by its
+ * class and the reason instead, so the validation error is still raised.
+ */
+function describeSchema(type: Type): string {
+  try {
+    return safeStringify(type.toJSON());
+  } catch (error) {
+    return `${type.constructor.name} (schema JSON unavailable: ${
+      (error as Error).message
+    })`;
+  }
+}
+
+/**
  * Custom error class for Avro schema validation failures.
  */
 export class ValidationError<T = unknown> extends Error {
@@ -29,7 +44,7 @@ export class ValidationError<T = unknown> extends Error {
    */
   constructor(path: string[], invalidValue: unknown, schemaType: Type<T>) {
     const serializedValue = safeStringify(invalidValue);
-    const serializedJSON = safeStringify(schemaType.toJSON());
+    const serializedJSON = describeSchema(schemaType);
     let message =
       `Invalid value: \'${serializedValue}\' for type: ${serializedJSON}`;
     if (path.length > 0) {

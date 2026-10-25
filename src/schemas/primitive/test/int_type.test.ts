@@ -449,3 +449,11 @@ describe("IntType", () => {
     });
   });
 });
+
+describe("IntType defaults", () => {
+  it("writes and reads a default as the JSON value it already is", () => {
+    const type = new IntType();
+    assertEquals(type.defaultToJSON(-7), -7);
+    assertEquals(type.defaultFromJSON(-7), -7);
+  });
+});

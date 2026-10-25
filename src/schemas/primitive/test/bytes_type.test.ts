@@ -448,3 +448,22 @@ describe("BytesType", () => {
     });
   });
 });
+
+describe("BytesType defaults", () => {
+  const type = new BytesType();
+  const allBytes = Uint8Array.from({ length: 256 }, (_, i) => i);
+  const allBytesJSON = String.fromCharCode(...allBytes);
+
+  it("writes each byte as one code point", () => {
+    assertEquals(type.defaultToJSON(allBytes), allBytesJSON);
+    assertEquals(type.defaultToJSON(new Uint8Array(0)), "");
+  });
+
+  it("reads the JSON string back to the same bytes", () => {
+    assertEquals(type.defaultFromJSON(allBytesJSON), allBytesJSON);
+    assertEquals(
+      type.cloneFromValue(type.defaultFromJSON(type.defaultToJSON(allBytes))),
+      allBytes,
+    );
+  });
+});

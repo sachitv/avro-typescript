@@ -310,6 +310,42 @@ export class MapType<T = unknown> extends BaseType<Map<string, T>> {
   }
 
   /**
+   * Encodes a map value as a JSON object.
+   */
+  public override defaultToJSON(value: Map<string, T>): JSONType {
+    // fromEntries defines own properties, so a "__proto__" key stays a key.
+    return Object.fromEntries(
+      Array.from(
+        value.entries(),
+        ([key, entry]) => [key, this.#valuesType.defaultToJSON(entry)],
+      ),
+    );
+  }
+
+  /**
+   * Reads a map default, given as a JSON object or a `Map`, entry by entry.
+   */
+  public override defaultFromJSON(value: unknown): unknown {
+    if (value instanceof Map) {
+      return new Map(
+        Array.from(
+          value.entries(),
+          ([key, entry]) => [key, this.#valuesType.defaultFromJSON(entry)],
+        ),
+      );
+    }
+    if (!isPlainObject(value)) {
+      return value;
+    }
+    // fromEntries defines own properties, so a "__proto__" key stays a key.
+    return Object.fromEntries(
+      Object.entries(value).map((
+        [key, entry],
+      ) => [key, this.#valuesType.defaultFromJSON(entry)]),
+    );
+  }
+
+  /**
    * Compares two map values. Always throws an error as maps cannot be compared.
    * @param _val1 First map value.
    * @param _val2 Second map value.
